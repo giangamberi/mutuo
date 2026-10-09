@@ -197,6 +197,15 @@ seeder.add_torrent(sp)
 engine_b = TorrentEngine(download_dir=os.path.join(TMP, "dl-b"))
 engine_b.start()
 b_ih = engine_b.add_torrent(magnet)
+# Opt-in downloads: the torrent is added with default_dont_download, so it will
+# not fetch any file until we include one. This mirrors the app, where opening a
+# PDF bumps the file's priority. Include file 0 once metadata is in hand.
+for _ in range(60):
+    if engine_b.get(b_ih, include_files=False) and engine_b._torrents.get(b_ih).fs is not None:
+        break
+    time.sleep(0.5)
+if engine_b._torrents.get(b_ih) and engine_b._torrents[b_ih].fs is not None:
+    engine_b.set_file_priority(b_ih, 0, 4)
 t0 = time.time()
 try:
     engine_b.wait_for_range(b_ih, 0, 0, size, timeout=45)

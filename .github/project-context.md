@@ -110,6 +110,7 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
   - `POST /api/torrent/{ih}/{action}` — `pause` | `resume` | `recheck`
   - `DELETE /api/torrent/{ih}` — body `{"delete_files": bool}`; remove from session, optionally wipe data dir
   - `POST /api/torrent/{ih}/file-priority` — body `{"index": int, "priority": int}` (0=exclude, 4=normal, 7=max)
+  - `DELETE /api/torrent/{ih}/file/{index}` — delete one file from disk + exclude it; torrent stays in session
   - `GET /api/file?ih=..&f=..` — resolve (info_hash, file_index) to name/size
   - `GET /api/pdf?ih=..&f=..` — HTTP Range streaming for PDF.js
 - `GET /` and `POST /api/catalog` are the main entry points; the drag-and-drop
@@ -127,6 +128,26 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
   path, or a `.torrent` URL. Returns the info-hash hex. For magnets the file
   list is empty until metadata arrives via DHT; for files/URLs it's immediate.
 - `add_torrent_async(source)`: same, on a daemon thread (used at startup/sync).
+- **Opt-in downloads** (changed 2026-10-09): every torrent is added with
+  `default_dont_download | auto_managed`, so metadata is fetched (the file
+  list shows) but *no file downloads until the user includes one*. "Including"
+  a file = `set_file_priority(ih, idx, 4)`; excluding = priority 0. This is the
+  mechanism the UI uses: opening a PDF, or flipping a file's include toggle,
+  is what starts its download. A torrent with no included files reports state
+  `idle` (not `downloading`) — see `_state_str`, which maps downloading/queued
+  /allocating to `idle` when `status.total_wanted == 0`.
+- **Pending includes** (`_pending_include`): `/api/pdf` calls `set_file_priority`
+  to include the file before waiting. On a *magnet* the metadata may not have
+  arrived yet (fs is None), so an include is queued in `_pending_include` and
+  applied by `_apply_pending_includes` the moment `has_metadata` flips in
+  `_refresh_states` (or when a `.torrent`'s fs is attached in `add_torrent`).
+  Without this, opening a magnet's PDF pre-metadata would leave the file at
+  priority 0 and block until the 600 s read timeout.
+- `delete_file(ih, idx)`: deletes one file from disk + sets its priority to 0,
+  but keeps the torrent in the session. `torrent_handle.delete_files(idx)` is
+  NOT bound in this libtorrent build, so the on-disk file is removed with
+  `os.remove` at `save_path / fs.file_path(idx)` (multi-file torrents store
+  under a `<name>/` subdir — use `file_path`, not the bare name).
 - `status(include_files=True)`: thread-safe snapshot list of dicts matching
   the front end's expectations (includes `files` with index/name/size/done).
 - `file_size(ih, idx)`, `wait_for_range(ih, idx, start, length, timeout)`,

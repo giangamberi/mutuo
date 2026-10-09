@@ -91,6 +91,7 @@ class TorrentEngine:
         self._cond = threading.Condition()
         self._lock = threading.Lock()
         self._pending_prio: dict[str, set[int]] = {}     # hex -> pieces to prioritize
+        self._pending_include: dict[str, set[int]] = {}  # hex -> file indices to include once metadata is ready (opt-in mode)
         self._stop = False
         self._thread = threading.Thread(target=self._run, daemon=True)
 
@@ -184,10 +185,15 @@ class TorrentEngine:
                 if ts.fs is None and fs is not None and fs.num_files() > 0:
                     ts.fs = fs
                     ts.ready = True
+                    self._apply_pending_includes(ih_hex)
                 return ih_hex
             params.save_path = save_path
-            if not is_magnet:
-                params.flags = lt.torrent_flags.auto_managed
+            # Opt-in downloads: metadata is fetched so the file list shows, but
+            # no file is downloaded until the user includes it (its priority is
+            # then bumped above 0). Applies whether metadata is in the .torrent
+            # now or arrives later via DHT for a magnet.
+            params.flags = (lt.torrent_flags.auto_managed
+                            | lt.torrent_flags.default_dont_download)
             try:
                 handle = self._session.add_torrent(params)
             except RuntimeError:
@@ -329,6 +335,7 @@ class TorrentEngine:
             self._session.remove_torrent(handle)
         self._torrents.pop(ih_hex, None)
         self._pending_prio.pop(ih_hex, None)
+        self._pending_include.pop(ih_hex, None)
         if delete_files and save_path:
             shutil.rmtree(save_path, ignore_errors=True)
 
@@ -339,10 +346,22 @@ class TorrentEngine:
         priorities (not a (indices, priority) pair), so read the current vector,
         patch the one index, and write it back."""
         handle = self._handle.get(ih_hex)
-        if handle is None or not handle.is_valid():
-            return
         ts = self._torrents.get(ih_hex)
-        n = ts.fs.num_files() if ts is not None and ts.fs is not None else 0
+        if handle is None or not handle.is_valid() or ts is None:
+            return
+        # Metadata not in hand yet (magnet, pre-fetch). If the caller wants to
+        # *include* the file (priority > 0), remember it so it is applied the
+        # moment metadata arrives — otherwise the opt-in download would never
+        # start and the open would block until timeout.
+        if ts.fs is None:
+            if priority > 0:
+                self._pending_include.setdefault(ih_hex, set()).add(file_index)
+            else:
+                pi = self._pending_include.get(ih_hex)
+                if pi:
+                    pi.discard(file_index)
+            return
+        n = ts.fs.num_files()
         try:
             prios = [int(p) for p in handle.file_priorities()]
         except Exception:
@@ -359,6 +378,34 @@ class TorrentEngine:
             except Exception:
                 pass
 
+    def delete_file(self, ih_hex: str, file_index: int) -> None:
+        """Delete one file from disk and exclude it, WITHOUT removing the
+        torrent. `torrent_handle.delete_files(idx)` is not bound in this
+        libtorrent build, so we drop the on-disk file ourselves and set its
+        priority to 0 so the torrent does not re-download it. The torrent stays
+        in the session (so other files and the metadata are preserved)."""
+        ts = self._torrents.get(ih_hex)
+        if ts is None or ts.fs is None:
+            raise TorrentError("torrent/file not found or metadata not ready")
+        if file_index >= ts.fs.num_files():
+            raise TorrentError(f"no file {file_index}")
+        path = os.path.join(ts.save_path, ts.fs.file_path(file_index))
+        if os.path.exists(path):
+            os.remove(path)
+        # Exclude it so the torrent does not re-download it, and drop any
+        # pending piece priorities covering this file so the swarm stops.
+        self.set_file_priority(ih_hex, file_index, 0)
+        try:
+            pl = ts.fs.piece_length()
+            off = ts.fs.file_offset(file_index)
+            first = off // pl
+            last = (off + max(ts.fs.file_size(file_index) - 1, 0)) // pl
+            pending = self._pending_prio.get(ih_hex)
+            if pending:
+                pending.difference_update(range(first, last + 1))
+        except Exception:
+            pass
+
     # ---------- internals ----------
 
     def _missing_pieces(self, ih: str, ts: TorrentState, file_index: int,
@@ -369,6 +416,19 @@ class TorrentEngine:
         first = (off + start) // pl
         last = (off + start + max(length - 1, 0)) // pl
         return {p for p in range(first, last + 1) if not handle.have_piece(p)}
+
+    def _apply_pending_includes(self, ih_hex: str) -> None:
+        """After metadata arrives, include any files the user already asked for
+        (e.g. clicked a PDF on a magnet before its metadata landed)."""
+        pending = self._pending_include.pop(ih_hex, None)
+        if not pending:
+            return
+        ts = self._torrents.get(ih_hex)
+        if ts is None or ts.fs is None:
+            return
+        for idx in list(pending):
+            if idx < ts.fs.num_files():
+                self.set_file_priority(ih_hex, idx, 4)
 
     def _apply_priorities(self) -> None:
         """Re-assert priorities on requested pieces so the swarm focuses on them."""
@@ -423,6 +483,7 @@ class TorrentEngine:
                         ts.fs = ti.files()
                         ts.name = ts.name or ti.name()
                         ts.ready = True
+                        self._apply_pending_includes(ih)
                 except Exception:
                     pass
             if ts.fs is not None:
@@ -455,7 +516,12 @@ class TorrentEngine:
             getattr(lt.torrent_status, "state_allocating", 6): "allocating",
             getattr(lt.torrent_status, "state_forced_checking", 7): "forced checking",
         }
-        return names.get(status.state, f"state={status.state}")
+        state = names.get(status.state, f"state={status.state}")
+        # In opt-in (default_dont_download) mode a torrent that has no file
+        # included wants nothing; calling it "downloading" is misleading.
+        if state in ("downloading", "queued", "allocating") and status.total_wanted == 0:
+            return "idle"
+        return state
 
     def _run(self) -> None:
         # save DHT/session state every 30 s so a restart resumes warm

@@ -191,6 +191,18 @@ def file_priority(ih: str, req: FilePriorityRequest) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
+@app.delete("/api/torrent/{ih}/file/{index}")
+def delete_file(ih: str, index: int) -> JSONResponse:
+    """Delete one file from disk and exclude it, keeping the torrent in the session."""
+    if engine.get(ih, include_files=False) is None:
+        raise HTTPException(404, "torrent not in session")
+    try:
+        engine.delete_file(ih, index)
+    except TorrentError as exc:
+        raise HTTPException(404, str(exc))
+    return JSONResponse({"ok": True})
+
+
 @app.get("/api/file")
 def file_meta(ih: str, f: int) -> JSONResponse:
     """Resolve (info_hash, file_index) -> name/size so the UI can offer readers."""
@@ -229,6 +241,13 @@ def stream_pdf(ih: str, f: int, request: Request) -> Response:
         start, length, status_code = 0, size, 200
         headers = {"Content-Length": str(length), "Accept-Ranges": "bytes"}
 
+    # Opt-in downloads: opening a PDF is the user's choice to fetch it. Make
+    # sure the file is actually included in the download, otherwise its pieces
+    # are never requested and the read below would block until timeout.
+    try:
+        engine.set_file_priority(ih, f, 4)
+    except (KeyError, TorrentError):
+        pass
     try:
         engine.wait_for_range(ih, f, start, length, timeout=600)
         data = engine.fetch_range(ih, f, start, length)
