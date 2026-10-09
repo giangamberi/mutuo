@@ -54,7 +54,13 @@ def _startup():
 
 @app.get("/")
 def index() -> HTMLResponse:
-    return HTMLResponse((BASE / "static" / "index.html").read_text(encoding="utf-8"))
+    resp = HTMLResponse((BASE / "static" / "index.html").read_text(encoding="utf-8"))
+    # The UI changes frequently and is a single file with no cache-busting version
+    # in its name; never let the browser serve a stale copy.
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.get("/api/catalog")
