@@ -131,6 +131,15 @@ def list_torrents() -> JSONResponse:
     return JSONResponse(engine.status(include_files=True))
 
 
+@app.get("/api/torrent")
+def get_torrent(ih: str) -> JSONResponse:
+    """Detail snapshot of one torrent (stats + file list) for the loading page."""
+    entry = engine.get(ih)
+    if entry is None:
+        raise HTTPException(404, "torrent not in session")
+    return JSONResponse(entry)
+
+
 @app.get("/api/file")
 def file_meta(ih: str, f: int) -> JSONResponse:
     """Resolve (info_hash, file_index) -> name/size so the UI can offer readers."""

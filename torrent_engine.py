@@ -63,9 +63,16 @@ class TorrentState:
     progress: float = 0.0
     state: str = "unknown"
     num_peers: int = 0
+    num_seeds: int = 0
+    num_complete: int = 0
+    num_incomplete: int = 0
+    upload_rate: int = 0
+    download_rate: int = 0
+    is_seeding: bool = False
     total_size: int = 0
     total_done: int = 0
     file_progress: dict[int, int] = field(default_factory=dict)  # idx -> bytes done
+    last_dht: float = 0.0                    # last force_dht_lookup() (magnet bootstrap)
 
 
 class TorrentEngine:
@@ -156,18 +163,25 @@ class TorrentEngine:
             name = params.name
             ih_hex = str(params.info_hashes.get_best())
             # no file list until metadata is fetched from the swarm
-            has_files = False
+            fs = None
         else:
             ti = lt.torrent_info(source)
             name = _s(ti.name())
             ih_hex = _ih_hex(ti.info_hash)
             params = lt.add_torrent_params()
             params.ti = ti
-            has_files = ti.files().num_files() > 0
+            fs = ti.files()
         save_path = os.path.join(self._download_dir, ih_hex)
         os.makedirs(save_path, exist_ok=True)
         with self._lock:
-            if ih_hex in self._torrents:
+            ts = self._torrents.get(ih_hex)
+            if ts is not None:
+                # already tracked (e.g. added from a magnet at startup): attach
+                # the file list now that full metadata is in hand, so the UI does
+                # not sit on "waiting for metadata" forever.
+                if ts.fs is None and fs is not None and fs.num_files() > 0:
+                    ts.fs = fs
+                    ts.ready = True
                 return ih_hex
             params.save_path = save_path
             if not is_magnet:
@@ -180,8 +194,8 @@ class TorrentEngine:
                 info_hash=ih_hex, name=name, save_path=save_path,
                 magnet=magnet or (source if is_magnet else ""),
             )
-            if has_files:  # .torrent files already carry the file list
-                ts.fs = ti.files()
+            if fs is not None and fs.num_files() > 0:  # .torrent files carry the file list
+                ts.fs = fs
                 ts.ready = True
             self._torrents[ih_hex] = ts
             self._handle[ih_hex] = handle
@@ -200,30 +214,41 @@ class TorrentEngine:
         self._pending_prio.pop(ih_hex, None)
 
     def status(self, include_files: bool = True) -> list[dict]:
-        out = []
-        for ih, ts in list(self._torrents.items()):
-            entry = {
-                "info_hash": ih,
-                "name": ts.name,
-                "magnet": ts.magnet,
-                "ready": ts.ready,
-                "progress": ts.progress,
-                "state": ts.state,
-                "num_peers": ts.num_peers,
-                "total_size": ts.total_size,
-                "total_done": ts.total_done,
-            }
-            if include_files and ts.fs is not None:
-                entry["files"] = [
-                    {"index": i, "name": _s(ts.fs.file_name(i)),
-                     "size": ts.fs.file_size(i),
-                     "done": ts.file_progress.get(i, 0)}
-                    for i in range(ts.fs.num_files())
-                ]
-            else:
-                entry["files"] = []
-            out.append(entry)
-        return out
+        return [self._entry(ts, include_files) for ts in list(self._torrents.values())]
+
+    def get(self, ih_hex: str, include_files: bool = True):
+        """Snapshot of a single torrent, or None when it is not in the session."""
+        ts = self._torrents.get(ih_hex)
+        return None if ts is None else self._entry(ts, include_files)
+
+    def _entry(self, ts: TorrentState, include_files: bool = True) -> dict:
+        entry = {
+            "info_hash": ts.info_hash,
+            "name": ts.name,
+            "magnet": ts.magnet,
+            "ready": ts.ready,
+            "progress": ts.progress,
+            "state": ts.state,
+            "num_peers": ts.num_peers,
+            "num_seeds": ts.num_seeds,
+            "num_complete": ts.num_complete,
+            "num_incomplete": ts.num_incomplete,
+            "upload_rate": ts.upload_rate,
+            "download_rate": ts.download_rate,
+            "is_seeding": ts.is_seeding,
+            "total_size": ts.total_size,
+            "total_done": ts.total_done,
+        }
+        if include_files and ts.fs is not None:
+            entry["files"] = [
+                {"index": i, "name": _s(ts.fs.file_name(i)),
+                 "size": ts.fs.file_size(i),
+                 "done": ts.file_progress.get(i, 0)}
+                for i in range(ts.fs.num_files())
+            ]
+        else:
+            entry["files"] = []
+        return entry
 
     def file_size(self, ih_hex: str, file_index: int) -> int:
         ts = self._torrents[ih_hex]
@@ -305,8 +330,23 @@ class TorrentEngine:
             ts.progress = status.progress
             ts.state = self._state_str(status)
             ts.num_peers = status.num_peers
+            ts.num_seeds = getattr(status, "num_seeds", 0)
+            ts.num_complete = getattr(status, "num_complete", 0)
+            ts.num_incomplete = getattr(status, "num_incomplete", 0)
+            ts.upload_rate = getattr(status, "upload_payload_rate", 0)
+            ts.download_rate = getattr(status, "download_payload_rate", 0)
+            ts.is_seeding = bool(getattr(status, "seeding", False))
             ts.total_size = status.total_wanted
-            ts.total_done = status.all_time_download
+            ts.total_done = status.total_wanted_done
+            if ts.fs is None:
+                # magnet without metadata yet: nudge DHT so we do not sit at 0
+                # peers forever just because the routing table filled slowly.
+                if time.monotonic() - ts.last_dht > 10.0:
+                    ts.last_dht = time.monotonic()
+                    try:
+                        handle.force_dht_lookup()
+                    except Exception:
+                        pass
             # pick up file list when magnet metadata arrives
             if status.has_metadata and ts.fs is None:
                 try:

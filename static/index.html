@@ -14,18 +14,51 @@
   input { min-width:280px; }
   main { flex:1; display:flex; min-height:0; }
   aside { width:320px; min-width:240px; background:var(--panel); border-right:1px solid #000; overflow-y:auto; }
-  .t { padding:10px 14px; border-bottom:1px solid #262b34; }
+  aside .tbtn {
+    display:block; width:100%; text-align:left; font:inherit; cursor:pointer;
+    background:transparent; color:var(--text); border:0; border-bottom:1px solid #262b34;
+    border-radius:0; padding:10px 14px;
+  }
+  aside .tbtn:hover { background:#232a36; }
+  aside .tbtn.active { background:rgba(79,140,255,.12); box-shadow:inset 3px 0 0 var(--acc); }
+  aside .tbtn:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
   .t .name { font-size:13px; font-weight:600; }
   .t .meta { font-size:11px; color:var(--dim); margin-top:3px; }
   .bar { height:4px; background:#0f1115; border-radius:2px; margin-top:6px; overflow:hidden; }
   .bar > div { height:100%; background:var(--acc); }
   .files { font-size:12px; margin-top:6px; }
-  .files a { color:var(--acc); cursor:pointer; text-decoration:none; display:block; padding:2px 0; }
-  .files a:hover { text-decoration:underline; }
+  .files .no-pdf { color:var(--dim); font-style:italic; padding:2px 0; }
+  .files button.file-btn {
+    display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+    font:inherit; font-size:12px;
+    color:var(--text); background:#0f1115; border:1px solid #333a47;
+    border-radius:6px; padding:7px 10px; margin:5px 0; cursor:pointer;
+    text-decoration:none; line-height:1.3;
+  }
+  .files button.file-btn:hover { background:#232a36; border-color:var(--acc); color:var(--acc); }
+  .files button.file-btn:focus-visible { outline:2px solid var(--acc); outline-offset:1px; }
+  .files button.file-btn.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--acc); }
+  .files button.file-btn .icon { flex:0 0 auto; font-size:14px; }
+  .files button.file-btn .fname { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .files button.file-btn .fsize { flex:0 0 auto; color:var(--dim); font-size:11px; }
   #viewer { flex:1; display:flex; flex-direction:column; align-items:center; overflow-y:auto; padding:12px; }
   #page { background:#fff; margin-bottom:10px; }
   #status { font-size:12px; color:var(--dim); margin-bottom:8px; }
   .empty { color:var(--dim); font-size:13px; margin-top:24px; }
+  #loading { width:min(560px,92%); margin-top:36px; text-align:center; }
+  #loading h2 { font-size:15px; margin:0 0 4px; word-break:break-all; }
+  #loading .sub { font-size:12px; color:var(--dim); margin-bottom:10px; }
+  #loading .bar { height:6px; }
+  #loading .stats {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 18px;
+    text-align:left; font-size:12px; margin-top:14px;
+  }
+  #loading .stats b { color:var(--dim); font-weight:500; margin-right:6px; }
+  #loading .spin {
+    width:18px; height:18px; margin:0 auto 10px; border-radius:50%;
+    border:2px solid #333a47; border-top-color:var(--acc); animation:spin .9s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
   #drop-overlay {
     display:none; position:fixed; inset:0; z-index:99;
     background:rgba(15,17,21,.88); backdrop-filter:blur(2px);
@@ -59,15 +92,18 @@
 <main>
   <aside id="catalog"></aside>
   <section id="viewer">
+    <div id="loading" style="display:none"></div>
     <div id="status"></div>
-    <div class="empty" id="empty">Pick a PDF from the catalog — it starts downloading when you open it.</div>
+    <div class="empty" id="empty">Pick a torrent from the list — the PDF opens as soon as enough of it has arrived.</div>
     <div id="pages" style="display:none"></div>
   </section>
 </main>
 <script type="module">
 import * as pdfjsLib from '/static/pdfjs-dist/build/pdf.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/pdfjs-dist/build/pdf.worker.min.mjs';
-let current = null; // {ih, f, name, doc}
+let current = null; // {ih, f, name, doc} — the PDF currently shown
+let selected = null; // info_hash of the torrent the user picked
+let waitTimer = null; // retry timer for the "waiting on the swarm" page
 
 async function j(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r; }
 
@@ -81,22 +117,15 @@ async function refresh() {
     for (const t of torrents) {
       const c = byMagnet[magnetKey(t.magnet)] || {};
       const pct = Math.round(t.progress * 100);
-      const div = document.createElement('div');
-      div.className = 't';
-      div.innerHTML = `<div class="name">${esc(c.name || t.name)}</div>
-        <div class="meta">${t.state} · ${pct}% · ${t.num_peers} peers</div>
-        <div class="bar"><div style="width:${pct}%"></div></div>
-        <div class="files"></div>`;
-      const files = div.querySelector('.files');
-      for (const f of (t.files || [])) {
-        if (!/\.pdf$/i.test(f.name)) continue;
-        const a = document.createElement('a');
-        a.textContent = f.name;
-        a.dataset.ih = t.info_hash;
-        a.dataset.idx = f.index;
-        files.appendChild(a);
-      }
-      el.appendChild(div);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tbtn' + (selected === t.info_hash ? ' active' : '');
+      b.dataset.ih = t.info_hash;
+      b.dataset.name = c.name || t.name || '';
+      b.innerHTML = `<div class="name">${esc(c.name || t.name || t.info_hash)}</div>
+        <div class="meta">${esc(t.state)} · ${pct}% · ${t.num_peers} peers</div>
+        <div class="bar"><div style="width:${pct}%"></div></div>`;
+      el.appendChild(b);
     }
     document.getElementById('hdrstat').textContent =
       torrents.length ? `${torrents.length} torrent(s)` : 'no torrents — add one or point feed.json at a source';
@@ -104,7 +133,92 @@ async function refresh() {
 }
 
 function magnetKey(m) { for (const p of m.split('&')) if (p.startsWith('xt=')) return p.slice(3); return m; }
+function fmtSize(n) {
+  if (!n) return '—';
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
+  return (n / 1048576).toFixed(1) + ' MB';
+}
+function fmtRate(n) { return n > 0 ? fmtSize(n) + '/s' : '—'; }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// clicking a torrent: open its PDF, or show the loading page while pieces arrive
+async function openTorrent(ih, name) {
+  selected = ih;
+  markActive();
+  if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
+  showLoading({ info_hash: ih, name: name || '', state: 'connecting', progress: 0 }, 'Opening…');
+  let entry;
+  try {
+    entry = await j(`/api/torrent?ih=${ih}`).then(r => r.json());
+  } catch (e) {
+    showEmpty('Could not open this torrent: ' + e.message);
+    return;
+  }
+  const pdfs = (entry.files || []).filter(f => /\.pdf$/i.test(f.name));
+  if (pdfs.length === 1) { openPdf(ih, pdfs[0].index, pdfs[0].name, pdfs[0].size); return; }
+  if (pdfs.length > 1) { showFileList(ih, pdfs); return; }
+  // nothing usable yet — keep the loading page and retry while the swarm works
+  showLoading(entry);
+  waitTimer = setTimeout(() => openTorrent(ih, name), 2000);
+}
+
+function markActive() {
+  document.querySelectorAll('#catalog .tbtn').forEach(n => {
+    n.classList.toggle('active', n.dataset.ih === selected);
+  });
+}
+
+function hideLoading() { document.getElementById('loading').style.display = 'none'; }
+
+function showEmpty(msg) {
+  const empty = document.getElementById('empty');
+  empty.textContent = msg;
+  empty.style.display = '';
+  document.getElementById('pages').style.display = 'none';
+}
+
+function showLoading(entry, note) {
+  const pct = Math.round((entry.progress || 0) * 100);
+  const el = document.getElementById('loading');
+  el.innerHTML = `<div class="spin"></div>
+    <h2>${esc(entry.name || 'Untitled torrent')}</h2>
+    <div class="sub">${esc(note || 'Waiting on the swarm — the PDF appears as soon as enough of it has arrived.')}</div>
+    <div class="bar"><div style="width:${pct}%"></div></div>
+    <div class="stats">
+      <div><b>state</b>${esc(entry.state || '—')}</div>
+      <div><b>progress</b>${pct}%</div>
+      <div><b>peers</b>${entry.num_peers || 0}</div>
+      <div><b>seeds</b>${entry.num_seeds || 0} / ${entry.num_complete >= 0 ? entry.num_complete : '?'}</div>
+      <div><b>down</b>${fmtRate(entry.download_rate)}</div>
+      <div><b>up</b>${fmtRate(entry.upload_rate)}</div>
+      <div><b>downloaded</b>${fmtSize(entry.total_done)} of ${fmtSize(entry.total_size)}</div>
+      <div><b>info hash</b>${esc(entry.info_hash || '')}</div>
+    </div>
+    <div><button type="button" id="retry">Retry now</button></div>`;
+  el.style.display = '';
+}
+
+function showFileList(ih, pdfs) {
+  const pages = document.getElementById('pages');
+  pages.innerHTML = '';
+  const ul = document.createElement('div');
+  ul.className = 'files';
+  for (const f of pdfs) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'file-btn';
+    b.innerHTML = `<span class="icon">&#128196;</span><span class="fname">${esc(f.name)}</span>` +
+      `<span class="fsize">${fmtSize(f.size)}</span>`;
+    b.dataset.ih = ih;
+    b.dataset.idx = f.index;
+    b.dataset.name = f.name;
+    b.title = f.name;
+    ul.appendChild(b);
+  }
+  pages.appendChild(ul);
+  pages.style.display = '';
+}
 
 window.addMagnet = async function () {
   const magnet = document.getElementById('magnet').value.trim();
@@ -175,6 +289,7 @@ async function dropTorrentFiles(torrents) {
 
 async function openPdf(ih, f, name, size) {
   if (current) { try { current.doc.destroy(); } catch {} current = null; }
+  hideLoading();
   const pages = document.getElementById('pages');
   const empty = document.getElementById('empty');
   empty.style.display = 'none';
@@ -192,9 +307,11 @@ async function openPdf(ih, f, name, size) {
     status.textContent = `${name} — ${doc.numPages} pages`;
     for (let p = 1; p <= doc.numPages; p++) await renderPage(doc, p, pages);
   } catch (e) {
-    status.textContent = `Failed to load ${name}: ${e.message}`;
-    empty.style.display = ''; empty.textContent = status.textContent;
-    pages.style.display = 'none';
+    status.textContent = '';
+    // nothing usable yet: keep the loading page with live torrent stats
+    showLoading({ info_hash: ih, name: name, state: 'stalled', progress: 0, files: [] },
+      `Could not open ${name} (${e.message}) — waiting on the swarm…`);
+    if (!waitTimer) waitTimer = setTimeout(() => openTorrent(ih, name), 2000);
   }
 }
 
@@ -209,13 +326,31 @@ async function renderPage(doc, p, container) {
   await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 }
 
-// single delegated click handler — survives the 4 s DOM rebuild in refresh()
+// clicking a torrent button in the sidebar
 document.getElementById('catalog').addEventListener('click', (e) => {
-  const a = e.target.closest('a[data-ih]');
-  if (!a) return;
+  const b = e.target.closest('button.tbtn[data-ih]');
+  if (!b) return;
   e.preventDefault();
-  openPdf(a.dataset.ih, Number(a.dataset.idx), a.textContent, 0);
+  openTorrent(b.dataset.ih, b.dataset.name || '');
 });
+
+// "Retry now" on the loading page
+document.getElementById('loading').addEventListener('click', (e) => {
+  if (!e.target.closest('#retry')) return;
+  e.preventDefault();
+  if (selected) openTorrent(selected, '');
+});
+
+// PDF chooser inside the viewer
+document.getElementById('pages').addEventListener('click', (e) => {
+  const b = e.target.closest('button.file-btn');
+  if (!b) return;
+  e.preventDefault();
+  openPdf(b.dataset.ih, Number(b.dataset.idx), b.dataset.name || b.textContent, 0);
+});
+
+refresh();
+setInterval(refresh, 4000);
 
 refresh();
 setInterval(refresh, 4000);
