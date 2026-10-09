@@ -147,6 +147,50 @@ def get_torrent(ih: str) -> JSONResponse:
     return JSONResponse(entry)
 
 
+@app.post("/api/torrent/{ih}/{action}")
+def torrent_action(ih: str, action: str) -> JSONResponse:
+    """Per-torrent actions: pause, resume, recheck."""
+    if engine.get(ih, include_files=False) is None:
+        raise HTTPException(404, "torrent not in session")
+    if action == "pause":
+        engine.pause(ih)
+    elif action == "resume":
+        engine.resume(ih)
+    elif action == "recheck":
+        engine.force_recheck(ih)
+    else:
+        raise HTTPException(400, f"unknown action: {action}")
+    return JSONResponse({"ok": True})
+
+
+class RemoveRequest(BaseModel):
+    delete_files: bool = False
+
+
+@app.delete("/api/torrent/{ih}")
+def remove_torrent(ih: str, req: RemoveRequest | None = None) -> JSONResponse:
+    """Remove a torrent from the session (optionally deleting downloaded data)."""
+    if engine.get(ih, include_files=False) is None:
+        raise HTTPException(404, "torrent not in session")
+    delete = bool(req.delete_files) if req else False
+    engine.remove_torrent(ih, delete_files=delete)
+    return JSONResponse({"ok": True})
+
+
+class FilePriorityRequest(BaseModel):
+    index: int
+    priority: int  # 0=exclude, 4=normal, 7=max
+
+
+@app.post("/api/torrent/{ih}/file-priority")
+def file_priority(ih: str, req: FilePriorityRequest) -> JSONResponse:
+    """Set download priority for one file (0 to exclude it from the download)."""
+    if engine.get(ih, include_files=False) is None:
+        raise HTTPException(404, "torrent not in session")
+    engine.set_file_priority(ih, req.index, req.priority)
+    return JSONResponse({"ok": True})
+
+
 @app.get("/api/file")
 def file_meta(ih: str, f: int) -> JSONResponse:
     """Resolve (info_hash, file_index) -> name/size so the UI can offer readers."""

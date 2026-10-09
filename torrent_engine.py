@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
 import threading
 import time
 from dataclasses import dataclass, field
@@ -69,6 +70,7 @@ class TorrentState:
     upload_rate: int = 0
     download_rate: int = 0
     is_seeding: bool = False
+    is_paused: bool = False
     total_size: int = 0
     total_done: int = 0
     file_progress: dict[int, int] = field(default_factory=dict)  # idx -> bytes done
@@ -206,13 +208,6 @@ class TorrentEngine:
     def add_torrent_async(self, source: str) -> None:
         threading.Thread(target=self.add_torrent, args=(source,), daemon=True).start()
 
-    def remove(self, ih_hex: str) -> None:
-        handle = self._handle.pop(ih_hex, None)
-        if handle is not None and handle.is_valid():
-            self._session.remove_torrent(handle)
-        self._torrents.pop(ih_hex, None)
-        self._pending_prio.pop(ih_hex, None)
-
     def status(self, include_files: bool = True) -> list[dict]:
         return [self._entry(ts, include_files) for ts in list(self._torrents.values())]
 
@@ -236,19 +231,33 @@ class TorrentEngine:
             "upload_rate": ts.upload_rate,
             "download_rate": ts.download_rate,
             "is_seeding": ts.is_seeding,
+            "is_paused": ts.is_paused,
             "total_size": ts.total_size,
             "total_done": ts.total_done,
         }
         if include_files and ts.fs is not None:
+            prios = self._file_prios(ts)
             entry["files"] = [
                 {"index": i, "name": _s(ts.fs.file_name(i)),
                  "size": ts.fs.file_size(i),
-                 "done": ts.file_progress.get(i, 0)}
+                 "done": ts.file_progress.get(i, 0),
+                 "priority": prios[i]}
                 for i in range(ts.fs.num_files())
             ]
         else:
             entry["files"] = []
         return entry
+
+    def _file_prios(self, ts: TorrentState) -> list[int]:
+        """Current per-file download priorities (0 means excluded)."""
+        handle = self._handle.get(ts.info_hash)
+        n = ts.fs.num_files()
+        if handle is not None and handle.is_valid():
+            try:
+                return [int(p) for p in handle.file_priorities()]
+            except Exception:
+                pass
+        return [4] * n
 
     def file_size(self, ih_hex: str, file_index: int) -> int:
         ts = self._torrents[ih_hex]
@@ -291,6 +300,64 @@ class TorrentEngine:
         with open(path, "rb") as fh:
             fh.seek(ts.fs.file_offset(file_index) + start)
             return fh.read(length)
+
+    # ---------- per-torrent actions ----------
+
+    def pause(self, ih_hex: str) -> None:
+        handle = self._handle.get(ih_hex)
+        if handle is not None and handle.is_valid():
+            handle.pause()
+
+    def resume(self, ih_hex: str) -> None:
+        handle = self._handle.get(ih_hex)
+        if handle is not None and handle.is_valid():
+            handle.resume()
+
+    def force_recheck(self, ih_hex: str) -> None:
+        handle = self._handle.get(ih_hex)
+        if handle is not None and handle.is_valid():
+            handle.force_recheck()
+
+    def remove_torrent(self, ih_hex: str, delete_files: bool = False) -> None:
+        """Remove from the session; when delete_files, also wipe the per-torrent
+        data directory. Deleting the directory ourselves (rather than relying on
+        libtorrent's remove flag) is deterministic across libtorrent versions."""
+        ts = self._torrents.get(ih_hex)
+        save_path = ts.save_path if ts is not None else None
+        handle = self._handle.pop(ih_hex, None)
+        if handle is not None and handle.is_valid():
+            self._session.remove_torrent(handle)
+        self._torrents.pop(ih_hex, None)
+        self._pending_prio.pop(ih_hex, None)
+        if delete_files and save_path:
+            shutil.rmtree(save_path, ignore_errors=True)
+
+    def set_file_priority(self, ih_hex: str, file_index: int, priority: int) -> None:
+        """Set download priority for one file (0=exclude, 4=normal, 7=max).
+
+        This libtorrent 2.x binding takes a single index-aligned list of
+        priorities (not a (indices, priority) pair), so read the current vector,
+        patch the one index, and write it back."""
+        handle = self._handle.get(ih_hex)
+        if handle is None or not handle.is_valid():
+            return
+        ts = self._torrents.get(ih_hex)
+        n = ts.fs.num_files() if ts is not None and ts.fs is not None else 0
+        try:
+            prios = [int(p) for p in handle.file_priorities()]
+        except Exception:
+            prios = []
+        while len(prios) < n:
+            prios.append(4)
+        if file_index < n:
+            prios[file_index] = priority
+        try:
+            handle.prioritize_files(prios)
+        except (TypeError, AttributeError):
+            try:  # 1.x single-file API
+                handle.prioritize_file(file_index, priority)
+            except Exception:
+                pass
 
     # ---------- internals ----------
 
@@ -336,6 +403,7 @@ class TorrentEngine:
             ts.upload_rate = getattr(status, "upload_payload_rate", 0)
             ts.download_rate = getattr(status, "download_payload_rate", 0)
             ts.is_seeding = bool(getattr(status, "seeding", False))
+            ts.is_paused = bool(getattr(status, "paused", False))
             ts.total_size = status.total_wanted
             ts.total_done = status.total_wanted_done
             if ts.fs is None:
@@ -369,12 +437,12 @@ class TorrentEngine:
 
     @staticmethod
     def _state_str(status: "lt.torrent_status") -> str:
-        if status.seeding:
-            return "seed"
         if status.paused:
             return "paused"
         if status.checking_files:
             return "checking"
+        if status.seeding:
+            return "seed"
         if status.downloading_metadata:
             return "fetching metadata"
         names = {

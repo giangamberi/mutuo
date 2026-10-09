@@ -106,6 +106,10 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
     instantly.
   - `POST /api/sync` — re-merge feed.json into catalog, enqueue new torrents
   - `GET /api/torrents` — engine state snapshots (`status(include_files=True)`)
+  - `GET /api/torrent?ih=..` — one torrent's snapshot (stats + file list w/ per-file priority)
+  - `POST /api/torrent/{ih}/{action}` — `pause` | `resume` | `recheck`
+  - `DELETE /api/torrent/{ih}` — body `{"delete_files": bool}`; remove from session, optionally wipe data dir
+  - `POST /api/torrent/{ih}/file-priority` — body `{"index": int, "priority": int}` (0=exclude, 4=normal, 7=max)
   - `GET /api/file?ih=..&f=..` — resolve (info_hash, file_index) to name/size
   - `GET /api/pdf?ih=..&f=..` — HTTP Range streaming for PDF.js
 - `GET /` and `POST /api/catalog` are the main entry points; the drag-and-drop
@@ -128,6 +132,18 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
 - `file_size(ih, idx)`, `wait_for_range(ih, idx, start, length, timeout)`,
   `fetch_range(ih, idx, start, length)`: the three methods the `/api/pdf`
   endpoint uses to stream a range only after its pieces are available.
+- `pause(ih)`, `resume(ih)`, `force_recheck(ih)`: per-torrent actions.
+- `remove_torrent(ih, delete_files=False)`: drop from session; with
+  `delete_files=True` the per-torrent data dir is also `rmtree`'d (done by
+  us, not via libtorrent's remove flag — deterministic across versions).
+- `set_file_priority(ih, idx, prio)`: this 2.x binding's `prioritize_files`
+  takes a single index-aligned list (NOT a `(indices, prio)` pair), so the
+  method reads `file_priorities()`, patches one index, and writes back.
+  `0` excludes a file from the download.
+- `_state_str`: `paused` is checked before `seeding` so a paused, complete
+  torrent reads "paused", not "seed".
+- Per-file `priority` (0=excluded) is exposed in each entry's `files` list so
+  the UI can restore the exclude state after a re-render.
 - `_load_state()` / `_save_state()`: persist the libtorrent session blob
   (2.x `save_state` embeds the DHT routing table) to
   `downloads/.session_state.json` so a restart resumes with a warm DHT table

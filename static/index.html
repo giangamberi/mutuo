@@ -14,14 +14,27 @@
   input { min-width:280px; }
   main { flex:1; display:flex; min-height:0; }
   aside { width:320px; min-width:240px; background:var(--panel); border-right:1px solid #000; overflow-y:auto; }
-  aside .tbtn {
+  aside .titem { position:relative; border-bottom:1px solid #262b34; }
+  aside .titem .open {
     display:block; width:100%; text-align:left; font:inherit; cursor:pointer;
-    background:transparent; color:var(--text); border:0; border-bottom:1px solid #262b34;
-    border-radius:0; padding:10px 14px;
+    background:transparent; color:var(--text); border:0; border-radius:0; padding:10px 44px 10px 14px;
   }
-  aside .tbtn:hover { background:#232a36; }
-  aside .tbtn.active { background:rgba(79,140,255,.12); box-shadow:inset 3px 0 0 var(--acc); }
-  aside .tbtn:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
+  aside .titem:hover .open { background:#232a36; }
+  aside .titem.active .open { background:rgba(79,140,255,.12); box-shadow:inset 3px 0 0 var(--acc); }
+  aside .titem .open:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
+  aside .titem .cog {
+    position:absolute; top:8px; right:8px; padding:3px 7px; font-size:12px; line-height:1;
+    background:transparent; color:var(--dim); border:1px solid transparent; border-radius:6px; cursor:pointer;
+  }
+  aside .titem .cog:hover { background:#0f1115; border-color:#333a47; color:var(--text); }
+  .menu { display:none; position:absolute; right:8px; z-index:50; min-width:190px;
+    background:var(--panel); border:1px solid #333a47; border-radius:8px; box-shadow:0 8px 24px #000a; }
+  .menu.open { display:block; }
+  .menu button { display:block; width:100%; text-align:left; border:0; border-radius:0;
+    background:transparent; color:var(--text); padding:8px 12px; font-size:12px; }
+  .menu button:hover { background:#232a36; }
+  .menu .danger { color:#ff6b6b; }
+  .menu .danger:hover { background:#3a1f24; }
   .t .name { font-size:13px; font-weight:600; }
   .t .meta { font-size:11px; color:var(--dim); margin-top:3px; }
   .bar { height:4px; background:#0f1115; border-radius:2px; margin-top:6px; overflow:hidden; }
@@ -41,6 +54,10 @@
   .files button.file-btn .icon { flex:0 0 auto; font-size:14px; }
   .files button.file-btn .fname { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .files button.file-btn .fsize { flex:0 0 auto; color:var(--dim); font-size:11px; }
+  .files button.file-btn.excluded { opacity:.55; }
+  .files .excl-toggle { flex:0 0 auto; font-size:11px; padding:2px 7px; cursor:pointer;
+    background:transparent; border:1px solid #333a47; border-radius:5px; color:var(--dim); }
+  .files .excl-toggle:hover { border-color:var(--acc); color:var(--acc); }
   #viewer { flex:1; display:flex; flex-direction:column; align-items:center; overflow-y:auto; padding:12px; }
   #page { background:#fff; margin-bottom:10px; }
   #status { font-size:12px; color:var(--dim); margin-bottom:8px; }
@@ -117,15 +134,26 @@ async function refresh() {
     for (const t of torrents) {
       const c = byMagnet[magnetKey(t.magnet)] || {};
       const pct = Math.round(t.progress * 100);
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'tbtn' + (selected === t.info_hash ? ' active' : '');
-      b.dataset.ih = t.info_hash;
-      b.dataset.name = c.name || t.name || '';
-      b.innerHTML = `<div class="name">${esc(c.name || t.name || t.info_hash)}</div>
-        <div class="meta">${esc(t.state)} · ${pct}% · ${t.num_peers} peers</div>
-        <div class="bar"><div style="width:${pct}%"></div></div>`;
-      el.appendChild(b);
+      const item = document.createElement('div');
+      item.className = 'titem' + (selected === t.info_hash ? ' active' : '');
+      item.dataset.ih = t.info_hash;
+      const meta = `${esc(t.state)} · ${pct}% · ${t.num_seeds || 0}⇩${t.num_peers}peers` +
+        (t.is_paused ? ' · ⏸' : '');
+      item.innerHTML = `<button type="button" class="open" data-ih="${t.info_hash}" data-name="${esc(c.name || t.name || '')}">
+          <div class="name">${esc(c.name || t.name || t.info_hash)}</div>
+          <div class="meta">${meta}</div>
+          <div class="bar"><div style="width:${pct}%"></div></div>
+        </button>
+        <button type="button" class="cog" data-ih="${t.info_hash}" aria-label="torrent actions">⋯</button>
+        <div class="menu">
+          <button data-act="${t.is_paused ? 'resume' : 'pause'}" data-ih="${t.info_hash}">${t.is_paused ? '▶ Resume' : '⏸ Pause'}</button>
+          <button data-act="recheck" data-ih="${t.info_hash}">↻ Recheck files</button>
+          <button data-act="files" data-ih="${t.info_hash}">Manage files</button>
+          <button data-act="copy" data-ih="${t.info_hash}">Copy magnet link</button>
+          <button data-act="remove-keep" data-ih="${t.info_hash}" class="danger">Remove (keep files)</button>
+          <button data-act="remove-del" data-ih="${t.info_hash}" class="danger">Remove &amp; delete files…</button>
+        </div>`;
+      el.appendChild(item);
     }
     document.getElementById('hdrstat').textContent =
       torrents.length ? `${torrents.length} torrent(s)` : 'no torrents — add one or point feed.json at a source';
@@ -164,7 +192,7 @@ async function openTorrent(ih, name) {
 }
 
 function markActive() {
-  document.querySelectorAll('#catalog .tbtn').forEach(n => {
+  document.querySelectorAll('#catalog .titem').forEach(n => {
     n.classList.toggle('active', n.dataset.ih === selected);
   });
 }
@@ -204,16 +232,24 @@ function showFileList(ih, pdfs) {
   pages.innerHTML = '';
   const ul = document.createElement('div');
   ul.className = 'files';
+  ul.dataset.ih = ih;
   for (const f of pdfs) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'file-btn';
     b.innerHTML = `<span class="icon">&#128196;</span><span class="fname">${esc(f.name)}</span>` +
-      `<span class="fsize">${fmtSize(f.size)}</span>`;
+      `<span class="fsize">${fmtSize(f.size)}</span>` +
+      `<span class="excl-toggle" title="Exclude this file from the download">⊘ exclude</span>`;
     b.dataset.ih = ih;
     b.dataset.idx = f.index;
     b.dataset.name = f.name;
     b.title = f.name;
+    if (f.priority === 0) {
+      b.classList.add('excluded');
+      const t = b.querySelector('.excl-toggle');
+      t.textContent = '✓ included';
+      t.title = 'This file is excluded — click to include again';
+    }
     ul.appendChild(b);
   }
   pages.appendChild(ul);
@@ -326,13 +362,67 @@ async function renderPage(doc, p, container) {
   await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 }
 
-// clicking a torrent button in the sidebar
+// clicking a torrent button in the sidebar (open the PDF), or its ⋯ menu
 document.getElementById('catalog').addEventListener('click', (e) => {
-  const b = e.target.closest('button.tbtn[data-ih]');
-  if (!b) return;
-  e.preventDefault();
-  openTorrent(b.dataset.ih, b.dataset.name || '');
+  const cog = e.target.closest('.cog[data-ih]');
+  if (cog) {
+    e.preventDefault();
+    const menu = cog.parentElement.querySelector('.menu');
+    const wasOpen = menu.classList.contains('open');
+    document.querySelectorAll('#catalog .menu.open').forEach(m => m.classList.remove('open'));
+    if (!wasOpen) menu.classList.add('open');
+    return;
+  }
+  const act = e.target.closest('.menu button[data-act]');
+  if (act) {
+    e.preventDefault();
+    act.parentElement.classList.remove('open');
+    doTorrentAction(act.dataset.ih, act.dataset.act);
+    return;
+  }
+  const b = e.target.closest('button.open[data-ih]');
+  if (b) { e.preventDefault(); openTorrent(b.dataset.ih, b.dataset.name || ''); }
 });
+
+// close the ⋯ menu on outside click / Escape
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.titem'))
+    document.querySelectorAll('#catalog .menu.open').forEach(m => m.classList.remove('open'));
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape')
+    document.querySelectorAll('#catalog .menu.open').forEach(m => m.classList.remove('open'));
+});
+
+async function doTorrentAction(ih, act) {
+  if (act === 'files') { openFileManager(ih); return; }
+  try {
+    if (act === 'copy') {
+      const entry = await j(`/api/torrent?ih=${ih}`).then(r => r.json());
+      if (entry.magnet) { await navigator.clipboard.writeText(entry.magnet); toast('magnet link copied'); }
+      return;
+    }
+    if (act === 'remove-keep' || act === 'remove-del') {
+      const msg = act === 'remove-del'
+        ? 'Remove this torrent AND delete its downloaded files?'
+        : 'Remove this torrent from the session (files are kept on disk)?';
+      if (!confirm(msg)) return;
+      await j(`/api/torrent/${ih}`, { method: 'DELETE', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ delete_files: act === 'remove-del' }) });
+      if (selected === ih) { selected = null; showEmpty('Torrent removed.'); }
+    } else {
+      await j(`/api/torrent/${ih}/${act}`, { method: 'POST' });
+    }
+  } catch (e) { alert(e.message); }
+  refresh();
+}
+
+function toast(msg) {
+  const el = document.getElementById('hdrstat');
+  const old = el.textContent;
+  el.textContent = msg;
+  setTimeout(() => { if (el.textContent === msg) el.textContent = old; }, 2000);
+}
 
 // "Retry now" on the loading page
 document.getElementById('loading').addEventListener('click', (e) => {
@@ -341,16 +431,77 @@ document.getElementById('loading').addEventListener('click', (e) => {
   if (selected) openTorrent(selected, '');
 });
 
-// PDF chooser inside the viewer
+// PDF chooser inside the viewer (open a PDF, or toggle its exclusion)
 document.getElementById('pages').addEventListener('click', (e) => {
+  const excl = e.target.closest('.excl-toggle');
+  if (excl) {
+    e.preventDefault();
+    const b = excl.closest('button.file-btn');
+    toggleExcluded(b);
+    return;
+  }
   const b = e.target.closest('button.file-btn');
   if (!b) return;
   e.preventDefault();
-  openPdf(b.dataset.ih, Number(b.dataset.idx), b.dataset.name || b.textContent, 0);
+  if (/\.pdf$/i.test(b.dataset.name || ''))
+    openPdf(b.dataset.ih, Number(b.dataset.idx), b.dataset.name || b.textContent, 0);
+  else toast('not a PDF');
 });
 
-refresh();
-setInterval(refresh, 4000);
+// show every file in the torrent with an include/exclude toggle
+async function openFileManager(ih) {
+  hideLoading();
+  let entry;
+  try { entry = await j(`/api/torrent?ih=${ih}`).then(r => r.json()); }
+  catch (e) { alert(e.message); return; }
+  if (!entry.files || !entry.files.length) { alert('No file list yet — metadata not available.'); return; }
+  const pages = document.getElementById('pages');
+  const empty = document.getElementById('empty');
+  empty.style.display = 'none';
+  pages.style.display = '';
+  pages.innerHTML = '';
+  const h = document.createElement('h2');
+  h.style.cssText = 'font-size:14px;margin:0 0 10px;';
+  h.textContent = `Files in ${entry.name || ih} — toggle which to download`;
+  pages.appendChild(h);
+  const ul = document.createElement('div');
+  ul.className = 'files';
+  ul.dataset.ih = ih;
+  for (const f of entry.files) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'file-btn';
+    b.innerHTML = `<span class="icon">${/\.pdf$/i.test(f.name) ? '&#128196;' : '&#128193;'}</span><span class="fname">${esc(f.name)}</span>` +
+      `<span class="fsize">${fmtSize(f.size)}</span>` +
+      `<span class="excl-toggle" title="Exclude this file from the download">⊘ exclude</span>`;
+    b.dataset.ih = ih;
+    b.dataset.idx = f.index;
+    b.dataset.name = f.name;
+    b.title = f.name;
+    if (f.priority === 0) {
+      b.classList.add('excluded');
+      b.querySelector('.excl-toggle').textContent = '✓ included';
+    }
+    ul.appendChild(b);
+  }
+  pages.appendChild(ul);
+}
+
+async function toggleExcluded(b) {
+  const excl = b.querySelector('.excl-toggle');
+  const excluded = b.classList.toggle('excluded');
+  excl.textContent = excluded ? '✓ included' : '⊘ exclude';
+  excl.title = excluded ? 'This file is excluded — click to include again' : 'Exclude this file from the download';
+  try {
+    await j(`/api/torrent/${b.dataset.ih}/file-priority`, { method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ index: Number(b.dataset.idx), priority: excluded ? 0 : 4 }) });
+  } catch (e) {
+    b.classList.remove('excluded');
+    excl.textContent = '⊘ exclude';
+    alert(e.message);
+  }
+}
 
 refresh();
 setInterval(refresh, 4000);
