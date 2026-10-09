@@ -152,6 +152,10 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
   engine expects it (so it *verifies* rather than downloads), then drives the
   app via FastAPI's `TestClient` — checks `206` (head/tail), `200` (full),
   `416` (invalid range), and catalog add/list.
+- Test C (deterministic, no network): partial read. Seeds only the first
+  piece of a 3-piece file and proves that a present range is served
+  immediately while a missing range blocks and times out — the "read before
+  fully downloaded" path.
 - Test B (best-effort): a real magnet download across two in-process
   libtorrent sessions (seeder + client engine) on localhost. Prints
   `SKIPPED (no peers ...)` if DHT is blocked — not a failure.

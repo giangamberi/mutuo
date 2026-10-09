@@ -7,6 +7,10 @@ app itself only *downloads*, so this is purely fixture code.
 - Test A (deterministic, no network): pre-place the PDF where libtorrent
   expects it, so the engine *verifies* rather than downloads. Exercises
   metadata, verification, disk reads, and HTTP 200/206/416 paths.
+- Test C (deterministic, no network): partial read. Seeds only the first piece
+  of a 3-piece file and proves the core promise: a present range is served
+  immediately, while a missing range blocks and times out (never returns
+  garbage). This is the "open a PDF before it's fully downloaded" path.
 - Test B (best-effort): real magnet download across two sessions on localhost.
   Tolerant of DHT timing; reports but does not fail the suite.
 
@@ -36,8 +40,12 @@ def make_torrent(name: str, files: dict, piece_length: int = 16384) -> tuple[byt
     # v1 single-or-multi-file info dict; one piece per file for the tiny fixtures
     if len(files) == 1:
         (path, content) = next(iter(files.items()))
+        # one sha1 per piece (a tiny file is a single piece, so this reduces to
+        # the historical sha1(content) behaviour)
+        n = max(1, (len(content) + piece_length - 1) // piece_length)
+        pieces = b"".join(sha1(content[i*piece_length:(i+1)*piece_length]) for i in range(n))
         info = {b"name": name.encode(), b"piece length": piece_length,
-                b"length": len(content), b"pieces": sha1(content)}
+                b"length": len(content), b"pieces": pieces}
     else:
         data = b"".join(files.values())
         n = (len(data) + piece_length - 1) // piece_length
@@ -134,6 +142,47 @@ with TestClient(app_module.app) as client:
     assert r.status_code in (200, 409)
     assert any(c["name"] == "e2e" for c in client.get("/api/catalog").json())
     print("A7 catalog add/list: OK")
+
+# ---- Test C: partial read (only some pieces present, no peers) --------------
+# Build a 3-piece torrent, pre-seed ONLY the first piece (the rest is
+# zero-filled so it fails verification and stays "missing"). Proves the core
+# promise: bytes already on disk are served immediately, while a range that
+# hasn't downloaded yet BLOCKS and times out -- it never returns garbage.
+# Deterministic (no network), so it always runs.
+piece_len = 1024
+content = bytes(range(256)) * 12            # 3072 bytes -> exactly 3 pieces
+c_name = "part.pdf"
+t_bytes, _ = make_torrent(c_name, {c_name: content}, piece_length=piece_len)
+t_c = os.path.join(TMP, "part.torrent")
+open(t_c, "wb").write(t_bytes)
+c_ih = str(lt.torrent_info(t_bytes).info_hash())
+
+dl_c = os.path.join(TMP, "dl-c")
+seed_c = os.path.join(dl_c, c_ih)
+os.makedirs(seed_c, exist_ok=True)
+partial = content[:piece_len] + b"\x00" * (len(content) - piece_len)
+open(os.path.join(seed_c, c_name), "wb").write(partial)
+
+eng_c = TorrentEngine(download_dir=dl_c)
+eng_c.start()
+eng_c.add_torrent(t_c)
+try:
+    # head (first piece) is present on disk -> served without waiting
+    eng_c.wait_for_range(c_ih, 0, 0, piece_len, timeout=20)
+    head = eng_c.fetch_range(c_ih, 0, 0, piece_len)
+    assert head == content[:piece_len], "head bytes mismatch"
+    print("C1 present head served immediately: OK")
+
+    # tail spans a not-yet-downloaded piece -> must time out, not return data
+    t0 = time.monotonic()
+    try:
+        eng_c.wait_for_range(c_ih, 0, len(content) - piece_len, piece_len, timeout=3)
+        raise AssertionError("expected TimeoutError for missing tail")
+    except TimeoutError:
+        pass
+    print(f"C2 missing tail blocks (timed out in {time.monotonic() - t0:.1f}s): OK")
+finally:
+    eng_c.stop()
 
 # ---- Test B: real magnet download across two sessions (best effort) ---------
 seeder = lt.session()
