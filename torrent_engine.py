@@ -17,10 +17,13 @@ libtorrent 2.x Python API notes (verified empirically, see e2e_test.py):
 """
 from __future__ import annotations
 
+import base64
+import json
 import os
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import libtorrent as lt
 
@@ -69,6 +72,10 @@ class TorrentEngine:
     def __init__(self, download_dir: str):
         self._download_dir = download_dir
         os.makedirs(download_dir, exist_ok=True)
+        # Persist DHT routing table + session state so a restart does NOT start
+        # from a cold, empty DHT table — the usual reason re-added torrents sit
+        # at 0 peers for minutes right after a restart.
+        self._state_file = Path(download_dir) / ".session_state.json"
         self._session = lt.session()
         self._torrents: dict[str, TorrentState] = {}     # keyed by hex info-hash string
         self._handle: dict[str, "lt.torrent_handle"] = {}
@@ -77,6 +84,41 @@ class TorrentEngine:
         self._pending_prio: dict[str, set[int]] = {}     # hex -> pieces to prioritize
         self._stop = False
         self._thread = threading.Thread(target=self._run, daemon=True)
+
+    # ---------- session state persistence ----------
+
+    def _load_state(self) -> None:
+        """Restore DHT routing table + session state from a previous run so a
+        restart does NOT start from a cold, empty DHT table. Best-effort: any
+        failure just means we start cold (pre-fix behaviour)."""
+        if not self._state_file.exists():
+            return
+        try:
+            blob = base64.b64decode(
+                json.loads(self._state_file.read_text(encoding="utf-8")).get("session", "")
+            )
+            if blob:
+                self._session.load_state(blob)   # 2.x: save_state embeds DHT; load_state restores it
+                print(f"engine: restored session state from {self._state_file.name}")
+        except Exception as exc:
+            print(f"engine: could not restore session state ({exc}); starting cold")
+
+    def _save_state(self) -> None:
+        """Snapshot session state (2.x embeds the DHT routing table in it). Called
+        periodically and on shutdown so a restart resumes warm."""
+        try:
+            blob = self._session.save_state()
+            # 2.x returns a dict; bencode to a stable byte blob. 1.x returns bytes.
+            if not isinstance(blob, (bytes, bytearray)):
+                blob = lt.bencode(dict(blob))
+            if not blob:
+                return
+            payload = {"session": base64.b64encode(bytes(blob)).decode("ascii")}
+            tmp = self._state_file.with_suffix(".tmp")
+            tmp.write_text(json.dumps(payload), encoding="utf-8")
+            tmp.replace(self._state_file)   # atomic so a crash never corrupts it
+        except Exception as exc:
+            print(f"engine: failed to save session state ({exc})")
 
     # ---------- session setup ----------
 
@@ -94,6 +136,7 @@ class TorrentEngine:
             self._session.listen_on(6881, 6899)
         except Exception as exc:  # port range unavailable — keep default
             print(f"engine: listen_on failed ({exc}); using default port")
+        self._load_state()
         self._thread.start()
 
     # ---------- public API (thread-safe; wait_* may block) ----------
@@ -307,11 +350,21 @@ class TorrentEngine:
         return names.get(status.state, f"state={status.state}")
 
     def _run(self) -> None:
+        # save DHT/session state every 30 s so a restart resumes warm
+        _last_save = 0.0
         while not self._stop:
             self._session.wait_for_alert(250)  # also acts as a 250ms tick
             self._session.pop_alerts()        # drain; state polling is our signal
             self._refresh_states()
             self._apply_priorities()
+            now = time.monotonic()
+            if now - _last_save > 30.0:
+                self._save_state()
+                _last_save = now
 
     def stop(self) -> None:
         self._stop = True
+        try:
+            self._save_state()  # final snapshot so the next start restores cleanly
+        except Exception:
+            pass

@@ -53,8 +53,9 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
 
 1. **Catalog is the source of truth for *what* to track.** It's a JSON file
    on disk. The engine is in-memory and rebuilt on every restart by
-   re-adding all catalog entries. This means the app survives restarts
-   without a database.
+   re-adding all catalog entries. Downloaded bytes also persist in
+   `downloads/`, so a restart resumes from what's already on disk. This means
+   the app survives restarts without a database.
 
 2. **Info-hash is the join key.** The catalog keys each item by the info-hash
    extracted from the magnet (`Catalog._magnet_key`, the `xt=` part). The
@@ -80,6 +81,15 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
    binds the session to ports 6881–6899. UPnP/LSD are left at libtorrent's
    defaults. Without DHT, magnet-only torrents with no reachable trackers
    won't find peers.
+
+6. **DHT/session state is persisted across restarts** in
+   `downloads/.session_state.json` (gitignored). A fresh libtorrent session has
+   an empty DHT routing table, so a cold restart sits at 0 peers on
+   DHT-reliant torrents for minutes. `start()` calls `_load_state()` to restore
+   the saved blob (libtorrent 2.x `save_state` embeds the DHT table, and
+   `load_state` restores it); `_save_state()` runs every 30 s from the run
+   loop and once on `stop()`, written atomically via a `.tmp` rename. It's
+   best-effort: if the file is missing or corrupt the engine just starts cold.
 
 ## File-by-file notes
 
@@ -118,6 +128,12 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
 - `file_size(ih, idx)`, `wait_for_range(ih, idx, start, length, timeout)`,
   `fetch_range(ih, idx, start, length)`: the three methods the `/api/pdf`
   endpoint uses to stream a range only after its pieces are available.
+- `_load_state()` / `_save_state()`: persist the libtorrent session blob
+  (2.x `save_state` embeds the DHT routing table) to
+  `downloads/.session_state.json` so a restart resumes with a warm DHT table
+  instead of 0 peers for minutes. Saved every 30 s and on `stop()`, written
+  atomically; loaded in `start()`. Best-effort — a missing/corrupt file just
+  means a cold start.
 
 ### `catalog.py`
 - `Catalog` class: in-memory dict of `CatalogItem` objects, keyed by
