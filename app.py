@@ -10,18 +10,24 @@ Architecture notes
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Request
+import libtorrent as lt
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from catalog import Catalog
-from torrent_engine import TorrentEngine, TorrentError
+from torrent_engine import TorrentEngine, TorrentError, _ih_hex
 
 BASE = Path(__file__).parent
+UPLOAD_DIR = BASE / ".torrents"
 app = FastAPI(title="pdf-torrent-reader")
 
 engine = TorrentEngine(download_dir=str(BASE / "downloads"))
@@ -68,6 +74,38 @@ def post_catalog(req: AddRequest) -> JSONResponse:
     catalog.save()
     engine.add_torrent_async(req.magnet)
     return JSONResponse({"ok": True})
+
+
+@app.post("/api/torrent")
+async def upload_torrent(file: UploadFile = File(...)) -> JSONResponse:
+    """Accept a dropped .torrent file, register it in the catalog (as a
+    magnet), and add it to the session via the file. Because the file already
+    carries full metadata, the PDF list shows up immediately — no DHT wait."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "empty file")
+    tmp = tempfile.NamedTemporaryFile(suffix=".torrent", delete=False)
+    try:
+        tmp.write(data)
+        tmp.close()
+        try:
+            ti = lt.torrent_info(tmp.name)
+        except Exception as exc:
+            raise HTTPException(400, f"not a valid .torrent file: {exc}")
+        name = ti.name()
+        ih_hex = _ih_hex(ti.info_hash)
+        magnet = _build_magnet(ti)
+        # keep a small stable copy on disk (lets us re-add by path later)
+        UPLOAD_DIR.mkdir(exist_ok=True)
+        dest = str(UPLOAD_DIR / f"{ih_hex}.torrent")
+        shutil.copyfile(tmp.name, dest)
+        if not catalog.has(magnet):
+            catalog.add(name, magnet, [])
+            catalog.save()
+        engine.add_torrent(dest, magnet=magnet)
+        return JSONResponse({"ok": True, "name": name, "info_hash": ih_hex})
+    finally:
+        os.unlink(tmp.name)
 
 
 @app.get("/api/torrents")
@@ -140,3 +178,17 @@ def _ih_from_magnet(magnet: str) -> str | None:
         if part.startswith("xt=urn:btih:"):
             return part[len("xt=urn:btih:"):]
     return None
+
+
+def _build_magnet(ti) -> str:
+    """Build a magnet URI from parsed metadata so a dropped .torrent can be
+    persisted in the catalog (the file itself can't) and re-added after a
+    restart. Trackers from the file are included to help reconnect."""
+    parts = [f"magnet:?xt=urn:btih:{_ih_hex(ti.info_hash)}", f"dn={quote(ti.name())}"]
+    try:
+        trackers = list(ti.trackers())
+    except Exception:
+        trackers = []
+    for tracker in trackers:
+        parts.append(f"tr={quote(tracker)}")
+    return "&".join(parts)

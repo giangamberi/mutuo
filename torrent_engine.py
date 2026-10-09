@@ -88,8 +88,12 @@ class TorrentEngine:
 
     # ---------- public API (thread-safe; wait_* may block) ----------
 
-    def add_torrent(self, source: str) -> str:
-        """Add a magnet URI, .torrent URL, or .torrent file path. Returns info_hash hex."""
+    def add_torrent(self, source: str, magnet: str = "") -> str:
+        """Add a magnet URI, .torrent URL, or .torrent file path. Returns info_hash hex.
+
+        `magnet` optionally records a canonical magnet URI against the state.
+        When adding from a .torrent file we pass the file's constructed magnet
+        so the UI can still match the entry to its catalog record by name."""
         is_magnet = source.startswith("magnet:")
         # magnets and .torrent files/URLs parse into different objects:
         #   magnet -> add_torrent_params (no metadata yet)  -> libtorrent fetches it via DHT
@@ -121,7 +125,7 @@ class TorrentEngine:
                 return ih_hex  # already present (e.g. app restart)
             ts = TorrentState(
                 info_hash=ih_hex, name=name, save_path=save_path,
-                magnet=source if is_magnet else "",
+                magnet=magnet or (source if is_magnet else ""),
             )
             if has_files:  # .torrent files already carry the file list
                 ts.fs = ti.files()
