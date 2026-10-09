@@ -53,7 +53,7 @@ def _startup():
 
 @app.get("/")
 def index() -> HTMLResponse:
-    return HTMLResponse((BASE / "static" / "index.html").read_text())
+    return HTMLResponse((BASE / "static" / "index.html").read_text(encoding="utf-8"))
 
 
 @app.get("/api/catalog")

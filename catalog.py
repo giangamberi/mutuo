@@ -41,7 +41,7 @@ class Catalog:
 
     def _load(self) -> None:
         try:
-            with open(self._path) as fh:
+            with open(self._path, encoding="utf-8") as fh:
                 for entry in self._entries(json.load(fh)):
                     self._items[self._magnet_key(entry["magnet"])] = CatalogItem(
                         name=entry.get("name", ""),
@@ -56,7 +56,7 @@ class Catalog:
             {"name": it.name, "magnet": it.magnet, "files": it.files, "added_at": it.added_at}
             for it in self._items.values()
         ]
-        with open(self._path, "w") as fh:
+        with open(self._path, "w", encoding="utf-8") as fh:
             json.dump(entries, fh, indent=2)
 
     def items(self) -> list[CatalogItem]:
@@ -80,7 +80,7 @@ class Catalog:
             with urllib.request.urlopen(feed_url, timeout=30) as resp:
                 data = json.load(resp)
         else:  # local file path
-            with open(feed_url) as fh:
+            with open(feed_url, encoding="utf-8") as fh:
                 data = json.load(fh)
         added = 0
         for entry in self._entries(data):
