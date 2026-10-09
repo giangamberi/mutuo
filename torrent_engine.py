@@ -39,6 +39,16 @@ def _ih_hex(info_hash) -> str:
     return str(val)
 
 
+def _s(x) -> str:
+    """libtorrent returns name()/trackers()/file_name() as bytes on some builds;
+    coerce to str before it reaches a JSON response or a magnet URI."""
+    if isinstance(x, bytes):
+        return x.decode("utf-8", "replace")
+    if x is None:
+        return ""
+    return str(x)
+
+
 @dataclass
 class TorrentState:
     info_hash: str                           # hex string, used as the dict key everywhere
@@ -106,7 +116,7 @@ class TorrentEngine:
             has_files = False
         else:
             ti = lt.torrent_info(source)
-            name = ti.name()
+            name = _s(ti.name())
             ih_hex = _ih_hex(ti.info_hash)
             params = lt.add_torrent_params()
             params.ti = ti
@@ -162,7 +172,7 @@ class TorrentEngine:
             }
             if include_files and ts.fs is not None:
                 entry["files"] = [
-                    {"index": i, "name": ts.fs.file_name(i),
+                    {"index": i, "name": _s(ts.fs.file_name(i)),
                      "size": ts.fs.file_size(i),
                      "done": ts.file_progress.get(i, 0)}
                     for i in range(ts.fs.num_files())

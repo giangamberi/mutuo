@@ -92,7 +92,7 @@ async def upload_torrent(file: UploadFile = File(...)) -> JSONResponse:
             ti = lt.torrent_info(tmp.name)
         except Exception as exc:
             raise HTTPException(400, f"not a valid .torrent file: {exc}")
-        name = ti.name()
+        name = _as_str(ti.name())
         ih_hex = _ih_hex(ti.info_hash)
         magnet = _build_magnet(ti)
         # keep a small stable copy on disk (lets us re-add by path later)
@@ -180,15 +180,26 @@ def _ih_from_magnet(magnet: str) -> str | None:
     return None
 
 
+def _as_str(x) -> str:
+    """libtorrent returns name()/trackers() as bytes on some builds; coerce."""
+    if isinstance(x, bytes):
+        return x.decode("utf-8", "replace")
+    return str(x)
+
+
 def _build_magnet(ti) -> str:
     """Build a magnet URI from parsed metadata so a dropped .torrent can be
     persisted in the catalog (the file itself can't) and re-added after a
     restart. Trackers from the file are included to help reconnect."""
-    parts = [f"magnet:?xt=urn:btih:{_ih_hex(ti.info_hash)}", f"dn={quote(ti.name())}"]
+    parts = [f"magnet:?xt=urn:btih:{_ih_hex(ti.info_hash)}", f"dn={quote(_as_str(ti.name()))}"]
     try:
-        trackers = list(ti.trackers())
+        raw = list(ti.trackers())  # deprecated; returns announce_entry objects
     except Exception:
-        trackers = []
-    for tracker in trackers:
-        parts.append(f"tr={quote(tracker)}")
+        raw = []
+    for entry in raw:
+        # entries are announce_entry objects with a .url (str); guard both shapes
+        url = getattr(entry, "url", None)
+        url = _as_str(url if url is not None else entry)
+        if url:
+            parts.append(f"tr={quote(url)}")
     return "&".join(parts)
