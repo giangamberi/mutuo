@@ -92,7 +92,8 @@ async function refresh() {
         if (!/\.pdf$/i.test(f.name)) continue;
         const a = document.createElement('a');
         a.textContent = f.name;
-        a.onclick = () => openPdf(t.info_hash, f.index, f.name, f.size);
+        a.dataset.ih = t.info_hash;
+        a.dataset.idx = f.index;
         files.appendChild(a);
       }
       el.appendChild(div);
@@ -207,6 +208,14 @@ async function renderPage(doc, p, container) {
   container.appendChild(canvas);
   await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 }
+
+// single delegated click handler — survives the 4 s DOM rebuild in refresh()
+document.getElementById('catalog').addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-ih]');
+  if (!a) return;
+  e.preventDefault();
+  openPdf(a.dataset.ih, Number(a.dataset.idx), a.textContent, 0);
+});
 
 refresh();
 setInterval(refresh, 4000);
