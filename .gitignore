@@ -1,0 +1,5 @@
+# runtime state
+downloads/
+catalog.json
+*.pyc
+__pycache__/

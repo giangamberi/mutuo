@@ -1,93 +1,95 @@
-# pdf-reader
+# PDF Torrent Reader
 
+A local, single-user web app that reads PDFs straight out of BitTorrent.
+You give it a list of torrents (your own files, or internal company shares);
+it downloads the pieces the reader actually needs and streams them to PDF.js
+over HTTP Range requests — no full-file download required for first paint.
 
+Intended for **content you are authorized to share** (your own PDFs, internal
+company documents). It is a client for a swarm you control; it is not a
+distribution service for third-party copyrighted material.
 
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## How it works
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.scch.at/ponte-gamberi/pdf-reader.git
-git branch -M main
-git push -uf origin main
+Browser (PDF.js)                      FastAPI (app.py)                 libtorrent 2.x (engine thread)
+     |  GET /api/pdf?ih=..&f=0            |                                  |
+     |  Range: bytes=0-65535  --------->  |  parse range                     |
+     |  (PDF.js header fetch)             |  wait_for_range(0, 65536) ------->  verify pieces 0..N
+     |  (blocks until pieces verified)    |                                  |  (auto_managed + DHT/peers)
+     |  206 Partial Content  <----------- |  fetch_range = disk read <------- |  (verified bytes on disk)
+     |  ... more ranges ...               |                                  |
 ```
 
-## Integrate with your tools
+- **`torrent_engine.py`** runs one `lt.session` in a daemon thread. Each torrent
+  is stored under `downloads/<info_hash>/`. It polls state every 250 ms,
+  re-asserts piece priorities for whatever ranges are being read, and signals
+  a condition variable when verified bytes become available.
+- **`app.py`** is a small FastAPI app. `/api/pdf` maps an HTTP range to the
+  torrent pieces it covers, blocks until they're verified, then reads them
+  from disk and returns a `206`. Everything else PDF.js needs (`200`, `416`,
+  `Accept-Ranges`) is handled too.
+- **`catalog.py`** is the list of PDFs — persisted to `catalog.json`, synced
+  from an optional `feed.json` (a JSON list you point at an internal source).
+- **`static/index.html`** is a single-page UI: a torrent/file browser on the
+  left, the PDF.js viewer on the right.
 
-* [Set up project integrations](https://gitlab.scch.at/ponte-gamberi/pdf-reader/-/settings/integrations)
+## Install
 
-## Collaborate with your team
+```bash
+pip install libtorrent fastapi uvicorn httpx   # libtorrent pulls the C++ core
+```
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Run
 
-## Test and Deploy
+```bash
+cd pdf-torrent-reader
+python3 -m uvicorn app:app --host 127.0.0.1 --port 8080
+# open http://127.0.0.1:8080
+```
 
-Use the built-in continuous integration in GitLab.
+Binds to localhost by default (single-user, no auth). Add PDFs by pasting a
+`magnet:?xt=urn:btih:...` URI in the header, or by putting entries in
+`feed.json` and clicking **Sync feed**.
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+### feed.json format
 
-***
+```json
+[
+  {"name": "Acme Q3 report", "magnet": "magnet:?xt=urn:btih:...", "files": ["report.pdf"]},
+  {"name": "Handbook",      "magnet": "magnet:?xt=urn:btih:..."}
+]
+```
 
-# Editing this README
+`files` is optional — when omitted, every PDF in the torrent is offered.
+The path may also be a URL; `POST /api/sync` fetches and merges it.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Test
 
-## Suggestions for a good README
+```bash
+python3 e2e_test.py
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+- **Test A** (deterministic, no network): verifies the file, then exercises
+  the HTTP layer end-to-end — `200` full, `206` head/tail ranges, `416`
+  invalid range, and the catalog add/list round-trip.
+- **Test B** (best-effort): a real cross-session magnet download over DHT on
+  localhost. Skipped (not failed) if the sandbox blocks DHT.
 
-## Name
-Choose a self-explaining name for your project.
+## Design notes & known limits
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+- **Partial downloads are the point.** Only pieces covering the ranges you
+  view are verified. Opening a 20 MB PDF typically pulls a few MB before
+  first paint. Pieces stay on disk afterward, so re-reading is instant.
+- **No auth / no multi-tenancy.** Deliberate: it's one user on one machine.
+  If you ever point it at a network, add auth and treat it as a *distributor*
+  (that materially changes the legal posture).
+- **libtorrent 2.x binding is quirky.** Several methods you'd expect
+  (`handle.file_storage()`, `file_slice()`, `piece_passed()`,
+  `update_piece_priorities`) don't exist in the Python bindings; see the API
+  notes at the top of `torrent_engine.py` for the working equivalents.
+- **NAT/outbound UDP.** Magnet metadata and DHT discovery need outbound UDP
+  (or reachable trackers/peers). Behind a restrictive NAT the metadata fetch
+  can be slow; adding known peers/trackers to the magnet helps.
+- **Disk.** Verified files accumulate under `downloads/`. Delete old
+  info-hash dirs to reclaim space.

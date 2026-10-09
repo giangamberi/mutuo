@@ -1,0 +1,303 @@
+"""Torrent engine: runs a libtorrent 2.x session in a background thread.
+
+Serves arbitrary byte ranges of files inside torrents to PDF.js.
+
+libtorrent 2.x Python API notes (verified empirically, see e2e_test.py):
+- There is NO handle.file_storage(), handle.file_slice() or handle.piece_passed().
+- File layout is read from a `torrent_info.files()` (file_storage) object,
+  obtained at add-time for .torrent files, or via handle.get_torrent_info()
+  once magnet metadata has arrived.
+- "Do we have the bytes?"  -> handle.have_piece(piece_index)
+- "Give me the bytes"     -> read them from disk: libtorrent writes verified
+  pieces to  <save_path>/<file_path(i)>  so once every piece covering a range
+  has passed, a plain file read of that range is correct and cheap.
+- file_storage methods that exist: file_name(i), file_path(i), file_size(i),
+  file_offset(i), piece_length(), num_pieces(), num_files(), name().
+  (piece_size(i) takes an index; piece_length() is the uniform size.)
+"""
+from __future__ import annotations
+
+import os
+import threading
+import time
+from dataclasses import dataclass, field
+
+import libtorrent as lt
+
+
+class TorrentError(Exception):
+    pass
+
+
+def _ih_hex(info_hash) -> str:
+    """Normalize an info hash to its hex string.
+
+    libtorrent exposes this inconsistently: a method on file-based
+    torrent_info, but a plain property on magnet-parsed torrent_info.
+    """
+    val = info_hash() if callable(info_hash) else info_hash
+    return str(val)
+
+
+@dataclass
+class TorrentState:
+    info_hash: str                           # hex string, used as the dict key everywhere
+    name: str = ""
+    magnet: str = ""
+    save_path: str = ""
+    ready: bool = False                      # metadata received
+    fs: object = None                        # lt.file_storage (or None for magnet pre-metadata)
+    progress: float = 0.0
+    state: str = "unknown"
+    num_peers: int = 0
+    total_size: int = 0
+    total_done: int = 0
+    file_progress: dict[int, int] = field(default_factory=dict)  # idx -> bytes done
+
+
+class TorrentEngine:
+    def __init__(self, download_dir: str):
+        self._download_dir = download_dir
+        os.makedirs(download_dir, exist_ok=True)
+        self._session = lt.session()
+        self._torrents: dict[str, TorrentState] = {}     # keyed by hex info-hash string
+        self._handle: dict[str, "lt.torrent_handle"] = {}
+        self._cond = threading.Condition()
+        self._lock = threading.Lock()
+        self._pending_prio: dict[str, set[int]] = {}     # hex -> pieces to prioritize
+        self._stop = False
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    # ---------- session setup ----------
+
+    def start(self) -> None:
+        cfg = self._session.get_settings()
+        cfg["download_rate_limit"] = 0
+        cfg["upload_rate_limit"] = 0
+        cfg["active_downloads"] = 16
+        cfg["active_limit"] = 32
+        cfg["dont_count_slow_torrents"] = True
+        self._session.apply_settings(cfg)
+        self._session.add_dht_node(("router.bittorrent.com", 6881))
+        self._session.add_dht_node(("router.utorrent.com", 6881))
+        try:
+            self._session.listen_on(6881, 6899)
+        except Exception as exc:  # port range unavailable — keep default
+            print(f"engine: listen_on failed ({exc}); using default port")
+        self._thread.start()
+
+    # ---------- public API (thread-safe; wait_* may block) ----------
+
+    def add_torrent(self, source: str) -> str:
+        """Add a magnet URI, .torrent URL, or .torrent file path. Returns info_hash hex."""
+        is_magnet = source.startswith("magnet:")
+        # magnets and .torrent files/URLs parse into different objects:
+        #   magnet -> add_torrent_params (no metadata yet)  -> libtorrent fetches it via DHT
+        #   file/url -> torrent_info (metadata already in hand)
+        if is_magnet:
+            params = lt.parse_magnet_uri(source)
+            name = params.name
+            ih_hex = str(params.info_hashes.get_best())
+            # no file list until metadata is fetched from the swarm
+            has_files = False
+        else:
+            ti = lt.torrent_info(source)
+            name = ti.name()
+            ih_hex = _ih_hex(ti.info_hash)
+            params = lt.add_torrent_params()
+            params.ti = ti
+            has_files = ti.files().num_files() > 0
+        save_path = os.path.join(self._download_dir, ih_hex)
+        os.makedirs(save_path, exist_ok=True)
+        with self._lock:
+            if ih_hex in self._torrents:
+                return ih_hex
+            params.save_path = save_path
+            if not is_magnet:
+                params.flags = lt.torrent_flags.auto_managed
+            try:
+                handle = self._session.add_torrent(params)
+            except RuntimeError:
+                return ih_hex  # already present (e.g. app restart)
+            ts = TorrentState(
+                info_hash=ih_hex, name=name, save_path=save_path,
+                magnet=source if is_magnet else "",
+            )
+            if has_files:  # .torrent files already carry the file list
+                ts.fs = ti.files()
+                ts.ready = True
+            self._torrents[ih_hex] = ts
+            self._handle[ih_hex] = handle
+            with self._cond:
+                self._cond.notify_all()
+        return ih_hex
+
+    def add_torrent_async(self, source: str) -> None:
+        threading.Thread(target=self.add_torrent, args=(source,), daemon=True).start()
+
+    def remove(self, ih_hex: str) -> None:
+        handle = self._handle.pop(ih_hex, None)
+        if handle is not None and handle.is_valid():
+            self._session.remove_torrent(handle)
+        self._torrents.pop(ih_hex, None)
+        self._pending_prio.pop(ih_hex, None)
+
+    def status(self, include_files: bool = True) -> list[dict]:
+        out = []
+        for ih, ts in list(self._torrents.items()):
+            entry = {
+                "info_hash": ih,
+                "name": ts.name,
+                "magnet": ts.magnet,
+                "ready": ts.ready,
+                "progress": ts.progress,
+                "state": ts.state,
+                "num_peers": ts.num_peers,
+                "total_size": ts.total_size,
+                "total_done": ts.total_done,
+            }
+            if include_files and ts.fs is not None:
+                entry["files"] = [
+                    {"index": i, "name": ts.fs.file_name(i),
+                     "size": ts.fs.file_size(i),
+                     "done": ts.file_progress.get(i, 0)}
+                    for i in range(ts.fs.num_files())
+                ]
+            else:
+                entry["files"] = []
+            out.append(entry)
+        return out
+
+    def file_size(self, ih_hex: str, file_index: int) -> int:
+        ts = self._torrents[ih_hex]
+        if ts.fs is None:
+            raise TorrentError("metadata not ready")
+        if file_index >= ts.fs.num_files():
+            raise TorrentError(f"no file {file_index}")
+        return ts.fs.file_size(file_index)
+
+    def wait_for_range(self, ih_hex: str, file_index: int, start: int, length: int,
+                       timeout: float = 300.0) -> None:
+        """Block until metadata is ready AND every piece covering
+        [start, start+length) of file_index has been verified."""
+        ih = ih_hex
+        deadline = time.monotonic() + timeout
+        while True:
+            ts = self._torrents.get(ih)
+            if ts is None:
+                raise KeyError(ih_hex)
+            handle = self._handle.get(ih)
+            if ts.fs is not None and handle is not None and handle.is_valid():
+                missing = self._missing_pieces(ih, ts, file_index, start, length)
+                if not missing:
+                    return
+                self._pending_prio.setdefault(ih, set()).update(missing)
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise TimeoutError("timed out waiting for metadata/pieces")
+            with self._cond:
+                self._cond.wait(timeout=min(left, 1.0))
+
+    def fetch_range(self, ih_hex: str, file_index: int, start: int, length: int) -> bytes:
+        """Return verified bytes by reading them from disk (caller waited first)."""
+        ts = self._torrents[ih_hex]
+        if ts.fs is None:
+            raise TorrentError("metadata not ready")
+        path = os.path.join(ts.save_path, ts.fs.file_path(file_index))
+        if not os.path.exists(path):
+            raise TorrentError("file not on disk yet")
+        with open(path, "rb") as fh:
+            fh.seek(ts.fs.file_offset(file_index) + start)
+            return fh.read(length)
+
+    # ---------- internals ----------
+
+    def _missing_pieces(self, ih: str, ts: TorrentState, file_index: int,
+                        start: int, length: int) -> set[int]:
+        handle = self._handle[ih]
+        pl = ts.fs.piece_length()
+        off = ts.fs.file_offset(file_index)
+        first = (off + start) // pl
+        last = (off + start + max(length - 1, 0)) // pl
+        return {p for p in range(first, last + 1) if not handle.have_piece(p)}
+
+    def _apply_priorities(self) -> None:
+        """Re-assert priorities on requested pieces so the swarm focuses on them."""
+        for ih, pieces in self._pending_prio.items():
+            if not pieces:
+                continue
+            handle = self._handle.get(ih)
+            if handle is None or not handle.is_valid():
+                continue
+            try:
+                handle.prioritize_pieces(sorted(pieces), 4)
+            except Exception:
+                pass
+
+    def _refresh_states(self) -> None:
+        for handle in self._session.get_torrents():
+            try:
+                status = handle.status()
+            except Exception:
+                continue
+            ih = str(status.info_hash)
+            ts = self._torrents.get(ih)
+            if ts is None:
+                continue
+            self._handle[ih] = handle
+            ts.progress = status.progress
+            ts.state = self._state_str(status)
+            ts.num_peers = status.num_peers
+            ts.total_size = status.total_wanted
+            ts.total_done = status.all_time_download
+            # pick up file list when magnet metadata arrives
+            if status.has_metadata and ts.fs is None:
+                try:
+                    ti = handle.get_torrent_info()
+                    if ti is not None:
+                        ts.fs = ti.files()
+                        ts.name = ts.name or ti.name()
+                        ts.ready = True
+                except Exception:
+                    pass
+            if ts.fs is not None:
+                try:
+                    ts.file_progress = {
+                        i: int(d) for i, d in enumerate(handle.file_progress())
+                    }
+                except Exception:
+                    pass
+        with self._cond:
+            self._cond.notify_all()
+
+    @staticmethod
+    def _state_str(status: "lt.torrent_status") -> str:
+        if status.seeding:
+            return "seed"
+        if status.paused:
+            return "paused"
+        if status.checking_files:
+            return "checking"
+        if status.downloading_metadata:
+            return "fetching metadata"
+        names = {
+            getattr(lt.torrent_status, "state_none", 0): "queued",
+            getattr(lt.torrent_status, "state_checking", 1): "checking",
+            getattr(lt.torrent_status, "state_downloading", 2): "downloading",
+            getattr(lt.torrent_status, "state_downloading_metadata", 3): "fetching metadata",
+            getattr(lt.torrent_status, "state_finished", 4): "done",
+            getattr(lt.torrent_status, "state_seeding", 5): "seeding",
+            getattr(lt.torrent_status, "state_allocating", 6): "allocating",
+            getattr(lt.torrent_status, "state_forced_checking", 7): "forced checking",
+        }
+        return names.get(status.state, f"state={status.state}")
+
+    def _run(self) -> None:
+        while not self._stop:
+            self._session.wait_for_alert(250)  # also acts as a 250ms tick
+            self._session.pop_alerts()        # drain; state polling is our signal
+            self._refresh_states()
+            self._apply_priorities()
+
+    def stop(self) -> None:
+        self._stop = True
