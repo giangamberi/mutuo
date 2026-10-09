@@ -18,6 +18,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import libtorrent as lt
+from contextlib import asynccontextmanager
 from typing import List
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -29,7 +30,23 @@ from torrent_engine import TorrentEngine, TorrentError, _ih_hex
 
 BASE = Path(__file__).parent
 UPLOAD_DIR = BASE / ".torrents"
-app = FastAPI(title="pdf-torrent-reader")
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # startup
+    engine.start()
+    feed = BASE / "feed.json"
+    catalog.sync(str(feed) if feed.exists() else None)
+    # enqueue torrents that are catalogued but not yet in the session
+    for item in catalog.items():
+        engine.add_torrent_async(item.magnet)
+    try:
+        yield
+    finally:
+        # shutdown
+        engine.stop()
+
+
+app = FastAPI(title="pdf-torrent-reader", lifespan=_lifespan)
 
 engine = TorrentEngine(download_dir=str(BASE / "downloads"))
 catalog = Catalog(str(BASE / "catalog.json"))
@@ -40,16 +57,6 @@ class AddRequest(BaseModel):
     name: str
     magnet: str
     files: list[str] | None = None
-
-
-@app.on_event("startup")
-def _startup():
-    engine.start()
-    feed = BASE / "feed.json"
-    catalog.sync(str(feed) if feed.exists() else None)
-    # enqueue torrents that are catalogued but not yet in the session
-    for item in catalog.items():
-        engine.add_torrent_async(item.magnet)
 
 
 @app.get("/")
