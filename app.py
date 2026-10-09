@@ -18,6 +18,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import libtorrent as lt
+from typing import List
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -77,35 +78,46 @@ def post_catalog(req: AddRequest) -> JSONResponse:
 
 
 @app.post("/api/torrent")
-async def upload_torrent(file: UploadFile = File(...)) -> JSONResponse:
-    """Accept a dropped .torrent file, register it in the catalog (as a
-    magnet), and add it to the session via the file. Because the file already
-    carries full metadata, the PDF list shows up immediately — no DHT wait."""
-    data = await file.read()
-    if not data:
-        raise HTTPException(400, "empty file")
-    tmp = tempfile.NamedTemporaryFile(suffix=".torrent", delete=False)
-    try:
-        tmp.write(data)
-        tmp.close()
+async def upload_torrent(files: List[UploadFile] = File(...)) -> JSONResponse:
+    """Accept one or more dropped .torrent files, register each in the
+    catalog (as a magnet), and add each to the session. Because the files
+    already carry full metadata, PDF lists appear immediately — no DHT wait."""
+    if not files:
+        raise HTTPException(400, "no files provided")
+    added, skipped, errors = [], [], []
+    for uf in files:
+        data = await uf.read()
+        fname = _as_str(uf.filename) if uf.filename else "unknown"
+        if not data:
+            errors.append({"file": fname, "error": "empty file"})
+            continue
+        tmp = tempfile.NamedTemporaryFile(suffix=".torrent", delete=False)
         try:
-            ti = lt.torrent_info(tmp.name)
-        except Exception as exc:
-            raise HTTPException(400, f"not a valid .torrent file: {exc}")
-        name = _as_str(ti.name())
-        ih_hex = _ih_hex(ti.info_hash)
-        magnet = _build_magnet(ti)
-        # keep a small stable copy on disk (lets us re-add by path later)
-        UPLOAD_DIR.mkdir(exist_ok=True)
-        dest = str(UPLOAD_DIR / f"{ih_hex}.torrent")
-        shutil.copyfile(tmp.name, dest)
-        if not catalog.has(magnet):
-            catalog.add(name, magnet, [])
-            catalog.save()
-        engine.add_torrent(dest, magnet=magnet)
-        return JSONResponse({"ok": True, "name": name, "info_hash": ih_hex})
-    finally:
-        os.unlink(tmp.name)
+            tmp.write(data)
+            tmp.close()
+            try:
+                ti = lt.torrent_info(tmp.name)
+            except Exception as exc:
+                errors.append({"file": fname, "error": f"not a valid .torrent: {exc}"})
+                continue
+            name = _as_str(ti.name())
+            ih_hex = _ih_hex(ti.info_hash)
+            magnet = _build_magnet(ti)
+            UPLOAD_DIR.mkdir(exist_ok=True)
+            dest = str(UPLOAD_DIR / f"{ih_hex}.torrent")
+            shutil.copyfile(tmp.name, dest)
+            already = catalog.has(magnet)
+            if not already:
+                catalog.add(name, magnet, [])
+                catalog.save()
+            engine.add_torrent(dest, magnet=magnet)
+            entry = {"name": name, "info_hash": ih_hex}
+            (skipped if already else added).append(entry)
+        finally:
+            os.unlink(tmp.name)
+    if errors and not added and not skipped:
+        raise HTTPException(400, "; ".join(f"{e['file']}: {e['error']}" for e in errors))
+    return JSONResponse({"ok": True, "added": added, "skipped": skipped, "errors": errors})
 
 
 @app.get("/api/torrents")

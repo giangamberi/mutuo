@@ -89,9 +89,11 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
   - `GET /` — serves `static/index.html`
   - `GET /api/catalog` — list all catalog entries
   - `POST /api/catalog` — add a magnet or `.torrent` URL to the catalog + engine
-  - `POST /api/torrent` — upload a `.torrent` file (multipart), parse,
-    register as magnet, add to engine. The file already has full metadata,
-    so the PDF list appears instantly.
+  - `POST /api/torrent` — upload one or more `.torrent` files (multipart,
+    field name `files`). Each is parsed, registered as a magnet, and added
+    to the engine; the response reports `added`, `skipped` (already present),
+    and `errors` (per-file). Files carry full metadata, so PDF lists appear
+    instantly.
   - `POST /api/sync` — re-merge feed.json into catalog, enqueue new torrents
   - `GET /api/torrents` — engine state snapshots (`status(include_files=True)`)
   - `GET /api/file?ih=..&f=..` — resolve (info_hash, file_index) to name/size
@@ -134,8 +136,9 @@ User adds torrent (magnet paste, .torrent file, or feed.json)
   button) → clicking a torrent shows its file list.
 - Right panel: PDF.js viewer (bundled locally, no CDN).
 - Header: magnet input, Sync feed button, status text.
-- Drag-and-drop: drop a `.torrent` file anywhere in the window → POST to
-  `/api/torrent` → refresh.
+- Drag-and-drop: drop one or more `.torrent` files anywhere in the window →
+  POST all of them to `/api/torrent` → refresh. The status bar reports how many
+  were added / already present / failed.
 - Polling: `refresh()` runs every 4 s (`setInterval`), fetches `/api/catalog`
   and `/api/torrents`, joins them by info-hash (`magnetKey()`), re-renders both
   panels, updates progress bars. `magnetKey(m)` extracts the `xt=` part from a
