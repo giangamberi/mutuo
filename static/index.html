@@ -22,8 +22,23 @@
   #sidebar-top #minimize-btn { padding:2px 9px; font-size:12px; line-height:1.4; }
   aside.minimized { width:34px !important; min-width:34px !important; }
   aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; }
-  aside.minimized #tabs, aside.minimized #searchbar,
-  aside.minimized #catalog, aside.minimized #resizer { display:none; }
+  aside.minimized #sidebar-row, aside.minimized #resizer { display:none; }
+  /* left icon rail: Shelf / Favorites / Reading */
+  #sidebar-row { flex:1; display:flex; min-height:0; }
+  #rail { flex:0 0 46px; width:46px; border-right:1px solid #000; display:flex;
+    flex-direction:column; align-items:center; gap:6px; padding:8px 0; background:#191c22; }
+  #rail button { width:34px; height:34px; font-size:17px; line-height:1; padding:0;
+    background:transparent; color:var(--dim); border:1px solid transparent; border-radius:8px; cursor:pointer; }
+  #rail button:hover { background:#232a36; color:var(--text); }
+  #rail button.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--text); }
+  #sidebar-main { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; }
+  /* sub-tab rows (Reading: Read/Complete · Shelf: Providers/Plugins) */
+  .subtabs { display:flex; gap:4px; padding:6px 8px 0; }
+  .subtabs button { font-size:12px; padding:4px 12px; background:transparent; color:var(--dim);
+    border:1px solid transparent; border-radius:6px; cursor:pointer; }
+  .subtabs button:hover { background:#232a36; color:var(--text); }
+  .subtabs button.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--text); }
+  .subtabs.grow button { flex:1; }
   #tabs { display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:8px 8px 6px; border-bottom:1px solid #000; }
   #tabs .tabwrap { position:relative; display:flex; }
   #tabs .tab { font-size:12px; padding:4px 10px; background:transparent; color:var(--dim); border:1px solid transparent; border-radius:6px; cursor:pointer; }
@@ -55,6 +70,18 @@
     background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
   }
   aside .titem .cog:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
+  aside .titem .fav {
+    position:absolute; top:8px; right:34px; padding:3px 6px; font-size:12px; line-height:1;
+    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+  }
+  aside .titem .fav:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
+  aside .titem .fav.on { color:#ffd24a; border-color:#6b5a1e; }
+  aside .titem .status {
+    position:absolute; top:8px; right:8px; width:96px; font-size:11px; line-height:1.2;
+    padding:3px 4px; background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+  }
+  aside .titem .status:hover { border-color:var(--acc); color:var(--text); }
+  aside .titem.has-status button.open { padding-right:112px; }
   .menu { display:none; position:absolute; right:8px; z-index:50; min-width:190px;
     background:var(--panel); border:1px solid #333a47; border-radius:8px; box-shadow:0 8px 24px #000a; }
   .menu.open { display:block; }
@@ -92,6 +119,11 @@
   #viewer { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; background:#0f1115; }
   #status { font-size:12px; color:var(--dim); padding:6px 12px; border-bottom:1px solid #000; }
   #pdf-frame { flex:1; width:100%; border:0; background:#0f1115; min-height:0; }
+  #text-viewer { flex:1; min-height:0; overflow:auto; background:#0f1115; }
+  #text-viewer pre { margin:0 auto; max-width:720px; padding:24px 28px 60px;
+    font-family:Georgia,'Times New Roman',serif; font-size:16px; line-height:1.7;
+    color:#d7dbe0; white-space:pre-wrap; word-wrap:break-word; }
+  #html-frame { flex:1; width:100%; border:0; background:#fff; min-height:0; }
   .empty { color:var(--dim); font-size:13px; margin-top:24px; padding:0 16px; }
   #loading { width:min(560px,92%); margin-top:36px; text-align:center; align-self:center; }
   #loading h2 { font-size:15px; margin:0 0 4px; word-break:break-all; }
@@ -318,6 +350,9 @@
     <div id="sidebar-top">
       <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
     </div>
+    <div id="sidebar-row">
+    <div id="rail"></div>
+    <div id="sidebar-main">
     <div id="tabs"></div>
     <div id="searchbar">
       <input id="search" type="search" placeholder="Search documents…" autocomplete="off">
@@ -346,12 +381,16 @@
     </div>
     <div id="catalog"></div>
     <div id="resizer" title="Drag to resize · double-click to reset"></div>
+    </div>
+    </div>
   </aside>
   <section id="viewer">
     <div id="loading" style="display:none"></div>
     <div id="status" style="display:none"></div>
     <div class="empty" id="empty">Pick a torrent from the list. Nothing downloads until you open a PDF (or include a file) — that’s how you choose what to fetch.</div>
     <iframe id="pdf-frame" style="display:none" title="PDF viewer"></iframe>
+    <div id="text-viewer" style="display:none"><pre id="text-content"></pre></div>
+    <iframe id="html-frame" style="display:none" title="HTML viewer"></iframe>
     <div id="pages" style="display:none"></div>
   </section>
 </main>
@@ -360,8 +399,12 @@ let selected = null; // info_hash of the torrent the user picked
 let waitTimer = null; // retry timer for the "waiting on the swarm" page
 let activeProvider = 'local'; // which provider tab the list shows
 let providers = []; // [{id, name, feed, description, enabled}]
+let favorites = []; // [{key, name, type, ih, pdf, url, magnet, kind, provider}]
+// left rail: which top-level view the sidebar shows
+let view = 'shelf'; // 'shelf' | 'favorites' | 'reading'
+let shelfSub = 'providers'; // 'providers' | 'plugins' (Shelf sub-explorers)
+let readingSub = 'toread'; // 'toread' | 'reading' | 'complete' (Reading sub-tabs)
 let plugins = []; // [{id, name, description}] — custom behaviours
-let showingPlugins = false; // the sidebar shows the plugin manager, not a list
 let page = 1; // current page of the (paginated) list
 let perPage = parseInt(localStorage.getItem('per-page'), 10) || 25; // items per page (0 = all)
 // live plugin provider: results are fetched on demand (not from the catalog)
@@ -380,24 +423,39 @@ async function refresh() {
     providers = await j('/api/providers').then(r => r.json());
     const directPdfs = await j('/api/pdfs').then(r => r.json());
     plugins = await j('/api/plugins').then(r => r.json());
+    favorites = await j('/api/favorites').then(r => r.json());
     const byMagnet = Object.fromEntries(catalog.map(c => [magnetKey(c.magnet), c]));
     const provOf = t => (byMagnet[magnetKey(t.magnet)] || {}).provider || 'local';
-    renderTabs();
-    if (showingPlugins) { renderPluginView(directPdfs, catalog); return; }
-    const liveProv = providers.find(p => p.id === activeProvider && p.live);
-    if (liveProv) { renderLiveProvider(liveProv); return; }
-    // leaving a live tab: restore the torrent-only controls it hid and drop
-    // the live provider's config controls (sort/language/…) from the bar
-    document.getElementById('sort').style.display = '';
-    document.getElementById('perpage').style.display = '';
-    document.querySelector('#searchbar .pg').style.display = '';
-    document.getElementById('search-btn').style.display = 'none';
-    document.getElementById('filters-btn').style.display = '';
-    document.getElementById('searchbar').style.display = '';
-    document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
-    document.getElementById('search').placeholder = 'Search documents…';
-    const el = document.getElementById('catalog');
-    el.innerHTML = '';
+    renderRail();
+    if (view === 'favorites') {
+      document.getElementById('tabs').style.display = 'none';
+      renderFavorites(torrents, directPdfs, byMagnet, provOf, { showStar: true });
+      return;
+    }
+    if (view === 'reading') { renderReading(torrents, directPdfs, byMagnet, provOf); return; }
+    renderShelf(torrents, directPdfs, catalog, byMagnet, provOf);
+  } catch (e) { /* server still starting */ }
+}
+
+// Shelf view: the Providers / Plugins sub-explorers. The Providers sub-view
+// renders the provider tabs + the active provider's list (live or torrent).
+function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
+  renderShelfTabs();
+  if (shelfSub === 'plugins') { renderPluginView(directPdfs, catalog); return; }
+  const liveProv = providers.find(p => p.id === activeProvider && p.live);
+  if (liveProv) { renderLiveProvider(liveProv); return; }
+  // leaving a live tab: restore the torrent-only controls it hid and drop
+  // the live provider's config controls (sort/language/…) from the bar
+  document.getElementById('sort').style.display = '';
+  document.getElementById('perpage').style.display = '';
+  document.querySelector('#searchbar .pg').style.display = '';
+  document.getElementById('search-btn').style.display = 'none';
+  document.getElementById('filters-btn').style.display = '';
+  document.getElementById('searchbar').style.display = '';
+  document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
+  document.getElementById('search').placeholder = 'Search documents…';
+  const el = document.getElementById('catalog');
+  el.innerHTML = '';
     // search + sort: filter the current provider's items by name, then order
     // them by the chosen key (torrents first, then direct PDFs)
     const q = (document.getElementById('search').value || '').trim().toLowerCase();
@@ -438,11 +496,14 @@ async function refresh() {
       item.dataset.ih = t.info_hash;
       const meta = `${esc(t.state)} · ${pct}% · ${t.num_seeds || 0}⇩${t.num_peers}peers` +
         (t.is_paused ? ' · ⏸' : '');
+      const favKey = 'torrent:' + t.info_hash;
+      const isFav = favorites.some(f => f.key === favKey);
       item.innerHTML = `<button type="button" class="open" data-ih="${t.info_hash}" data-name="${esc(c.name || t.name || '')}">
           <div class="name">${esc(c.name || t.name || t.info_hash)}</div>
           <div class="meta">${meta}</div>
           <div class="bar"><div style="width:${pct}%"></div></div>
         </button>
+        <button type="button" class="fav${isFav ? ' on' : ''}" data-favkey="${esc(favKey)}" data-favtype="torrent" data-favname="${esc(c.name || t.name || t.info_hash)}" data-favih="${t.info_hash}" data-favprovider="${esc(provOf(t))}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">${isFav ? '★' : '☆'}</button>
         <button type="button" class="cog" data-ih="${t.info_hash}" aria-label="torrent actions">⋯</button>
         <div class="menu">
           <button data-act="${t.is_paused ? 'resume' : 'pause'}" data-ih="${t.info_hash}">${t.is_paused ? '▶ Resume' : '⏸ Pause'}</button>
@@ -464,10 +525,13 @@ async function refresh() {
       item.dataset.pdf = p.id;
       const pdfMeta = [fromFolder ? 'from folder' : 'direct file', fmtSize(p.size),
         p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · ');
+      const pdfFavKey = 'pdf:' + p.id;
+      const pdfIsFav = favorites.some(f => f.key === pdfFavKey);
       item.innerHTML = `<button type="button" class="open" data-pdf="${p.id}" data-name="${esc(p.name)}" data-source="${fromFolder ? 'folder' : 'upload'}">
           <div class="name">&#128196; ${esc(p.name)}</div>
           <div class="meta">${esc(pdfMeta)}</div>
         </button>
+        <button type="button" class="fav${pdfIsFav ? ' on' : ''}" data-favkey="${esc(pdfFavKey)}" data-favtype="pdf" data-favname="${esc(p.name)}" data-favpdf="${p.id}" data-favprovider="${esc(p.provider || 'local')}" title="${pdfIsFav ? 'Remove from favorites' : 'Add to favorites'}">${pdfIsFav ? '★' : '☆'}</button>
         <button type="button" class="cog" data-pdf="${p.id}" aria-label="pdf actions">⋯</button>
         <div class="menu">
           <button data-pdfact="open" data-pdf="${p.id}">Open</button>
@@ -482,7 +546,6 @@ async function refresh() {
             : 'nothing here — drop a .torrent or .pdf, or sync the provider feed';
     document.getElementById('count').textContent = q ? `${shown} match` : '';
     updatePagination(pages);
-  } catch (e) { /* server still starting */ }
 }
 
 function updatePagination(pages) {
@@ -648,13 +711,18 @@ function renderLiveProvider(prov) {
     document.getElementById('hdrstat').textContent = `search ${esc(prov.name)}`;
     return;
   }
+  const kindIcon = { pdf: '&#128196;', text: '&#128221;', html: '&#127760;', epub: '&#128218;', torrent: '&#128279;' };
   for (const it of liveResults) {
     const item = document.createElement('div');
     item.className = 'titem';
-    item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livename="${esc(it.name)}">
-        <div class="name">&#128196; ${esc(it.name)}</div>
-        <div class="meta">${esc(it.meta || (it.magnet ? 'torrent' : 'PDF'))}</div>
-      </button>`;
+    const kind = it.magnet ? 'torrent' : (it.kind || 'pdf');
+    const liveFavKey = 'live:' + (it.magnet || it.url || it.name);
+    const liveIsFav = favorites.some(f => f.key === liveFavKey);
+    item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}">
+        <div class="name">${kindIcon[kind] || '&#128196;'} ${esc(it.name)}</div>
+        <div class="meta">${esc(it.meta || kind)}</div>
+      </button>
+      <button type="button" class="fav${liveIsFav ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveIsFav ? 'Remove from favorites' : 'Add to favorites'}">${liveIsFav ? '★' : '☆'}</button>`;
     el.appendChild(item);
   }
   document.getElementById('hdrstat').textContent = `${liveResults.length} result(s) in ${esc(prov.name)}`;
@@ -737,20 +805,53 @@ function runLiveSearch() {
   if (localStorage.getItem(KEY) === '1') setMinimized(true);
 })();
 
-// ---- provider tabs ----
-function renderTabs() {
-  const el = document.getElementById('tabs');
+// ---- left rail: Shelf / Favorites / Reading ----
+function renderRail() {
+  const el = document.getElementById('rail');
   el.innerHTML = '';
+  const mk = (icon, label, key) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = view === key ? 'active' : '';
+    b.textContent = icon;
+    b.title = label;
+    b.onclick = () => { view = key; refresh(); };
+    el.appendChild(b);
+  };
+  mk('📚', 'Shelf — browse providers & plugins', 'shelf');
+  mk('★', 'Favorites — your starred documents', 'favorites');
+  mk('📖', 'Reading — to read, in progress & complete', 'reading');
+}
+
+// ---- Shelf: the Providers / Plugins sub-explorers ----
+function renderShelfTabs() {
+  const el = document.getElementById('tabs');
+  el.style.display = '';
+  el.innerHTML = '';
+  // sub-view toggle: Providers (the provider tabs) or Plugins (the manager)
+  const sub = document.createElement('div');
+  sub.className = 'subtabs grow';
+  const mkSub = (label, key) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = shelfSub === key ? 'active' : '';
+    b.textContent = label;
+    b.onclick = () => { shelfSub = key; refresh(); };
+    sub.appendChild(b);
+  };
+  mkSub('Providers', 'providers');
+  mkSub('Plugins', 'plugins');
+  el.appendChild(sub);
+  if (shelfSub === 'plugins') return; // the plugin manager fills the list below
   for (const p of providers) {
     const wrap = document.createElement('span');
     wrap.className = 'tabwrap';
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'tab' + (!showingPlugins && p.id === activeProvider ? ' active' : '') + (p.enabled ? '' : ' off');
+    b.className = 'tab' + (p.id === activeProvider ? ' active' : '') + (p.enabled ? '' : ' off');
     b.textContent = p.name;
     b.title = p.description || p.feed || p.name;
     b.onclick = () => {
-      showingPlugins = false;
       const wasLive = providers.find(x => x.id === activeProvider && x.live);
       activeProvider = p.id;
       // opening a live tab fresh: start from an empty result set (the user
@@ -777,16 +878,135 @@ function renderTabs() {
   add.textContent = '+ provider';
   add.onclick = addProviderDialog;
   el.appendChild(add);
-
-  // distinct management tab for plugins (custom behaviours), not a content tab
-  const plug = document.createElement('button');
-  plug.type = 'button';
-  plug.className = 'tab' + (showingPlugins ? ' active' : '');
-  plug.textContent = '🔌 Plugins';
-  plug.title = 'Manage plugins — custom behaviours that load books/PDFs';
-  plug.onclick = () => { showingPlugins = true; refresh(); };
-  el.appendChild(plug);
 }
+
+// toggle a document's favorite state (star). The payload is built from the
+// button's data-* attrs so it works for torrents, direct PDFs, and live results.
+async function toggleFavorite(btn) {
+  const d = btn.dataset;
+  const on = btn.classList.contains('on');
+  const payload = { key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
+    ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
+    magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local' };
+  try {
+    if (on) await j('/api/favorites?key=' + encodeURIComponent(d.favkey), { method: 'DELETE' });
+    else await j('/api/favorites', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+// the ★ Favorites tab: every starred document, resolved against the current
+// catalog / direct-PDF / torrent state so it opens exactly like its home tab.
+function renderFavorites(torrents, directPdfs, byMagnet, provOf, opts) {
+  opts = opts || {};
+  const showStar = !!opts.showStar;
+  const statusFilter = opts.statusFilter || null;
+  const showStatus = !!opts.showStatus;
+  const el = document.getElementById('catalog');
+  el.innerHTML = '';
+  document.getElementById('sort').style.display = '';
+  document.getElementById('perpage').style.display = 'none';
+  document.querySelector('#searchbar .pg').style.display = 'none';
+  document.getElementById('search-btn').style.display = 'none';
+  document.getElementById('filters-btn').style.display = 'none';
+  document.getElementById('searchbar').style.display = '';
+  document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
+  document.getElementById('search').placeholder = opts.placeholder || 'Search favorites…';
+  const q = (document.getElementById('search').value || '').trim().toLowerCase();
+  const rows = [];
+  for (const f of favorites) {
+    if (q && !(f.name || '').toLowerCase().includes(q)) continue;
+    if (statusFilter && (f.status || 'toread') !== statusFilter) continue;
+    if (f.type === 'torrent') {
+      const t = torrents.find(x => x.info_hash === f.ih);
+      if (!t) continue; // torrent no longer in the session
+      const c = byMagnet[magnetKey(t.magnet)] || {};
+      const pct = Math.round(t.progress * 100);
+      rows.push({ kind: 'torrent', name: c.name || t.name || t.info_hash,
+        meta: `${esc(t.state)} · ${pct}% · ${t.num_seeds || 0}⇩${t.num_peers}peers` + (t.is_paused ? ' · ⏸' : ''),
+        bar: pct, ih: t.info_hash, fav: f });
+    } else if (f.type === 'pdf') {
+      const p = directPdfs.find(x => x.id === f.pdf);
+      if (!p) continue; // PDF removed
+      rows.push({ kind: 'pdf', name: p.name,
+        meta: [p.source === 'folder' ? 'from folder' : 'direct file', fmtSize(p.size), p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · '),
+        pdf: p.id, fav: f });
+    } else { // live result (Gutenberg text/html/epub/pdf, or a torrent magnet)
+      rows.push({ kind: 'live', name: f.name, meta: f.kind || 'favorite',
+        url: f.url, magnet: f.magnet, kind: f.kind, fav: f });
+    }
+  }
+  for (const r of rows) {
+    const item = document.createElement('div');
+    item.className = 'titem' + (showStatus ? ' has-status' : '');
+    let openBtn;
+    if (r.kind === 'torrent') openBtn = `<button type="button" class="open" data-ih="${r.ih}" data-name="${esc(r.name)}"><div class="name">${esc(r.name)}</div><div class="meta">${r.meta}</div><div class="bar"><div style="width:${r.bar}%"></div></div></button>`;
+    else if (r.kind === 'pdf') openBtn = `<button type="button" class="open" data-pdf="${r.pdf}" data-name="${esc(r.name)}"><div class="name">&#128196; ${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
+    else openBtn = `<button type="button" class="open" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
+    const star = showStar
+      ? `<button type="button" class="fav on" data-favkey="${esc(r.fav.key)}" data-favtype="${esc(r.fav.type)}" data-favname="${esc(r.fav.name)}" data-favih="${esc(r.fav.ih || '')}" data-favpdf="${esc(r.fav.pdf || '')}" data-favurl="${esc(r.fav.url || '')}" data-favmagnet="${esc(r.fav.magnet || '')}" data-favkind="${esc(r.fav.kind || '')}" data-favprovider="${esc(r.fav.provider || 'local')}" title="Remove from favorites">★</button>`
+      : '';
+    const st = r.fav.status || 'toread';
+    const statusSel = showStatus
+      ? `<select class="status" data-favkey="${esc(r.fav.key)}" onchange="setStatus(this)" title="Reading status">
+           <option value="toread"${st === 'toread' ? ' selected' : ''}>To read</option>
+           <option value="reading"${st === 'reading' ? ' selected' : ''}>Reading</option>
+           <option value="complete"${st === 'complete' ? ' selected' : ''}>Complete</option>
+         </select>`
+      : '';
+    item.innerHTML = openBtn + star + statusSel;
+    el.appendChild(item);
+  }
+  document.getElementById('hdrstat').textContent = rows.length
+    ? `${rows.length} ${opts.statLabel || 'favorite(s)'}`
+    : (opts.emptyMsg || 'no favorites yet — star a document with ☆ to pin it here');
+  document.getElementById('count').textContent = q ? `${rows.length} match` : '';
+}
+
+// ---- Reading view: To Read / Reading / Complete sub-tabs ----
+// Each sub-tab shows the favorites whose reading status matches, with a
+// status control on each row to move it between the three states.
+function renderReading(torrents, directPdfs, byMagnet, provOf) {
+  const el = document.getElementById('tabs');
+  el.style.display = '';
+  el.innerHTML = '';
+  const sub = document.createElement('div');
+  sub.className = 'subtabs grow';
+  const mkSub = (label, key) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = readingSub === key ? 'active' : '';
+    b.textContent = label;
+    b.onclick = () => { readingSub = key; refresh(); };
+    sub.appendChild(b);
+  };
+  mkSub('To Read', 'toread');
+  mkSub('Reading', 'reading');
+  mkSub('Complete', 'complete');
+  el.appendChild(sub);
+
+  const L = {
+    toread:   { stat: 'to read',     empty: 'nothing to read yet — star a document to add it here', ph: 'Search to read…' },
+    reading:  { stat: 'in progress', empty: 'nothing in progress — start reading from To Read',      ph: 'Search reading…' },
+    complete: { stat: 'completed',   empty: 'nothing completed yet',                                 ph: 'Search completed…' },
+  }[readingSub];
+  renderFavorites(torrents, directPdfs, byMagnet, provOf, {
+    statusFilter: readingSub, showStatus: true,
+    statLabel: L.stat, emptyMsg: L.empty, placeholder: L.ph,
+  });
+}
+
+// move a favorite between the reading states (To Read / Reading / Complete).
+// Exposed on window because the row's inline onchange handler can't see
+// module-scoped functions.
+window.setStatus = async function (sel) {
+  const key = sel.dataset.favkey;
+  const status = sel.value;
+  try {
+    await j('/api/favorites/status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key, status }) });
+    refresh();
+  } catch (e) { alert(e.message); }
+};
 
 function toggleProviderMenu(cog, p) {
   const wasOpen = cog.parentElement.querySelector('.menu')?.classList.contains('open');
@@ -951,6 +1171,8 @@ function hideLoading() {
 // PDF doesn't linger behind the loading page or a new torrent's file list
 function hidePdf() {
   document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('text-viewer').style.display = 'none';
+  document.getElementById('html-frame').style.display = 'none';
   document.getElementById('status').style.display = 'none';
   document.getElementById('pages').style.display = 'none';
 }
@@ -962,6 +1184,8 @@ function showEmpty(msg) {
   empty.style.display = '';
   document.getElementById('pages').style.display = 'none';
   document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('text-viewer').style.display = 'none';
+  document.getElementById('html-frame').style.display = 'none';
   document.getElementById('status').style.display = 'none';
 }
 
@@ -1117,6 +1341,8 @@ function openPdf(ih, f, name, size) {
   hideLoading();
   document.getElementById('pages').style.display = 'none';
   document.getElementById('empty').style.display = 'none';
+  document.getElementById('text-viewer').style.display = 'none';
+  document.getElementById('html-frame').style.display = 'none';
   const status = document.getElementById('status');
   status.textContent = name;
   status.style.display = '';
@@ -1133,6 +1359,8 @@ function openDirectPdf(id, name, size) {
   hideLoading();
   document.getElementById('pages').style.display = 'none';
   document.getElementById('empty').style.display = 'none';
+  document.getElementById('text-viewer').style.display = 'none';
+  document.getElementById('html-frame').style.display = 'none';
   const status = document.getElementById('status');
   status.textContent = name;
   status.style.display = '';
@@ -1150,6 +1378,47 @@ async function openDirectPdfById(id, name) {
   openDirectPdf(id, name, size);
 }
 
+// open a plain-text result in the in-site reader (fetched via /api/text to
+// dodge CORS — the browser can't fetch gutenberg.org directly)
+async function openTextResult(url, name) {
+  hideLoading();
+  document.getElementById('pages').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('html-frame').style.display = 'none';
+  const status = document.getElementById('status');
+  status.textContent = `loading ${name || 'text'}…`;
+  status.style.display = '';
+  const viewer = document.getElementById('text-viewer');
+  const content = document.getElementById('text-content');
+  content.textContent = '';
+  viewer.style.display = '';
+  try {
+    const r = await j(`/api/text?url=${encodeURIComponent(url)}`);
+    content.textContent = await r.text();
+    status.textContent = name || 'text';
+  } catch (e) {
+    status.textContent = `error: ${e.message}`;
+    viewer.style.display = 'none';
+  }
+}
+
+// open an HTML result in the in-site viewer (the iframe loads /api/html, which
+// proxies the page so CORS isn't an issue; the page's own CSS still loads)
+function openHtmlResult(url, name) {
+  hideLoading();
+  document.getElementById('pages').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('text-viewer').style.display = 'none';
+  const status = document.getElementById('status');
+  status.textContent = name || 'html';
+  status.style.display = '';
+  const frame = document.getElementById('html-frame');
+  frame.style.display = '';
+  frame.src = `/api/html?url=${encodeURIComponent(url)}`;
+}
+
 // open a live plugin search result: download its PDF (deduped by URL) and open it
 async function openLiveResult(url, name) {
   const prov = providers.find(p => p.id === activeProvider && p.live);
@@ -1164,6 +1433,26 @@ async function openLiveResult(url, name) {
     openDirectPdf(r.id, name, 0);
   } catch (e) {
     status.textContent = `error: ${e.message}`;
+  }
+}
+
+// track a live plugin search result that is a torrent: add it to the catalog
+// (tagged with the plugin's provider) and to the session, like the magnet box
+async function trackLiveMagnet(magnet, name) {
+  const prov = providers.find(p => p.id === activeProvider && p.live);
+  if (!prov || !magnet) return;
+  const status = document.getElementById('status');
+  status.textContent = `adding ${name || 'torrent'}…`;
+  status.style.display = '';
+  try {
+    await j('/api/catalog', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name: name || magnet.slice(10, 60), magnet, provider: prov.id }) });
+    status.textContent = `added ${name || 'torrent'} — it will appear under ${prov.name} once metadata arrives`;
+    refresh();
+  } catch (e) {
+    status.textContent = e.message.includes('already in catalog')
+      ? `${name || 'torrent'} is already in the catalog`
+      : `error: ${e.message}`;
   }
 }
 
@@ -1186,7 +1475,16 @@ async function doPdfAction(id, act, source) {
 // clicking a torrent/PDF button in the sidebar (open it), or its ⋯ menu
 document.getElementById('catalog').addEventListener('click', (e) => {
   const liveBtn = e.target.closest('button.open[data-liveurl]');
-  if (liveBtn) { e.preventDefault(); openLiveResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || ''); return; }
+  if (liveBtn) {
+    e.preventDefault();
+    if (liveBtn.dataset.livemagnet) trackLiveMagnet(liveBtn.dataset.livemagnet, liveBtn.dataset.livename || '');
+    // text and HTML open in the in-site reader; other non-PDF editions (EPUB) open in a new tab
+    else if (liveBtn.dataset.livekind === 'text') openTextResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '');
+    else if (liveBtn.dataset.livekind === 'html') openHtmlResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '');
+    else if (liveBtn.dataset.livekind && liveBtn.dataset.livekind !== 'pdf') window.open(liveBtn.dataset.liveurl, '_blank', 'noopener');
+    else openLiveResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '');
+    return;
+  }
   const cfgBtn = e.target.closest('button[data-config]');
   if (cfgBtn) { e.preventDefault(); openConfigModal(cfgBtn.dataset.config); return; }
   const runBtn = e.target.closest('button[data-run]');
@@ -1205,6 +1503,12 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     e.preventDefault();
     plugAct.parentElement.classList.remove('open');
     doPluginAction(plugAct.dataset.plug, plugAct.dataset.plugact);
+    return;
+  }
+  const favBtn = e.target.closest('button.fav[data-favkey]');
+  if (favBtn) {
+    e.preventDefault();
+    toggleFavorite(favBtn);
     return;
   }
   const cog = e.target.closest('.cog[data-ih], .cog[data-pdf]');
@@ -1465,7 +1769,7 @@ document.getElementById('catalog').addEventListener('change', (e) => {
     headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ active }) })
     .then(r => r.json())
     .then(() => {
-      if (active) { activeProvider = 'plugin:' + pid; showingPlugins = false; }
+      if (active) { activeProvider = 'plugin:' + pid; view = 'shelf'; shelfSub = 'providers'; }
       refresh();
     })
     .catch(err => { alert(err.message); refresh(); });
@@ -1562,7 +1866,7 @@ document.getElementById('plugin-run-ok').onclick = async () => {
     const parts = [`+${r.pdfs} PDF(s)`, `+${r.torrents} torrent(s)`];
     if (r.errors.length) parts.push(`${r.errors.length} failed`);
     activeProvider = r.provider;   // jump to the plugin's content tab
-    showingPlugins = false;
+    view = 'shelf'; shelfSub = 'providers';
     page = 1;
     await refresh();
     toast(`plugin: ${parts.join(', ')}`);

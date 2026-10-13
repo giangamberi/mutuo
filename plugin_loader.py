@@ -194,6 +194,9 @@ def search_plugin(pid: str, query: str, config: dict) -> list[dict]:
             v = str(entry.get(k, "")).strip()
             if v:
                 item[k] = v
+        kind = str(entry.get("kind", "")).strip()
+        if kind:
+            item["kind"] = kind
         meta = str(entry.get("meta", "")).strip()
         if meta:
             item["meta"] = meta

@@ -37,6 +37,7 @@ BASE = Path(__file__).parent
 UPLOAD_DIR = BASE / ".torrents"
 PDF_DIR = BASE / ".pdfs"          # direct .pdf files dropped into the reader
 PDFS_INDEX = BASE / "pdfs.json"   # registry of direct PDFs (id -> name/size/provider)
+FAVORITES_INDEX = BASE / "favorites.json"  # user's favorite documents (global)
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     # startup
@@ -741,6 +742,20 @@ def _save_pdfs(reg: dict) -> None:
     tmp.replace(PDFS_INDEX)
 
 
+def _load_favorites() -> list:
+    try:
+        data = json.loads(FAVORITES_INDEX.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _save_favorites(favs: list) -> None:
+    tmp = FAVORITES_INDEX.with_suffix(".tmp")
+    tmp.write_text(json.dumps(favs, indent=2), encoding="utf-8")
+    tmp.replace(FAVORITES_INDEX)
+
+
 def _pdf_meta(path: str) -> dict:
     """Extract filterable metadata from a PDF (title/author/subject/keywords/
     page count) plus the file's mtime. Returns {} on any error so a broken or
@@ -846,6 +861,63 @@ def delete_pdf(pid: str) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
+class FavoriteRequest(BaseModel):
+    key: str
+    name: str = ""
+    type: str = "live"   # torrent | pdf | live
+    ih: str = ""
+    pdf: str = ""
+    url: str = ""
+    magnet: str = ""
+    kind: str = ""
+    provider: str = "local"
+    status: str = "toread"   # toread | reading | complete
+
+
+class FavoriteStatusRequest(BaseModel):
+    key: str
+    status: str   # toread | reading | complete
+
+
+@app.get("/api/favorites")
+def list_favorites() -> JSONResponse:
+    return JSONResponse(_load_favorites())
+
+
+@app.post("/api/favorites")
+def add_favorite(req: FavoriteRequest) -> JSONResponse:
+    favs = _load_favorites()
+    if any(f["key"] == req.key for f in favs):
+        return JSONResponse({"ok": True, "added": False})
+    favs.append({"key": req.key, "name": req.name, "type": req.type,
+                 "ih": req.ih, "pdf": req.pdf, "url": req.url,
+                 "magnet": req.magnet, "kind": req.kind, "provider": req.provider,
+                 "status": req.status, "added_at": time.time()})
+    _save_favorites(favs)
+    return JSONResponse({"ok": True, "added": True})
+
+
+@app.post("/api/favorites/status")
+def set_favorite_status(req: FavoriteStatusRequest) -> JSONResponse:
+    favs = _load_favorites()
+    for f in favs:
+        if f["key"] == req.key:
+            f["status"] = req.status
+            _save_favorites(favs)
+            return JSONResponse({"ok": True})
+    raise HTTPException(404, "favorite not found")
+
+
+@app.delete("/api/favorites")
+def remove_favorite(key: str) -> JSONResponse:
+    favs = _load_favorites()
+    kept = [f for f in favs if f["key"] != key]
+    if len(kept) == len(favs):
+        raise HTTPException(404, "favorite not found")
+    _save_favorites(kept)
+    return JSONResponse({"ok": True})
+
+
 @app.get("/api/pdf/direct")
 def stream_direct_pdf(pid: str, request: Request) -> Response:
     """Serve a direct .pdf with full HTTP Range support (PDF.js contract).
@@ -877,6 +949,39 @@ def stream_direct_pdf(pid: str, request: Request) -> Response:
         fh.seek(start)
         data = fh.read(length)
     return Response(data, status_code=status_code, media_type="application/pdf", headers=headers)
+
+
+@app.get("/api/text")
+def proxy_text(url: str) -> Response:
+    """Fetch a remote plain-text document and return it so the in-site reader
+    can show it (the browser can't fetch gutenberg.org directly — no CORS).
+    Only http(s) URLs are allowed."""
+    if not re.match(r"^https?://", url):
+        raise HTTPException(400, "only http(s) URLs are allowed")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "pdf-torrent-reader/1.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = resp.read()
+    except Exception as exc:
+        raise HTTPException(502, f"could not fetch text: {exc}")
+    return Response(data, media_type="text/plain; charset=utf-8")
+
+
+@app.get("/api/html")
+def proxy_html(url: str) -> Response:
+    """Fetch a remote HTML document and return it so the in-site viewer can
+    show it (the browser can't fetch gutenberg.org directly — no CORS).
+    Only http(s) URLs are allowed."""
+    if not re.match(r"^https?://", url):
+        raise HTTPException(400, "only http(s) URLs are allowed")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "pdf-torrent-reader/1.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = resp.read()
+            ctype = resp.headers.get("Content-Type", "text/html")
+    except Exception as exc:
+        raise HTTPException(502, f"could not fetch html: {exc}")
+    return Response(data, media_type=ctype)
 
 
 def _ih_from_magnet(magnet: str) -> str | None:

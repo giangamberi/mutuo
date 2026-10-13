@@ -1,9 +1,9 @@
 """Project Gutenberg plugin.
 
 A *live* provider: search(query, config) queries Gutendex (the official JSON
-API for Project Gutenberg) and returns matching books as PDFs. Gutenberg's own
-site asks you not to scrape it, so we use Gutendex instead. Not every book has
-a PDF, so books without one are skipped.
+API for Project Gutenberg) and returns matching books. Most books have a PDF
+edition (opened in the reader); books without one fall back to their
+plain-text / HTML / EPUB edition, which the UI opens in a new tab.
 
 Define search(query, config) -> list[dict]. Each item is one of:
   {"name": str, "url": str}      a PDF to open (downloaded on click)
@@ -107,8 +107,29 @@ def _book_meta(b: dict) -> str:
     return " · ".join(parts)
 
 
+# format preference when a book has no PDF: plain text first (readable in any
+# browser tab), then HTML, then EPUB.
+FALLBACK_FORMATS = [
+    ("text/plain; charset=utf-8", "text"),
+    ("text/plain", "text"),
+    ("text/html", "html"),
+    ("application/epub+zip", "epub"),
+]
+
+
+def _pick_format(formats: dict):
+    """(url, kind) for a book: its PDF if available, else the best fallback
+    format. Returns (None, None) if the book has no usable edition."""
+    if formats.get("application/pdf"):
+        return formats["application/pdf"], "pdf"
+    for mime, kind in FALLBACK_FORMATS:
+        if formats.get(mime):
+            return formats[mime], kind
+    return None, None
+
+
 def search(query: str, config: dict) -> list[dict]:
-    """Search Gutendex and return matching books that have a PDF edition."""
+    """Search Gutendex and return matching books (PDF, else text/HTML/EPUB)."""
     params = {}
     q = (query or "").strip()
     if q:
@@ -150,14 +171,16 @@ def search(query: str, config: dict) -> list[dict]:
         results.sort(key=_author_key, reverse=True)
     items = []
     for b in results:
-        pdf_url = b.get("formats", {}).get("application/pdf")
-        if not pdf_url:
-            continue  # this book has no PDF edition
         name = _book_name(b)
         if not name:
             continue
-        item = {"name": name, "url": pdf_url}
+        url, kind = _pick_format(b.get("formats") or {})
+        if not url:
+            continue  # no usable edition at all
+        item = {"name": name, "url": url, "kind": kind}
         meta = _book_meta(b)
+        if kind != "pdf":
+            meta = f"{meta} · {kind}" if meta else kind
         if meta:
             item["meta"] = meta
         items.append(item)
