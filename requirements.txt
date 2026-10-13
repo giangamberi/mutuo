@@ -3,5 +3,6 @@ fastapi>=0.100
 uvicorn>=0.24
 httpx>=0.24
 python-multipart>=0.0.7
+pypdf>=4.0
 # optional, for nicer test PDFs (e2e_test falls back to a hand-rolled one)
 # reportlab

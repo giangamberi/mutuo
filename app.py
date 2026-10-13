@@ -741,6 +741,49 @@ def _save_pdfs(reg: dict) -> None:
     tmp.replace(PDFS_INDEX)
 
 
+def _pdf_meta(path: str) -> dict:
+    """Extract filterable metadata from a PDF (title/author/subject/keywords/
+    page count) plus the file's mtime. Returns {} on any error so a broken or
+    password-protected PDF never breaks the list. Cached by the caller."""
+    out = {}
+    try:
+        from pypdf import PdfReader
+        r = PdfReader(path)
+        md = r.metadata
+        if md:
+            for key in ("title", "author", "subject", "keywords"):
+                v = getattr(md, key, None)
+                if v:
+                    out[key] = str(v).strip()
+        try:
+            out["pages"] = len(r.pages)
+        except Exception:
+            pass
+    except Exception:
+        pass
+    try:
+        out["mtime"] = int(Path(path).stat().st_mtime)
+    except OSError:
+        pass
+    return out
+
+
+def _ensure_pdf_meta(reg: dict) -> bool:
+    """Fill in missing PDF metadata for every registered PDF that has a readable
+    file. Cached in the registry (meta_done flag) so extraction runs once per
+    file, not on every list call. Returns True if anything changed."""
+    changed = False
+    for pid, m in reg.items():
+        if m.get("meta_done"):
+            continue
+        path = m.get("path") or str(PDF_DIR / f"{pid}.pdf")
+        if Path(path).is_file():
+            m.update(_pdf_meta(path))
+        m["meta_done"] = True
+        changed = True
+    return changed
+
+
 @app.post("/api/pdf/upload")
 async def upload_pdf(files: List[UploadFile] = File(...),
                      provider: str = Form("local")) -> JSONResponse:
@@ -775,10 +818,15 @@ async def upload_pdf(files: List[UploadFile] = File(...),
 @app.get("/api/pdfs")
 def list_pdfs() -> JSONResponse:
     reg = _load_pdfs()
+    if _ensure_pdf_meta(reg):
+        _save_pdfs(reg)
     return JSONResponse([
         {"id": pid, "name": m["name"], "size": m["size"],
          "provider": m.get("provider", "local"),
-         "source": m.get("source", "upload")}
+         "source": m.get("source", "upload"),
+         "title": m.get("title", ""), "author": m.get("author", ""),
+         "subject": m.get("subject", ""), "keywords": m.get("keywords", ""),
+         "pages": m.get("pages", 0), "mtime": m.get("mtime", 0)}
         for pid, m in reg.items()
     ])
 

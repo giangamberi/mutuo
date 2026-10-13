@@ -180,6 +180,20 @@
   #plugin-config-modal .cfg-field label { display:block; font-size:12px; color:var(--dim); margin-bottom:4px; }
   #plugin-config-modal .cfg-field input, #plugin-config-modal .cfg-field select { width:100%; min-width:0; }
   #plugin-config-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  /* local-provider metadata filters */
+  #searchbar #filters-btn { padding:5px 10px; font-size:12px; white-space:nowrap; }
+  #filters-modal { display:none; position:fixed; inset:0; z-index:100; background:rgba(15,17,21,.7); align-items:center; justify-content:center; }
+  #filters-modal.open { display:flex; }
+  #filters-modal .card { width:min(440px,92vw); max-height:88vh; overflow-y:auto; background:var(--panel); border:1px solid #333a47; border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
+  #filters-modal h2 { font-size:15px; margin:0 0 14px; }
+  #filters-modal .fgroup { margin-bottom:14px; }
+  #filters-modal .fgroup-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); margin-bottom:8px; }
+  #filters-modal .cfg-field { margin-bottom:12px; }
+  #filters-modal .cfg-field label { display:block; font-size:12px; color:var(--dim); margin-bottom:4px; }
+  #filters-modal .cfg-field input, #filters-modal .cfg-field select { width:100%; min-width:0; }
+  #filters-modal .frow { display:flex; gap:10px; }
+  #filters-modal .frow .cfg-field { flex:1; }
+  #filters-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
 </style>
 </head>
 <body>
@@ -254,6 +268,43 @@
     </div>
   </div>
 </div>
+<div id="filters-modal">
+  <div class="card">
+    <h2>Filters</h2>
+    <div class="fgroup">
+      <div class="fgroup-label">PDF metadata</div>
+      <div class="cfg-field"><label>Author contains</label><input id="f-author" type="text" placeholder="e.g. schmidhuber"></div>
+      <div class="cfg-field"><label>Subject contains</label><input id="f-subject" type="text"></div>
+      <div class="cfg-field"><label>Keywords contain</label><input id="f-keywords" type="text"></div>
+      <div class="frow">
+        <div class="cfg-field"><label>Min pages</label><input id="f-minpages" type="number" min="0"></div>
+        <div class="cfg-field"><label>Max pages</label><input id="f-maxpages" type="number" min="0"></div>
+      </div>
+    </div>
+    <div class="fgroup">
+      <div class="fgroup-label">Torrents</div>
+      <div class="cfg-field"><label>State</label>
+        <select id="f-state">
+          <option value="">Any</option>
+          <option value="done">Done</option>
+          <option value="seeding">Seeding</option>
+          <option value="downloading">Downloading</option>
+          <option value="checking">Checking</option>
+          <option value="queued">Queued</option>
+        </select>
+      </div>
+      <div class="frow">
+        <div class="cfg-field"><label>Min size (MB)</label><input id="f-minsize" type="number" min="0"></div>
+        <div class="cfg-field"><label>Max size (MB)</label><input id="f-maxsize" type="number" min="0"></div>
+      </div>
+    </div>
+    <div class="row">
+      <button type="button" id="filters-clear">Clear</button>
+      <button type="button" id="filters-cancel">Cancel</button>
+      <button type="button" id="filters-apply">Apply</button>
+    </div>
+  </div>
+</div>
 <header>
   <h1>PDF Torrent Reader</h1>
   <input id="magnet" placeholder="magnet:?xt=urn:btih:...">
@@ -271,6 +322,7 @@
     <div id="searchbar">
       <input id="search" type="search" placeholder="Search documents…" autocomplete="off">
       <button id="search-btn" type="button" title="Search" style="display:none">Search</button>
+      <button id="filters-btn" type="button" title="Filter by metadata" style="display:none">Filters</button>
       <select id="sort" title="Sort order">
         <option value="name-asc">Name A–Z</option>
         <option value="name-desc">Name Z–A</option>
@@ -316,6 +368,8 @@ let perPage = parseInt(localStorage.getItem('per-page'), 10) || 25; // items per
 let liveResults = []; // [{name, url|magnet|path, meta?}] for the active live tab
 let liveLoading = false;
 let liveSeq = 0; // guards against out-of-order search responses
+// metadata filters for local (non-live) providers: PDF fields + torrent state/size
+let localFilters = { author:'', subject:'', keywords:'', minPages:'', maxPages:'', state:'', minSize:'', maxSize:'' };
 
 async function j(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r; }
 
@@ -332,12 +386,16 @@ async function refresh() {
     if (showingPlugins) { renderPluginView(directPdfs, catalog); return; }
     const liveProv = providers.find(p => p.id === activeProvider && p.live);
     if (liveProv) { renderLiveProvider(liveProv); return; }
-    // leaving a live tab: restore the torrent-only controls it hid
+    // leaving a live tab: restore the torrent-only controls it hid and drop
+    // the live provider's config controls (sort/language/…) from the bar
     document.getElementById('sort').style.display = '';
     document.getElementById('perpage').style.display = '';
     document.querySelector('#searchbar .pg').style.display = '';
     document.getElementById('search-btn').style.display = 'none';
+    document.getElementById('filters-btn').style.display = '';
     document.getElementById('searchbar').style.display = '';
+    document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
+    document.getElementById('search').placeholder = 'Search documents…';
     const el = document.getElementById('catalog');
     el.innerHTML = '';
     // search + sort: filter the current provider's items by name, then order
@@ -355,12 +413,14 @@ async function refresh() {
       .filter(t => provOf(t) === activeProvider)
       .map(t => { const c = byMagnet[magnetKey(t.magnet)] || {}; return { t, c, name: c.name || t.name || t.info_hash }; })
       .filter(x => !q || x.name.toLowerCase().includes(q))
+      .filter(x => torrentMatches(x.t))
       .sort((a, b) => cmp({ name: a.name, size: a.t.total_size || 0, progress: a.t.progress || 0, state: a.t.state || '' },
                           { name: b.name, size: b.t.total_size || 0, progress: b.t.progress || 0, state: b.t.state || '' }));
     const pItems = directPdfs
       .filter(p => (p.provider || 'local') === activeProvider)
       .map(p => ({ p, name: p.name }))
-      .filter(x => !q || x.name.toLowerCase().includes(q))
+      .filter(x => !q || (x.name.toLowerCase().includes(q) || pdfMetaText(x.p).includes(q)))
+      .filter(x => pdfMatches(x.p))
       .sort((a, b) => cmp({ name: a.name, size: a.p.size || 0, progress: 0, state: 'pdf' },
                           { name: b.name, size: b.p.size || 0, progress: 0, state: 'pdf' }));
     // paginate: slice the combined (torrents, then PDFs) list to the current page
@@ -402,9 +462,11 @@ async function refresh() {
       const item = document.createElement('div');
       item.className = 'titem' + (selected === 'pdf:' + p.id ? ' active' : '');
       item.dataset.pdf = p.id;
+      const pdfMeta = [fromFolder ? 'from folder' : 'direct file', fmtSize(p.size),
+        p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · ');
       item.innerHTML = `<button type="button" class="open" data-pdf="${p.id}" data-name="${esc(p.name)}" data-source="${fromFolder ? 'folder' : 'upload'}">
           <div class="name">&#128196; ${esc(p.name)}</div>
-          <div class="meta">${fromFolder ? 'from folder' : 'direct file'} · ${fmtSize(p.size)}</div>
+          <div class="meta">${esc(pdfMeta)}</div>
         </button>
         <button type="button" class="cog" data-pdf="${p.id}" aria-label="pdf actions">⋯</button>
         <div class="menu">
@@ -443,6 +505,66 @@ document.getElementById('search').addEventListener('keydown', (e) => {
   const live = providers.find(p => p.id === activeProvider && p.live);
   if (live) { e.preventDefault(); runLiveSearch(); }
 });
+
+// ---- local-provider metadata filters (PDF fields + torrent state/size) ----
+function pdfMetaText(p) {
+  return [p.title, p.author, p.subject, p.keywords].filter(Boolean).join(' ').toLowerCase();
+}
+function torrentMatches(t) {
+  const f = localFilters;
+  if (f.state && t.state !== f.state) return false;
+  const mb = (t.total_size || 0) / (1024 * 1024);
+  if (f.minSize && mb < parseFloat(f.minSize)) return false;
+  if (f.maxSize && mb > parseFloat(f.maxSize)) return false;
+  return true;
+}
+function pdfMatches(p) {
+  const f = localFilters;
+  const has = v => (v || '').toLowerCase();
+  if (f.author && !has(p.author).includes(f.author.toLowerCase())) return false;
+  if (f.subject && !has(p.subject).includes(f.subject.toLowerCase())) return false;
+  if (f.keywords && !has(p.keywords).includes(f.keywords.toLowerCase())) return false;
+  if (f.minPages && (p.pages || 0) < parseInt(f.minPages, 10)) return false;
+  if (f.maxPages && (p.pages || 0) > parseInt(f.maxPages, 10)) return false;
+  return true;
+}
+function openFiltersModal() {
+  const f = localFilters;
+  document.getElementById('f-author').value = f.author;
+  document.getElementById('f-subject').value = f.subject;
+  document.getElementById('f-keywords').value = f.keywords;
+  document.getElementById('f-minpages').value = f.minPages;
+  document.getElementById('f-maxpages').value = f.maxPages;
+  document.getElementById('f-state').value = f.state;
+  document.getElementById('f-minsize').value = f.minSize;
+  document.getElementById('f-maxsize').value = f.maxSize;
+  document.getElementById('filters-modal').classList.add('open');
+}
+document.getElementById('filters-btn').addEventListener('click', openFiltersModal);
+document.getElementById('filters-apply').addEventListener('click', () => {
+  localFilters = {
+    author: document.getElementById('f-author').value.trim(),
+    subject: document.getElementById('f-subject').value.trim(),
+    keywords: document.getElementById('f-keywords').value.trim(),
+    minPages: document.getElementById('f-minpages').value,
+    maxPages: document.getElementById('f-maxpages').value,
+    state: document.getElementById('f-state').value,
+    minSize: document.getElementById('f-minsize').value,
+    maxSize: document.getElementById('f-maxsize').value,
+  };
+  document.getElementById('filters-modal').classList.remove('open');
+  page = 1; refresh();
+});
+document.getElementById('filters-clear').addEventListener('click', () => {
+  localFilters = { author:'', subject:'', keywords:'', minPages:'', maxPages:'', state:'', minSize:'', maxSize:'' };
+  document.getElementById('filters-modal').classList.remove('open');
+  page = 1; refresh();
+});
+document.getElementById('filters-cancel').addEventListener('click', () =>
+  document.getElementById('filters-modal').classList.remove('open'));
+document.getElementById('filters-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'filters-modal') e.target.classList.remove('open');
+});
 document.getElementById('sort').addEventListener('change', () => { page = 1; refresh(); });
 document.getElementById('perpage').addEventListener('change', (e) => {
   perPage = e.target.value === 'all' ? 0 : parseInt(e.target.value, 10);
@@ -470,6 +592,7 @@ function renderLiveProvider(prov) {
   const sb = document.getElementById('searchbar');
   sb.style.display = '';
   document.getElementById('search-btn').style.display = '';
+  document.getElementById('filters-btn').style.display = 'none';
   // hide the torrent-only controls; a live provider lists search results
   document.getElementById('sort').style.display = 'none';
   document.getElementById('perpage').style.display = 'none';
