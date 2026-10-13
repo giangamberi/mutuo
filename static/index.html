@@ -13,20 +13,48 @@
   button, input, select { background:#0f1115; color:var(--text); border:1px solid #333a47; border-radius:6px; padding:6px 10px; font-size:13px; }
   input { min-width:280px; }
   main { flex:1; display:flex; min-height:0; }
-  aside { width:320px; min-width:240px; background:var(--panel); border-right:1px solid #000; overflow-y:auto; }
+  aside { width:320px; min-width:200px; background:var(--panel); border-right:1px solid #000; display:flex; flex-direction:column; position:relative; }
+  #resizer { position:absolute; top:0; right:-5px; width:10px; height:100%; cursor:col-resize; z-index:20; touch-action:none; }
+  #resizer::after { content:''; position:absolute; top:0; right:4px; width:2px; height:100%; background:transparent; }
+  #resizer:hover::after, #resizer.dragging::after { background:var(--acc); }
+  /* minimize the sidebar so the reader can focus on the text */
+  #sidebar-top { display:flex; justify-content:flex-end; padding:4px 6px 0; }
+  #sidebar-top #minimize-btn { padding:2px 9px; font-size:12px; line-height:1.4; }
+  aside.minimized { width:34px !important; min-width:34px !important; }
+  aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; }
+  aside.minimized #tabs, aside.minimized #searchbar,
+  aside.minimized #catalog, aside.minimized #resizer { display:none; }
+  #tabs { display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:8px 8px 6px; border-bottom:1px solid #000; }
+  #tabs .tabwrap { position:relative; display:flex; }
+  #tabs .tab { font-size:12px; padding:4px 10px; background:transparent; color:var(--dim); border:1px solid transparent; border-radius:6px; cursor:pointer; }
+  #tabs .tab:hover { background:#232a36; color:var(--text); }
+  #tabs .tab.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--text); }
+  #tabs .tab.off { opacity:.5; }
+  #tabs .tab.add { color:var(--acc); }
+  #tabs .pcog { font-size:11px; line-height:1; padding:4px 6px; margin-left:2px; background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer; }
+  #tabs .pcog:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
+  #catalog { flex:1; overflow-y:auto; }
+  #searchbar { display:flex; gap:6px; align-items:center; padding:6px 8px; border-bottom:1px solid #000; flex-wrap:wrap; }
+  #searchbar input { flex:1 1 140px; min-width:120px; padding:5px 8px; font-size:12px; }
+  #searchbar select { padding:5px 6px; font-size:12px; max-width:150px; }
+  #searchbar .count { font-size:11px; color:var(--dim); white-space:nowrap; }
+  #searchbar .pg { font-size:11px; color:var(--dim); white-space:nowrap; }
+  #searchbar .pg button { padding:4px 8px; font-size:12px; }
   aside .titem { position:relative; border-bottom:1px solid #262b34; }
-  aside .titem .open {
+  aside .titem button.open {
     display:block; width:100%; text-align:left; font:inherit; cursor:pointer;
     background:transparent; color:var(--text); border:0; border-radius:0; padding:10px 44px 10px 14px;
   }
-  aside .titem:hover .open { background:#232a36; }
-  aside .titem.active .open { background:rgba(79,140,255,.12); box-shadow:inset 3px 0 0 var(--acc); }
-  aside .titem .open:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
+  aside .titem:hover button.open { background:#232a36; }
+  aside .titem.active button.open { background:rgba(79,140,255,.12); box-shadow:inset 3px 0 0 var(--acc); }
+  aside .titem button.open:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
+  /* long filenames wrap instead of overflowing the sidebar */
+  aside .titem .name { overflow-wrap:anywhere; }
   aside .titem .cog {
     position:absolute; top:8px; right:8px; padding:3px 7px; font-size:12px; line-height:1;
-    background:transparent; color:var(--dim); border:1px solid transparent; border-radius:6px; cursor:pointer;
+    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
   }
-  aside .titem .cog:hover { background:#0f1115; border-color:#333a47; color:var(--text); }
+  aside .titem .cog:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
   .menu { display:none; position:absolute; right:8px; z-index:50; min-width:190px;
     background:var(--panel); border:1px solid #333a47; border-radius:8px; box-shadow:0 8px 24px #000a; }
   .menu.open { display:block; }
@@ -61,11 +89,11 @@
   .files .del-file { flex:0 0 auto; font-size:12px; padding:2px 5px; cursor:pointer;
     background:transparent; border:1px solid transparent; border-radius:5px; color:var(--dim); }
   .files .del-file:hover { border-color:#ff6b6b; color:#ff6b6b; background:#3a1f24; }
-  #viewer { flex:1; display:flex; flex-direction:column; align-items:center; overflow-y:auto; padding:12px; }
-  #page { background:#fff; margin-bottom:10px; }
-  #status { font-size:12px; color:var(--dim); margin-bottom:8px; }
-  .empty { color:var(--dim); font-size:13px; margin-top:24px; }
-  #loading { width:min(560px,92%); margin-top:36px; text-align:center; }
+  #viewer { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; background:#0f1115; }
+  #status { font-size:12px; color:var(--dim); padding:6px 12px; border-bottom:1px solid #000; }
+  #pdf-frame { flex:1; width:100%; border:0; background:#0f1115; min-height:0; }
+  .empty { color:var(--dim); font-size:13px; margin-top:24px; padding:0 16px; }
+  #loading { width:min(560px,92%); margin-top:36px; text-align:center; align-self:center; }
   #loading h2 { font-size:15px; margin:0 0 4px; word-break:break-all; }
   #loading .sub { font-size:12px; color:var(--dim); margin-bottom:10px; }
   #loading .bar { height:6px; }
@@ -92,13 +120,138 @@
   }
   #drop-overlay .box h2 { margin:0 0 8px; font-size:20px; }
   #drop-overlay .box p { margin:0; color:var(--dim); font-size:13px; }
+  #prov-modal { display:none; position:fixed; inset:0; z-index:100; background:rgba(15,17,21,.7);
+    align-items:center; justify-content:center; }
+  #prov-modal.open { display:flex; }
+  #prov-modal .card { width:min(440px,90vw); background:var(--panel); border:1px solid #333a47;
+    border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
+  #prov-modal h2 { font-size:15px; margin:0 0 14px; }
+  #prov-modal label { display:block; font-size:12px; color:var(--dim); margin:10px 0 4px; }
+  #prov-modal input { width:100%; min-width:0; }
+  #prov-modal .feedrow { display:flex; gap:8px; align-items:center; }
+  #prov-modal .feedrow input { flex:1; }
+  #prov-modal .feedrow button { flex:0 0 auto; white-space:nowrap; }
+  #prov-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  #confirm-modal { display:none; position:fixed; inset:0; z-index:101; background:rgba(15,17,21,.7);
+    align-items:center; justify-content:center; }
+  #confirm-modal.open { display:flex; }
+  #confirm-modal .card { width:min(400px,90vw); background:var(--panel); border:1px solid #333a47;
+    border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
+  #confirm-modal p { font-size:13px; margin:0 0 16px; }
+  #confirm-modal .row { display:flex; gap:8px; justify-content:flex-end; }
+  /* plugin management view */
+  #catalog .plugin-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid #000; }
+  #catalog .plugin-head h3 { margin:0; font-size:13px; }
+  #catalog .plugin-head button { font-size:12px; padding:4px 10px; color:var(--acc); }
+  #catalog .plugin-item { position:relative; border-bottom:1px solid #262b34; padding:10px 14px; }
+  #catalog .plugin-item .pname { font-size:13px; font-weight:600; padding-right:36px; }
+  #catalog .plugin-item .pdesc { font-size:11px; color:var(--dim); margin-top:3px; overflow-wrap:anywhere; }
+  #catalog .plugin-item .prow { display:flex; gap:6px; margin-top:8px; align-items:center; }
+  #catalog .plugin-item .prow button { font-size:12px; padding:4px 10px; }
+  #catalog .plugin-item .loaded { font-size:11px; color:var(--acc); margin-left:auto; }
+  #catalog .plugin-item .cog { position:absolute; top:10px; right:10px; padding:3px 7px; font-size:12px; line-height:1; background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer; }
+  #catalog .plugin-item .cog:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
+  #catalog .plugin-empty { color:var(--dim); font-size:13px; padding:16px 14px; }
+  /* plugin modals */
+  #plugin-run-modal, #plugin-add-modal { display:none; position:fixed; inset:0; z-index:100; background:rgba(15,17,21,.7); align-items:center; justify-content:center; }
+  #plugin-run-modal.open, #plugin-add-modal.open { display:flex; }
+  #plugin-run-modal .card, #plugin-add-modal .card { width:min(520px,92vw); background:var(--panel); border:1px solid #333a47; border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
+  #plugin-run-modal h2, #plugin-add-modal h2 { font-size:15px; margin:0 0 14px; }
+  #plugin-run-modal label, #plugin-add-modal label { display:block; font-size:12px; color:var(--dim); margin:10px 0 4px; }
+  #plugin-run-modal input, #plugin-add-modal input { width:100%; min-width:0; }
+  #plugin-add-modal textarea { width:100%; min-height:220px; font-family:ui-monospace,Consolas,monospace; font-size:12px; background:#0f1115; color:var(--text); border:1px solid #333a47; border-radius:6px; padding:8px 10px; resize:vertical; }
+  #plugin-run-modal .row, #plugin-add-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  #plugin-add-modal .hint { font-size:11px; color:var(--dim); margin-top:6px; line-height:1.5; }
+  #plugin-add-modal label.chk { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text); margin:10px 0 0; cursor:pointer; }
+  #plugin-add-modal label.chk input { width:auto; }
+  /* live provider: config controls injected into the search bar */
+  #searchbar .live-cfg { max-width:150px; }
+  #searchbar .live-cfg.txt { flex:0 1 170px; }
+  #searchbar #search-btn { padding:5px 10px; font-size:12px; white-space:nowrap; }
+  /* plugin management: active toggle */
+  #catalog .plugin-item .active-tgl { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--text); cursor:pointer; }
+  #catalog .plugin-item .active-tgl input { width:auto; }
+  /* plugin config modal */
+  #plugin-config-modal { display:none; position:fixed; inset:0; z-index:100; background:rgba(15,17,21,.7); align-items:center; justify-content:center; }
+  #plugin-config-modal.open { display:flex; }
+  #plugin-config-modal .card { width:min(460px,92vw); background:var(--panel); border:1px solid #333a47; border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
+  #plugin-config-modal h2 { font-size:15px; margin:0 0 14px; }
+  #plugin-config-modal .cfg-field { margin-bottom:12px; }
+  #plugin-config-modal .cfg-field label { display:block; font-size:12px; color:var(--dim); margin-bottom:4px; }
+  #plugin-config-modal .cfg-field input, #plugin-config-modal .cfg-field select { width:100%; min-width:0; }
+  #plugin-config-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
 </style>
 </head>
 <body>
 <div id="drop-overlay">
   <div class="box">
-    <h2>Drop .torrent file</h2>
+    <h2>Drop .torrent or .pdf file</h2>
     <p>Release to add it to the reader</p>
+  </div>
+</div>
+<div id="prov-modal">
+  <div class="card">
+    <h2>Add provider</h2>
+    <label for="prov-name">Name</label>
+    <input id="prov-name" placeholder="e.g. Archive.org, Company shares">
+    <label for="prov-feed">Feed (URL, feed.json file, or a folder of .torrent files — optional)</label>
+    <div class="feedrow">
+      <input id="prov-feed" placeholder="https://…/feed.json, C:\path\feed.json, or a folder">
+      <button type="button" id="prov-browse" title="Browse for a folder on this computer">Browse…</button>
+    </div>
+    <label for="prov-desc">Description (optional)</label>
+    <input id="prov-desc" placeholder="what this list is for">
+    <div class="row">
+      <button type="button" id="prov-cancel">Cancel</button>
+      <button type="button" id="prov-ok">Add</button>
+    </div>
+  </div>
+</div>
+<div id="confirm-modal">
+  <div class="card">
+    <p id="confirm-msg"></p>
+    <div class="row">
+      <button type="button" id="confirm-no">Cancel</button>
+      <button type="button" id="confirm-yes">OK</button>
+    </div>
+  </div>
+</div>
+<div id="plugin-run-modal">
+  <div class="card">
+    <h2 id="plugin-run-title">Run plugin</h2>
+    <div id="plugin-run-querywrap">
+      <label for="plugin-run-query">Query</label>
+      <input id="plugin-run-query" placeholder="search term…" autocomplete="off">
+    </div>
+    <div class="row">
+      <button type="button" id="plugin-run-cancel">Cancel</button>
+      <button type="button" id="plugin-run-ok">Run</button>
+    </div>
+  </div>
+</div>
+<div id="plugin-add-modal">
+  <div class="card">
+    <h2>Add plugin</h2>
+    <label for="plugin-add-name">Name</label>
+    <input id="plugin-add-name" placeholder="e.g. ArXiv, Z-Library" autocomplete="off">
+    <label for="plugin-add-code">Python code (must define fetch(query) or fetch() -> list[dict])</label>
+    <textarea id="plugin-add-code" spellcheck="false" placeholder="def fetch(query):&#10;    return []"></textarea>
+    <label class="chk"><input type="checkbox" id="plugin-add-needsquery" checked> Requires a query (uncheck to run with no query)</label>
+    <div class="hint">Each item: {"name", "magnet"} (torrent) · {"name", "url"} (PDF to download) · {"name", "path"} (local PDF).</div>
+    <div class="row">
+      <button type="button" id="plugin-add-cancel">Cancel</button>
+      <button type="button" id="plugin-add-ok">Add</button>
+    </div>
+  </div>
+</div>
+<div id="plugin-config-modal">
+  <div class="card">
+    <h2 id="plugin-config-title">Plugin settings</h2>
+    <div id="plugin-config-fields"></div>
+    <div class="row">
+      <button type="button" id="plugin-config-cancel">Cancel</button>
+      <button type="button" id="plugin-config-save">Save</button>
+    </div>
   </div>
 </div>
 <header>
@@ -110,20 +263,59 @@
   <span id="hdrstat" style="font-size:12px;color:var(--dim)"></span>
 </header>
 <main>
-  <aside id="catalog"></aside>
+  <aside>
+    <div id="sidebar-top">
+      <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
+    </div>
+    <div id="tabs"></div>
+    <div id="searchbar">
+      <input id="search" type="search" placeholder="Search documents…" autocomplete="off">
+      <button id="search-btn" type="button" title="Search" style="display:none">Search</button>
+      <select id="sort" title="Sort order">
+        <option value="name-asc">Name A–Z</option>
+        <option value="name-desc">Name Z–A</option>
+        <option value="size-desc">Largest first</option>
+        <option value="progress-desc">Most downloaded</option>
+        <option value="state">By state</option>
+      </select>
+      <select id="perpage" title="Items per page">
+        <option value="10">10 / page</option>
+        <option value="25">25 / page</option>
+        <option value="50">50 / page</option>
+        <option value="100">100 / page</option>
+        <option value="all">All</option>
+      </select>
+      <span class="pg">
+        <button id="pg-prev" type="button" title="Previous page">‹</button>
+        <span id="pg-info"></span>
+        <button id="pg-next" type="button" title="Next page">›</button>
+      </span>
+      <span class="count" id="count"></span>
+    </div>
+    <div id="catalog"></div>
+    <div id="resizer" title="Drag to resize · double-click to reset"></div>
+  </aside>
   <section id="viewer">
     <div id="loading" style="display:none"></div>
-    <div id="status"></div>
+    <div id="status" style="display:none"></div>
     <div class="empty" id="empty">Pick a torrent from the list. Nothing downloads until you open a PDF (or include a file) — that’s how you choose what to fetch.</div>
+    <iframe id="pdf-frame" style="display:none" title="PDF viewer"></iframe>
     <div id="pages" style="display:none"></div>
   </section>
 </main>
 <script type="module">
-import * as pdfjsLib from '/static/pdfjs-dist/build/pdf.min.mjs';
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/pdfjs-dist/build/pdf.worker.min.mjs';
-let current = null; // {ih, f, name, doc} — the PDF currently shown
 let selected = null; // info_hash of the torrent the user picked
 let waitTimer = null; // retry timer for the "waiting on the swarm" page
+let activeProvider = 'local'; // which provider tab the list shows
+let providers = []; // [{id, name, feed, description, enabled}]
+let plugins = []; // [{id, name, description}] — custom behaviours
+let showingPlugins = false; // the sidebar shows the plugin manager, not a list
+let page = 1; // current page of the (paginated) list
+let perPage = parseInt(localStorage.getItem('per-page'), 10) || 25; // items per page (0 = all)
+// live plugin provider: results are fetched on demand (not from the catalog)
+let liveResults = []; // [{name, url|magnet|path, meta?}] for the active live tab
+let liveLoading = false;
+let liveSeq = 0; // guards against out-of-order search responses
 
 async function j(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r; }
 
@@ -131,11 +323,55 @@ async function refresh() {
   try {
     const torrents = await j('/api/torrents').then(r => r.json());
     const catalog = await j('/api/catalog').then(r => r.json());
+    providers = await j('/api/providers').then(r => r.json());
+    const directPdfs = await j('/api/pdfs').then(r => r.json());
+    plugins = await j('/api/plugins').then(r => r.json());
     const byMagnet = Object.fromEntries(catalog.map(c => [magnetKey(c.magnet), c]));
+    const provOf = t => (byMagnet[magnetKey(t.magnet)] || {}).provider || 'local';
+    renderTabs();
+    if (showingPlugins) { renderPluginView(directPdfs, catalog); return; }
+    const liveProv = providers.find(p => p.id === activeProvider && p.live);
+    if (liveProv) { renderLiveProvider(liveProv); return; }
+    // leaving a live tab: restore the torrent-only controls it hid
+    document.getElementById('sort').style.display = '';
+    document.getElementById('perpage').style.display = '';
+    document.querySelector('#searchbar .pg').style.display = '';
+    document.getElementById('search-btn').style.display = 'none';
+    document.getElementById('searchbar').style.display = '';
     const el = document.getElementById('catalog');
     el.innerHTML = '';
-    for (const t of torrents) {
-      const c = byMagnet[magnetKey(t.magnet)] || {};
+    // search + sort: filter the current provider's items by name, then order
+    // them by the chosen key (torrents first, then direct PDFs)
+    const q = (document.getElementById('search').value || '').trim().toLowerCase();
+    const sort = document.getElementById('sort').value;
+    const cmp = {
+      'name-asc': (a, b) => a.name.localeCompare(b.name),
+      'name-desc': (a, b) => b.name.localeCompare(a.name),
+      'size-desc': (a, b) => b.size - a.size,
+      'progress-desc': (a, b) => b.progress - a.progress,
+      'state': (a, b) => a.state.localeCompare(b.state) || a.name.localeCompare(b.name),
+    }[sort] || ((a, b) => a.name.localeCompare(b.name));
+    const tItems = torrents
+      .filter(t => provOf(t) === activeProvider)
+      .map(t => { const c = byMagnet[magnetKey(t.magnet)] || {}; return { t, c, name: c.name || t.name || t.info_hash }; })
+      .filter(x => !q || x.name.toLowerCase().includes(q))
+      .sort((a, b) => cmp({ name: a.name, size: a.t.total_size || 0, progress: a.t.progress || 0, state: a.t.state || '' },
+                          { name: b.name, size: b.t.total_size || 0, progress: b.t.progress || 0, state: b.t.state || '' }));
+    const pItems = directPdfs
+      .filter(p => (p.provider || 'local') === activeProvider)
+      .map(p => ({ p, name: p.name }))
+      .filter(x => !q || x.name.toLowerCase().includes(q))
+      .sort((a, b) => cmp({ name: a.name, size: a.p.size || 0, progress: 0, state: 'pdf' },
+                          { name: b.name, size: b.p.size || 0, progress: 0, state: 'pdf' }));
+    // paginate: slice the combined (torrents, then PDFs) list to the current page
+    const total = tItems.length + pItems.length;
+    const pp = perPage === 0 ? total : perPage;
+    const pages = Math.max(1, Math.ceil(total / pp));
+    if (page > pages) page = pages;
+    const start = (page - 1) * pp;
+    const slice = [...tItems, ...pItems].slice(start, start + pp);
+    for (const { t, c } of slice) {
+      if (!t) continue; // direct PDF, rendered below
       const pct = Math.round(t.progress * 100);
       const item = document.createElement('div');
       item.className = 'titem' + (selected === t.info_hash ? ' active' : '');
@@ -158,9 +394,389 @@ async function refresh() {
         </div>`;
       el.appendChild(item);
     }
+    // direct (non-torrent) PDFs: uploaded files, or PDFs read in place from a
+    // provider folder
+    for (const { p } of slice) {
+      if (!p) continue; // torrent, rendered above
+      const fromFolder = p.source === 'folder';
+      const item = document.createElement('div');
+      item.className = 'titem' + (selected === 'pdf:' + p.id ? ' active' : '');
+      item.dataset.pdf = p.id;
+      item.innerHTML = `<button type="button" class="open" data-pdf="${p.id}" data-name="${esc(p.name)}" data-source="${fromFolder ? 'folder' : 'upload'}">
+          <div class="name">&#128196; ${esc(p.name)}</div>
+          <div class="meta">${fromFolder ? 'from folder' : 'direct file'} · ${fmtSize(p.size)}</div>
+        </button>
+        <button type="button" class="cog" data-pdf="${p.id}" aria-label="pdf actions">⋯</button>
+        <div class="menu">
+          <button data-pdfact="open" data-pdf="${p.id}">Open</button>
+          <button data-pdfact="remove" data-pdf="${p.id}" data-source="${fromFolder ? 'folder' : 'upload'}" class="danger">${fromFolder ? 'Remove from list…' : 'Remove &amp; delete…'}</button>
+        </div>`;
+      el.appendChild(item);
+    }
+    const shown = tItems.length + pItems.length;
+    const provName = activeProvider === 'local' ? 'Local' : (providers.find(p => p.id === activeProvider) || {}).name || activeProvider;
     document.getElementById('hdrstat').textContent =
-      torrents.length ? `${torrents.length} torrent(s)` : 'no torrents — add one or point feed.json at a source';
+      shown ? `${shown} item(s) in ${esc(provName)}`
+            : 'nothing here — drop a .torrent or .pdf, or sync the provider feed';
+    document.getElementById('count').textContent = q ? `${shown} match` : '';
+    updatePagination(pages);
   } catch (e) { /* server still starting */ }
+}
+
+function updatePagination(pages) {
+  document.getElementById('pg-info').textContent = pages > 1 ? `${page}/${pages}` : '';
+  document.getElementById('pg-prev').disabled = page <= 1;
+  document.getElementById('pg-next').disabled = page >= pages;
+}
+
+// search + sort bar: re-render the list as the query, sort, or page changes.
+// On a live tab, typing does nothing — the search only fires on the button
+// (or Enter), so a slow provider isn't hit on every keystroke.
+document.getElementById('search').addEventListener('input', () => {
+  const live = providers.find(p => p.id === activeProvider && p.live);
+  if (live) return;
+  page = 1; refresh();
+});
+document.getElementById('search-btn').addEventListener('click', () => runLiveSearch());
+document.getElementById('search').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const live = providers.find(p => p.id === activeProvider && p.live);
+  if (live) { e.preventDefault(); runLiveSearch(); }
+});
+document.getElementById('sort').addEventListener('change', () => { page = 1; refresh(); });
+document.getElementById('perpage').addEventListener('change', (e) => {
+  perPage = e.target.value === 'all' ? 0 : parseInt(e.target.value, 10);
+  localStorage.setItem('per-page', String(perPage));
+  page = 1;
+  refresh();
+});
+document.getElementById('pg-prev').addEventListener('click', () => { if (page > 1) { page--; refresh(); } });
+document.getElementById('pg-next').addEventListener('click', () => { page++; refresh(); });
+// restore the saved per-page choice
+(function () {
+  const sel = document.getElementById('perpage');
+  sel.value = perPage === 0 ? 'all' : String(perPage);
+})();
+
+// ---- live plugin provider (search box + config controls, results on demand) ----
+function liveCfgValue(key) {
+  const el = document.querySelector(`#searchbar .live-cfg[data-key="${key}"]`);
+  return el ? el.value : '';
+}
+
+function renderLiveProvider(prov) {
+  const el = document.getElementById('catalog');
+  el.innerHTML = '';
+  const sb = document.getElementById('searchbar');
+  sb.style.display = '';
+  document.getElementById('search-btn').style.display = '';
+  // hide the torrent-only controls; a live provider lists search results
+  document.getElementById('sort').style.display = 'none';
+  document.getElementById('perpage').style.display = 'none';
+  document.querySelector('#searchbar .pg').style.display = 'none';
+  document.getElementById('search').placeholder = `Search ${esc(prov.name)}…`;
+  // inject the plugin's config controls (sort, language, …) into the search bar
+  sb.querySelectorAll('.live-cfg').forEach(n => n.remove());
+  const count = document.getElementById('count');
+  for (const c of (prov.config_schema || [])) {
+    const val = (prov.config && prov.config[c.key] != null) ? prov.config[c.key] : (c.default || '');
+    let node;
+    if (c.type === 'select') {
+      node = document.createElement('select');
+      node.className = 'live-cfg';
+      for (const o of (c.options || [])) {
+        const op = document.createElement('option');
+        op.value = o.value; op.textContent = o.label;
+        if (String(o.value) === String(val)) op.selected = true;
+        node.appendChild(op);
+      }
+    } else {
+      node = document.createElement('input');
+      node.type = 'text';
+      node.className = 'live-cfg txt';
+      node.placeholder = c.placeholder || c.label || '';
+      node.value = val;
+    }
+    node.dataset.key = c.key;
+    node.title = c.label || c.key;
+    node.addEventListener('change', () => {
+      const cfg = {};
+      sb.querySelectorAll('.live-cfg').forEach(n => cfg[n.dataset.key] = n.value);
+      j(`/api/plugins/${prov.id.slice(7)}/config`, { method: 'POST',
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ config: cfg }) })
+        .then(r => r.json()).catch(() => {});
+    });
+    sb.insertBefore(node, count);
+  }
+  // render the current results (or a loading / empty state)
+  if (liveLoading) {
+    const d = document.createElement('div');
+    d.className = 'plugin-empty';
+    d.innerHTML = '<div class="spin"></div> searching…';
+    el.appendChild(d);
+    document.getElementById('hdrstat').textContent = 'searching…';
+    return;
+  }
+  if (!liveResults.length) {
+    const d = document.createElement('div');
+    d.className = 'plugin-empty';
+    d.textContent = 'Type a search term above to list results. Use the sort / language / topic controls to narrow it down.';
+    el.appendChild(d);
+    document.getElementById('hdrstat').textContent = `search ${esc(prov.name)}`;
+    return;
+  }
+  for (const it of liveResults) {
+    const item = document.createElement('div');
+    item.className = 'titem';
+    item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livename="${esc(it.name)}">
+        <div class="name">&#128196; ${esc(it.name)}</div>
+        <div class="meta">${esc(it.meta || (it.magnet ? 'torrent' : 'PDF'))}</div>
+      </button>`;
+    el.appendChild(item);
+  }
+  document.getElementById('hdrstat').textContent = `${liveResults.length} result(s) in ${esc(prov.name)}`;
+}
+
+function runLiveSearch() {
+  const prov = providers.find(p => p.id === activeProvider && p.live);
+  if (!prov) return;
+  const pid = prov.id.slice(7);
+  const q = (document.getElementById('search').value || '').trim();
+  // config comes from the search-bar controls once rendered; on first open
+  // (before they exist) fall back to the plugin's saved config
+  const cfg = {};
+  const controls = document.querySelectorAll('#searchbar .live-cfg');
+  if (controls.length) controls.forEach(n => cfg[n.dataset.key] = n.value);
+  else Object.assign(cfg, prov.config || {});
+  const seq = ++liveSeq;
+  liveLoading = true;
+  refresh();
+  const params = new URLSearchParams({ query: q, config: JSON.stringify(cfg) });
+  j(`/api/plugins/${pid}/search?${params}`)
+    .then(r => r.json())
+    .then(data => { if (seq !== liveSeq) return; liveResults = data.items || []; liveLoading = false; refresh(); })
+    .catch(e => { if (seq !== liveSeq) return; liveLoading = false; liveResults = []; document.getElementById('hdrstat').textContent = `search error: ${e.message}`; refresh(); });
+}
+
+// drag the right edge of the sidebar to resize it (persisted, double-click resets).
+// Uses Pointer Events + setPointerCapture so the handle keeps receiving every
+// move event even when the cursor moves fast or over other elements — the plain
+// document-mousemove approach drops events in some embedded browsers.
+(function () {
+  const aside = document.querySelector('aside');
+  const rz = document.getElementById('resizer');
+  const MIN = 200, MAX = 600, KEY = 'sidebar-width';
+  const saved = parseInt(localStorage.getItem(KEY), 10);
+  if (saved >= MIN && saved <= MAX) aside.style.width = saved + 'px';
+  let startX = 0, startW = 0, dragging = false;
+  rz.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { rz.setPointerCapture(e.pointerId); } catch {}
+    dragging = true;
+    rz.classList.add('dragging');
+    startX = e.clientX;
+    startW = aside.getBoundingClientRect().width;
+  });
+  rz.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const w = Math.min(MAX, Math.max(MIN, startW + (e.clientX - startX)));
+    aside.style.width = w + 'px';
+  });
+  const end = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    try { rz.releasePointerCapture(e.pointerId); } catch {}
+    rz.classList.remove('dragging');
+    localStorage.setItem(KEY, aside.style.width);
+  };
+  rz.addEventListener('pointerup', end);
+  rz.addEventListener('pointercancel', end);
+  rz.addEventListener('dblclick', () => {
+    aside.style.width = '320px';
+    localStorage.setItem(KEY, '320');
+  });
+})();
+
+// minimize / restore the sidebar (persisted). Collapsing to a thin rail lets
+// the PDF viewer take the full width so the reader can focus on the text.
+(function () {
+  const aside = document.querySelector('aside');
+  const btn = document.getElementById('minimize-btn');
+  const KEY = 'sidebar-minimized';
+  function setMinimized(m) {
+    aside.classList.toggle('minimized', m);
+    btn.innerHTML = m ? '&#8250;' : '&#8249;';
+    btn.title = m ? 'Show sidebar' : 'Hide sidebar';
+    btn.setAttribute('aria-label', btn.title);
+    localStorage.setItem(KEY, m ? '1' : '0');
+  }
+  btn.addEventListener('click', () => setMinimized(!aside.classList.contains('minimized')));
+  if (localStorage.getItem(KEY) === '1') setMinimized(true);
+})();
+
+// ---- provider tabs ----
+function renderTabs() {
+  const el = document.getElementById('tabs');
+  el.innerHTML = '';
+  for (const p of providers) {
+    const wrap = document.createElement('span');
+    wrap.className = 'tabwrap';
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tab' + (!showingPlugins && p.id === activeProvider ? ' active' : '') + (p.enabled ? '' : ' off');
+    b.textContent = p.name;
+    b.title = p.description || p.feed || p.name;
+    b.onclick = () => {
+      showingPlugins = false;
+      const wasLive = providers.find(x => x.id === activeProvider && x.live);
+      activeProvider = p.id;
+      // opening a live tab fresh: start from an empty result set (the user
+      // types to search); don't fire a slow empty query on open
+      if (p.live && !wasLive) liveResults = [];
+      refresh();
+    };
+    wrap.appendChild(b);
+    if (p.id !== 'local' && !p.plugin) {
+      const cog = document.createElement('button');
+      cog.type = 'button';
+      cog.className = 'pcog';
+      cog.textContent = '⋯';
+      cog.title = 'provider actions';
+      cog.dataset.pid = p.id;
+      cog.onclick = (e) => { e.stopPropagation(); toggleProviderMenu(cog, p); };
+      wrap.appendChild(cog);
+    }
+    el.appendChild(wrap);
+  }
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'tab add';
+  add.textContent = '+ provider';
+  add.onclick = addProviderDialog;
+  el.appendChild(add);
+
+  // distinct management tab for plugins (custom behaviours), not a content tab
+  const plug = document.createElement('button');
+  plug.type = 'button';
+  plug.className = 'tab' + (showingPlugins ? ' active' : '');
+  plug.textContent = '🔌 Plugins';
+  plug.title = 'Manage plugins — custom behaviours that load books/PDFs';
+  plug.onclick = () => { showingPlugins = true; refresh(); };
+  el.appendChild(plug);
+}
+
+function toggleProviderMenu(cog, p) {
+  const wasOpen = cog.parentElement.querySelector('.menu')?.classList.contains('open');
+  document.querySelectorAll('#tabs .menu.open').forEach(m => m.remove());
+  if (wasOpen) return;
+  const menu = document.createElement('div');
+  menu.className = 'menu open';
+  menu.style.position = 'absolute';
+  menu.style.top = '100%';
+  menu.style.left = '0';
+  menu.style.right = 'auto';
+  menu.style.marginTop = '4px';
+  const mk = (label, fn, danger) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    if (danger) b.className = 'danger';
+    b.onclick = (e) => { e.stopPropagation(); menu.remove(); fn(); };
+    menu.appendChild(b);
+  };
+  mk(p.enabled ? '⏸ Disable (stop syncing)' : '▶ Enable (sync now)', () => setProviderEnabled(p.id, !p.enabled));
+  if (p.feed) mk('↻ Sync feed now', () => syncProvider(p.id));
+  mk('🗑 Remove provider…', () => removeProvider(p), true);
+  cog.parentElement.appendChild(menu);
+}
+
+async function setProviderEnabled(pid, enabled) {
+  try {
+    await j(`/api/providers/${pid}/enabled?enabled=${enabled}`, { method: 'POST' });
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+async function syncProvider(pid) {
+  try {
+    const r = await j(`/api/providers/${pid}/sync`, { method: 'POST' }).then(r => r.json());
+    toast(`synced ${pid}: +${r.added} new torrent(s)`);
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+async function removeProvider(p) {
+  const ok = await askConfirm(`Remove provider "${p.name}"? Its torrents stay in the catalog and session.`);
+  if (!ok) return;
+  try {
+    await j(`/api/providers/${p.id}`, { method: 'DELETE' });
+    if (activeProvider === p.id) activeProvider = 'local';
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+// promise-based confirm (the integrated browser blocks window.confirm)
+function askConfirm(msg) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('confirm-modal');
+    document.getElementById('confirm-msg').textContent = msg;
+    modal.classList.add('open');
+    const done = (v) => {
+      modal.classList.remove('open');
+      document.getElementById('confirm-yes').onclick = null;
+      document.getElementById('confirm-no').onclick = null;
+      resolve(v);
+    };
+    document.getElementById('confirm-yes').onclick = () => done(true);
+    document.getElementById('confirm-no').onclick = () => done(false);
+    modal.onclick = (e) => { if (e.target.id === 'confirm-modal') done(false); };
+  });
+}
+
+function addProviderDialog() {
+  const modal = document.getElementById('prov-modal');
+  document.getElementById('prov-name').value = '';
+  document.getElementById('prov-feed').value = '';
+  document.getElementById('prov-desc').value = '';
+  modal.classList.add('open');
+  document.getElementById('prov-name').focus();
+}
+
+document.getElementById('prov-cancel').onclick = () =>
+  document.getElementById('prov-modal').classList.remove('open');
+document.getElementById('prov-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'prov-modal') e.target.classList.remove('open'); // backdrop click
+});
+document.getElementById('prov-ok').onclick = () => {
+  const name = document.getElementById('prov-name').value.trim();
+  if (!name) { document.getElementById('prov-name').focus(); return; }
+  const feed = document.getElementById('prov-feed').value.trim();
+  const desc = document.getElementById('prov-desc').value.trim();
+  document.getElementById('prov-modal').classList.remove('open');
+  addProvider(name, feed, desc);
+};
+document.getElementById('prov-browse').onclick = async () => {
+  const btn = document.getElementById('prov-browse');
+  const feed = document.getElementById('prov-feed');
+  btn.disabled = true; btn.textContent = 'Choosing…';
+  try {
+    const r = await j('/api/providers/browse', { method: 'POST' }).then(r => r.json());
+    if (r.path) feed.value = r.path;
+  } catch (e) { alert(e.message); }
+  btn.disabled = false; btn.textContent = 'Browse…';
+};
+document.getElementById('prov-name').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('prov-ok').click();
+});
+
+async function addProvider(name, feed, description) {
+  try {
+    const r = await j('/api/providers', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, feed, description }) }).then(r => r.json());
+    if (r.sync_error) alert(`Provider added, but feed sync failed: ${r.sync_error}`);
+    activeProvider = r.id;
+    refresh();
+  } catch (e) { alert(e.message); }
 }
 
 function magnetKey(m) { for (const p of m.split('&')) if (p.startsWith('xt=')) return p.slice(3); return m; }
@@ -196,20 +812,38 @@ async function openTorrent(ih, name) {
 
 function markActive() {
   document.querySelectorAll('#catalog .titem').forEach(n => {
-    n.classList.toggle('active', n.dataset.ih === selected);
+    const key = n.dataset.ih ? n.dataset.ih : (n.dataset.pdf ? 'pdf:' + n.dataset.pdf : null);
+    n.classList.toggle('active', key === selected);
   });
 }
 
-function hideLoading() { document.getElementById('loading').style.display = 'none'; }
+function hideLoading() {
+  // Stop the "waiting on the swarm" retry loop the moment we show a PDF,
+  // otherwise the pending retry re-shows the loading page over the viewer.
+  if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
+  document.getElementById('loading').style.display = 'none';
+}
+
+// hide the PDF viewer (and its status line / file list) so a previously open
+// PDF doesn't linger behind the loading page or a new torrent's file list
+function hidePdf() {
+  document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('status').style.display = 'none';
+  document.getElementById('pages').style.display = 'none';
+}
 
 function showEmpty(msg) {
+  if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
   const empty = document.getElementById('empty');
   empty.textContent = msg;
   empty.style.display = '';
   document.getElementById('pages').style.display = 'none';
+  document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('status').style.display = 'none';
 }
 
 function showLoading(entry, note) {
+  hidePdf();
   const pct = Math.round((entry.progress || 0) * 100);
   const el = document.getElementById('loading');
   el.innerHTML = `<div class="spin"></div>
@@ -231,6 +865,7 @@ function showLoading(entry, note) {
 }
 
 function showFileList(ih, pdfs) {
+  hidePdf();
   const pages = document.getElementById('pages');
   pages.innerHTML = '';
   const ul = document.createElement('div');
@@ -265,14 +900,16 @@ window.addMagnet = async function () {
   if (!magnet.startsWith('magnet:')) { alert('paste a magnet: URI'); return; }
   try {
     await j('/api/catalog', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name: magnet.slice(10, 60), magnet})});
+      body: JSON.stringify({name: magnet.slice(10, 60), magnet, provider: activeProvider})});
     document.getElementById('magnet').value = '';
     refresh();
   } catch (e) { alert(e.message); }
 };
 
 window.syncFeed = async function () {
-  try { const r = await j('/api/sync', {method:'POST'}).then(r => r.json());
+  try {
+    const url = activeProvider === 'local' ? '/api/sync' : `/api/providers/${activeProvider}/sync`;
+    const r = await j(url, {method:'POST'}).then(r => r.json());
     alert(`synced: +${r.added} new torrent(s)`); refresh();
   } catch (e) { alert(e.message); }
 };
@@ -301,8 +938,10 @@ window.addEventListener('drop', (e) => {
   dropOverlay.classList.remove('active');
   const allFiles = e.dataTransfer.files ? [...e.dataTransfer.files] : [];
   const torrents = allFiles.filter(f => /\.torrent$/i.test(f.name));
-  if (!torrents.length) { alert('Drop one or more .torrent files'); return; }
-  dropTorrentFiles(torrents);
+  const pdfs = allFiles.filter(f => /\.pdf$/i.test(f.name));
+  if (!torrents.length && !pdfs.length) { alert('Drop one or more .torrent or .pdf files'); return; }
+  if (torrents.length) dropTorrentFiles(torrents);
+  if (pdfs.length) dropPdfFiles(pdfs);
 });
 
 async function dropTorrentFiles(torrents) {
@@ -310,6 +949,7 @@ async function dropTorrentFiles(torrents) {
   status.textContent = `adding ${torrents.length} file(s)…`;
   const fd = new FormData();
   torrents.forEach(f => fd.append('files', f, f.name));
+  fd.append('provider', activeProvider);
   try {
     const r = await fetch('/api/torrent', { method: 'POST', body: fd });
     if (!r.ok) throw new Error(await r.text());
@@ -327,48 +967,124 @@ async function dropTorrentFiles(torrents) {
   }
 };
 
-async function openPdf(ih, f, name, size) {
-  if (current) { try { current.doc.destroy(); } catch {} current = null; }
-  hideLoading();
-  const pages = document.getElementById('pages');
-  const empty = document.getElementById('empty');
-  empty.style.display = 'none';
-  pages.style.display = '';
-  pages.innerHTML = '';
-  const status = document.getElementById('status');
-  status.textContent = `Loading ${name} — waiting on swarm for pieces…`;
-  // PDF.js requests the header range first; the server blocks until those
-  // pieces are verified, so first paint starts as soon as head of file lands.
-  const task = pdfjsLib.getDocument({ url: `/api/pdf?ih=${ih}&f=${f}` });
-  current = { ih, f, name, doc: null };
+async function dropPdfFiles(pdfs) {
+  const status = document.getElementById('hdrstat');
+  status.textContent = `adding ${pdfs.length} PDF file(s)…`;
+  const fd = new FormData();
+  pdfs.forEach(f => fd.append('files', f, f.name));
+  fd.append('provider', activeProvider);
   try {
-    const doc = await task.promise;
-    current.doc = doc;
-    status.textContent = `${name} — ${doc.numPages} pages`;
-    for (let p = 1; p <= doc.numPages; p++) await renderPage(doc, p, pages);
+    const r = await fetch('/api/pdf/upload', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    const parts = [`${data.added.length} added`];
+    if (data.errors.length) parts.push(`${data.errors.length} failed`);
+    status.textContent = parts.join(', ');
+    if (data.errors.length) console.warn('pdf errors:', data.errors);
+    refresh();
+    // open the first one right away
+    if (data.added.length) openDirectPdf(data.added[0].id, data.added[0].name, data.added[0].size);
   } catch (e) {
-    status.textContent = '';
-    // nothing usable yet: keep the loading page with live torrent stats
-    showLoading({ info_hash: ih, name: name, state: 'stalled', progress: 0, files: [] },
-      `Could not open ${name} (${e.message}) — waiting on the swarm…`);
-    if (!waitTimer) waitTimer = setTimeout(() => openTorrent(ih, name), 2000);
+    status.textContent = `error: ${e.message}`;
+    setTimeout(() => refresh(), 3000);
   }
 }
 
-async function renderPage(doc, p, container) {
-  const page = await doc.getPage(p);
-  const viewport = page.getViewport({ scale: 1.25 });
-  const canvas = document.createElement('canvas');
-  canvas.id = `page-${p}`;
-  canvas.width = viewport.width; canvas.height = viewport.height;
-  canvas.style.width = '720px';
-  container.appendChild(canvas);
-  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+function openPdf(ih, f, name, size) {
+  hideLoading();
+  document.getElementById('pages').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+  const status = document.getElementById('status');
+  status.textContent = name;
+  status.style.display = '';
+  // The official viewer loads the PDF itself; the server blocks each range
+  // request until the swarm has the pieces, so the viewer's own spinner shows
+  // while the download catches up.
+  const frame = document.getElementById('pdf-frame');
+  frame.style.display = '';
+  frame.src = `/static/pdfjs-dist/web/viewer.html?file=${encodeURIComponent(`/api/pdf?ih=${ih}&f=${f}`)}`;
 }
 
-// clicking a torrent button in the sidebar (open the PDF), or its ⋯ menu
+// open a direct (non-torrent) PDF served from /api/pdf/direct
+function openDirectPdf(id, name, size) {
+  hideLoading();
+  document.getElementById('pages').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+  const status = document.getElementById('status');
+  status.textContent = name;
+  status.style.display = '';
+  const frame = document.getElementById('pdf-frame');
+  frame.style.display = '';
+  frame.src = `/static/pdfjs-dist/web/viewer.html?file=${encodeURIComponent(`/api/pdf/direct?pid=${id}`)}`;
+}
+
+// open a direct PDF from the sidebar (look up its size for the status line)
+async function openDirectPdfById(id, name) {
+  selected = 'pdf:' + id;
+  markActive();
+  let size = 0;
+  try { size = (await j('/api/pdfs').then(r => r.json())).find(p => p.id === id)?.size || 0; } catch {}
+  openDirectPdf(id, name, size);
+}
+
+// open a live plugin search result: download its PDF (deduped by URL) and open it
+async function openLiveResult(url, name) {
+  const prov = providers.find(p => p.id === activeProvider && p.live);
+  if (!prov || !url) return;
+  const pid = prov.id.slice(7);
+  const status = document.getElementById('status');
+  status.textContent = `opening ${name || 'PDF'}…`;
+  status.style.display = '';
+  try {
+    const r = await j(`/api/plugins/${pid}/open`, { method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, name }) }).then(r => r.json());
+    openDirectPdf(r.id, name, 0);
+  } catch (e) {
+    status.textContent = `error: ${e.message}`;
+  }
+}
+
+async function doPdfAction(id, act, source) {
+  if (act === 'open') { openDirectPdfById(id, ''); return; }
+  if (act === 'remove') {
+    const fromFolder = source === 'folder';
+    const ok = await askConfirm(fromFolder
+      ? 'Remove this PDF from the list? The file in your folder is not touched.'
+      : 'Remove this PDF and delete it from disk?');
+    if (!ok) return;
+    try {
+      await j(`/api/pdfs/${id}`, { method: 'DELETE' });
+      if (selected === 'pdf:' + id) { selected = null; showEmpty('PDF removed.'); }
+    } catch (e) { alert(e.message); }
+  }
+  refresh();
+}
+
+// clicking a torrent/PDF button in the sidebar (open it), or its ⋯ menu
 document.getElementById('catalog').addEventListener('click', (e) => {
-  const cog = e.target.closest('.cog[data-ih]');
+  const liveBtn = e.target.closest('button.open[data-liveurl]');
+  if (liveBtn) { e.preventDefault(); openLiveResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || ''); return; }
+  const cfgBtn = e.target.closest('button[data-config]');
+  if (cfgBtn) { e.preventDefault(); openConfigModal(cfgBtn.dataset.config); return; }
+  const runBtn = e.target.closest('button[data-run]');
+  if (runBtn) { e.preventDefault(); openRunPluginModal(runBtn.dataset.run); return; }
+  const plugCog = e.target.closest('.cog[data-plug]');
+  if (plugCog) {
+    e.preventDefault();
+    const menu = plugCog.closest('.plugin-item').querySelector('.menu');
+    const wasOpen = menu.classList.contains('open');
+    document.querySelectorAll('#catalog .menu.open').forEach(m => m.classList.remove('open'));
+    if (!wasOpen) menu.classList.add('open');
+    return;
+  }
+  const plugAct = e.target.closest('.menu button[data-plugact]');
+  if (plugAct) {
+    e.preventDefault();
+    plugAct.parentElement.classList.remove('open');
+    doPluginAction(plugAct.dataset.plug, plugAct.dataset.plugact);
+    return;
+  }
+  const cog = e.target.closest('.cog[data-ih], .cog[data-pdf]');
   if (cog) {
     e.preventDefault();
     const menu = cog.parentElement.querySelector('.menu');
@@ -384,18 +1100,27 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     doTorrentAction(act.dataset.ih, act.dataset.act);
     return;
   }
+  const pact = e.target.closest('.menu button[data-pdfact]');
+  if (pact) {
+    e.preventDefault();
+    pact.parentElement.classList.remove('open');
+    doPdfAction(pact.dataset.pdf, pact.dataset.pdfact, pact.dataset.source);
+    return;
+  }
   const b = e.target.closest('button.open[data-ih]');
-  if (b) { e.preventDefault(); openTorrent(b.dataset.ih, b.dataset.name || ''); }
+  if (b) { e.preventDefault(); openTorrent(b.dataset.ih, b.dataset.name || ''); return; }
+  const pb = e.target.closest('button.open[data-pdf]');
+  if (pb) { e.preventDefault(); openDirectPdfById(pb.dataset.pdf, pb.dataset.name || ''); }
 });
 
-// close the ⋯ menu on outside click / Escape
+// close the ⋯ menus on outside click / Escape
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.titem'))
-    document.querySelectorAll('#catalog .menu.open').forEach(m => m.classList.remove('open'));
+  if (!e.target.closest('.titem') && !e.target.closest('.tabwrap') && !e.target.closest('.plugin-item'))
+    document.querySelectorAll('#catalog .menu.open, #tabs .menu.open').forEach(m => m.classList.remove('open'));
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape')
-    document.querySelectorAll('#catalog .menu.open').forEach(m => m.classList.remove('open'));
+    document.querySelectorAll('#catalog .menu.open, #tabs .menu.open').forEach(m => m.classList.remove('open'));
 });
 
 async function doTorrentAction(ih, act) {
@@ -532,6 +1257,233 @@ async function toggleExcluded(b) {
     alert(e.message);
   }
 }
+
+// ---- plugins (custom behaviours that load books/PDFs) ----
+let runPluginId = null;
+
+function renderPluginView(directPdfs, catalog) {
+  document.getElementById('searchbar').style.display = 'none';
+  document.getElementById('hdrstat').textContent = plugins.length ? `${plugins.length} plugin(s)` : 'no plugins';
+  const el = document.getElementById('catalog');
+  el.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'plugin-head';
+  head.innerHTML = `<h3>Plugins</h3><button type="button" id="plugin-add-btn">+ plugin</button>`;
+  el.appendChild(head);
+  head.querySelector('#plugin-add-btn').onclick = openAddPluginModal;
+  if (!plugins.length) {
+    const e = document.createElement('div');
+    e.className = 'plugin-empty';
+    e.textContent = 'No plugins yet. Add one to load books or PDFs from a source (e.g. Project Gutenberg).';
+    el.appendChild(e);
+    return;
+  }
+  // how many items each plugin has loaded (catalog torrents + direct PDFs)
+  const loadedCount = {};
+  for (const c of catalog) if (c.provider && c.provider.startsWith('plugin:')) {
+    const k = c.provider.slice(7); loadedCount[k] = (loadedCount[k] || 0) + 1;
+  }
+  for (const p of directPdfs) if ((p.provider || '').startsWith('plugin:')) {
+    const k = p.provider.slice(7); loadedCount[k] = (loadedCount[k] || 0) + 1;
+  }
+  for (const pl of plugins) {
+    const n = loadedCount[pl.id] || 0;
+    const hasConfig = (pl.config_schema || []).length > 0;
+    const item = document.createElement('div');
+    item.className = 'plugin-item';
+    item.innerHTML = `<div class="pname">🔌 ${esc(pl.name)}</div>
+      <div class="pdesc">${esc(pl.description || 'no description')}</div>
+      <div class="prow">
+        <label class="active-tgl" title="When active, this plugin appears as a searchable provider tab">
+          <input type="checkbox" data-active="${pl.id}" ${pl.active ? 'checked' : ''}> Active
+        </label>
+        ${hasConfig ? `<button type="button" data-config="${pl.id}">⚙ Settings</button>` : ''}
+        ${pl.has_fetch ? `<button type="button" data-run="${pl.id}">▶ Run</button>` : ''}
+        <button type="button" class="cog" data-plug="${pl.id}" aria-label="plugin actions">⋯</button>
+        ${n ? `<span class="loaded">${n} loaded</span>` : ''}
+      </div>
+      <div class="menu">
+        <button data-plugact="clear" data-plug="${pl.id}">🧹 Clear loaded items…</button>
+        <button data-plugact="remove" data-plug="${pl.id}" class="danger">🗑 Remove plugin…</button>
+      </div>`;
+    el.appendChild(item);
+  }
+}
+
+async function doPluginAction(pid, act) {
+  if (act === 'clear') {
+    const ok = await askConfirm('Clear all items this plugin loaded? (torrents are removed from the session, downloaded PDFs are deleted)');
+    if (!ok) return;
+    try { await j(`/api/plugins/${pid}/items`, { method: 'DELETE' }); } catch (e) { alert(e.message); }
+    refresh();
+    return;
+  }
+  if (act === 'remove') {
+    const ok = await askConfirm('Remove this plugin? Its already-loaded items stay until you clear them.');
+    if (!ok) return;
+    try {
+      await j(`/api/plugins/${pid}`, { method: 'DELETE' });
+      if (activeProvider === 'plugin:' + pid) activeProvider = 'local';
+    } catch (e) { alert(e.message); }
+    refresh();
+  }
+}
+
+// ---- plugin active toggle + config modal ----
+let configPluginId = null;
+
+// toggling a plugin active makes it appear (or disappear) as a provider tab
+document.getElementById('catalog').addEventListener('change', (e) => {
+  const tgl = e.target.closest('input[data-active]');
+  if (!tgl) return;
+  const pid = tgl.dataset.active;
+  const active = tgl.checked;
+  j(`/api/plugins/${pid}/active`, { method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ active }) })
+    .then(r => r.json())
+    .then(() => {
+      if (active) { activeProvider = 'plugin:' + pid; showingPlugins = false; }
+      refresh();
+    })
+    .catch(err => { alert(err.message); refresh(); });
+});
+
+function openConfigModal(pid) {
+  configPluginId = pid;
+  const pl = plugins.find(p => p.id === pid) || {};
+  document.getElementById('plugin-config-title').textContent = `Settings — ${pl.name || pid}`;
+  const fields = document.getElementById('plugin-config-fields');
+  fields.innerHTML = '';
+  const schema = pl.config_schema || [];
+  if (!schema.length) {
+    const d = document.createElement('div');
+    d.className = 'plugin-empty';
+    d.textContent = 'This plugin has no settings.';
+    fields.appendChild(d);
+  }
+  for (const c of schema) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cfg-field';
+    const label = document.createElement('label');
+    label.textContent = c.label || c.key;
+    wrap.appendChild(label);
+    let node;
+    if (c.type === 'select') {
+      node = document.createElement('select');
+      for (const o of (c.options || [])) {
+        const op = document.createElement('option');
+        op.value = o.value; op.textContent = o.label;
+        node.appendChild(op);
+      }
+    } else {
+      node = document.createElement('input');
+      node.type = 'text';
+      node.placeholder = c.placeholder || '';
+    }
+    node.dataset.key = c.key;
+    const cur = (pl.config && pl.config[c.key] != null) ? pl.config[c.key] : (c.default || '');
+    node.value = cur;
+    wrap.appendChild(node);
+    fields.appendChild(wrap);
+  }
+  document.getElementById('plugin-config-modal').classList.add('open');
+}
+
+document.getElementById('plugin-config-cancel').onclick = () =>
+  document.getElementById('plugin-config-modal').classList.remove('open');
+document.getElementById('plugin-config-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'plugin-config-modal') e.target.classList.remove('open');
+});
+document.getElementById('plugin-config-save').onclick = async () => {
+  const pid = configPluginId;
+  const cfg = {};
+  document.querySelectorAll('#plugin-config-fields .cfg-field [data-key]').forEach(n => cfg[n.dataset.key] = n.value);
+  document.getElementById('plugin-config-modal').classList.remove('open');
+  if (!pid) return;
+  try {
+    await j(`/api/plugins/${pid}/config`, { method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ config: cfg }) });
+    refresh();
+  } catch (e) { alert(e.message); }
+};
+
+function openRunPluginModal(pid) {
+  runPluginId = pid;
+  const pl = plugins.find(p => p.id === pid) || {};
+  const needsQuery = pl.needs_query !== false;
+  document.getElementById('plugin-run-title').textContent = `Run ${pl.name || pid}`;
+  document.getElementById('plugin-run-querywrap').style.display = needsQuery ? '' : 'none';
+  document.getElementById('plugin-run-query').value = '';
+  document.getElementById('plugin-run-modal').classList.add('open');
+  if (needsQuery) document.getElementById('plugin-run-query').focus();
+}
+
+document.getElementById('plugin-run-cancel').onclick = () =>
+  document.getElementById('plugin-run-modal').classList.remove('open');
+document.getElementById('plugin-run-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'plugin-run-modal') e.target.classList.remove('open');
+});
+document.getElementById('plugin-run-query').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('plugin-run-ok').click();
+});
+document.getElementById('plugin-run-ok').onclick = async () => {
+  const pid = runPluginId;
+  const query = document.getElementById('plugin-run-query').value.trim();
+  document.getElementById('plugin-run-modal').classList.remove('open');
+  if (!pid) return;
+  const status = document.getElementById('hdrstat');
+  status.textContent = 'running plugin…';
+  try {
+    const r = await j(`/api/plugins/${pid}/run`, { method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ query }) }).then(r => r.json());
+    const parts = [`+${r.pdfs} PDF(s)`, `+${r.torrents} torrent(s)`];
+    if (r.errors.length) parts.push(`${r.errors.length} failed`);
+    activeProvider = r.provider;   // jump to the plugin's content tab
+    showingPlugins = false;
+    page = 1;
+    await refresh();
+    toast(`plugin: ${parts.join(', ')}`);
+    if (r.errors.length) console.warn('plugin errors:', r.errors);
+  } catch (e) {
+    status.textContent = `error: ${e.message}`;
+    setTimeout(() => refresh(), 3000);
+  }
+};
+
+const DEFAULT_PLUGIN_CODE =
+  'def fetch(query):\n' +
+  '    # return a list of items; each is one of:\n' +
+  '    #   {"name": str, "magnet": str}   a torrent to track\n' +
+  '    #   {"name": str, "url": str}      a PDF to download and read\n' +
+  '    #   {"name": str, "path": str}     a local PDF to read in place\n' +
+  '    return []\n';
+
+function openAddPluginModal() {
+  document.getElementById('plugin-add-name').value = '';
+  document.getElementById('plugin-add-code').value = DEFAULT_PLUGIN_CODE;
+  document.getElementById('plugin-add-needsquery').checked = true;
+  document.getElementById('plugin-add-modal').classList.add('open');
+  document.getElementById('plugin-add-name').focus();
+}
+
+document.getElementById('plugin-add-cancel').onclick = () =>
+  document.getElementById('plugin-add-modal').classList.remove('open');
+document.getElementById('plugin-add-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'plugin-add-modal') e.target.classList.remove('open');
+});
+document.getElementById('plugin-add-ok').onclick = async () => {
+  const name = document.getElementById('plugin-add-name').value.trim();
+  const code = document.getElementById('plugin-add-code').value;
+  const needsQuery = document.getElementById('plugin-add-needsquery').checked;
+  if (!name) { document.getElementById('plugin-add-name').focus(); return; }
+  document.getElementById('plugin-add-modal').classList.remove('open');
+  try {
+    await j('/api/plugins', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, code, needs_query: needsQuery }) });
+    toast('plugin added');
+    refresh();
+  } catch (e) { alert(e.message); }
+};
 
 refresh();
 setInterval(refresh, 4000);

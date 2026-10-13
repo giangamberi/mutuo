@@ -260,9 +260,14 @@ class TorrentEngine:
         n = ts.fs.num_files()
         if handle is not None and handle.is_valid():
             try:
-                return [int(p) for p in handle.file_priorities()]
+                prios = [int(p) for p in handle.file_priorities()]
             except Exception:
-                pass
+                prios = []
+            # file_priorities() can transiently return a short list (e.g. right
+            # after session-state restore); pad so callers can index by file.
+            while len(prios) < n:
+                prios.append(4)
+            return prios
         return [4] * n
 
     def file_size(self, ih_hex: str, file_index: int) -> int:

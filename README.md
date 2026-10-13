@@ -31,8 +31,11 @@ Browser (PDF.js)                      FastAPI (app.py)                 libtorren
   `Accept-Ranges`) is handled too.
 - **`catalog.py`** is the list of PDFs — persisted to `catalog.json`, synced
   from an optional `feed.json` (a JSON list you point at an internal source).
-- **`static/index.html`** is a single-page UI: a torrent/file browser on the
-  left, the PDF.js viewer on the right.
+  It also holds **providers** (`providers.json`): named torrent lists, each
+  with its own feed. The UI shows one tab per provider; the "Local" tab is
+  the built-in catalog.
+- **`static/index.html`** is a single-page UI: a provider tab bar +
+  torrent/file browser on the left, the PDF.js viewer on the right.
 
 ## Install
 
@@ -63,6 +66,23 @@ Binds to localhost by default (single-user, no auth). Add PDFs by pasting a
 
 `files` is optional — when omitted, every PDF in the torrent is offered.
 The path may also be a URL; `POST /api/sync` fetches and merges it.
+
+### Providers
+
+The sidebar has one tab per **provider** — a named torrent list. The
+**Local** tab is the built-in catalog (`catalog.json` + `feed.json`).
+Click **+ provider** to add another (e.g. "Archive.org", "Company shares");
+each provider points at its own feed (a URL or local file in `feed.json`
+format) and gets its own tab.
+
+- A provider's feed is merged into the catalog at startup and on **Sync
+  feed** (the header button syncs the active tab). Torrents are tagged with
+  the provider they came from, so each tab shows only its own list.
+- Per-tab ⋯ menu: enable/disable syncing, sync now, remove the provider
+  (its already-added torrents stay in the catalog and session).
+- Magnets pasted or `.torrent` files dropped while a tab is active are
+  filed under that provider.
+- Providers persist to `providers.json` (runtime state, like `catalog.json`).
 
 ## Test
 

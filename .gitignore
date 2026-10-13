@@ -1,5 +1,10 @@
 # runtime state
 downloads/
 catalog.json
+providers.json
+pdfs.json
+plugin_state.json
+.pdfs/
 *.pyc
 __pycache__/
+.torrents/
