@@ -4,6 +4,7 @@ catalog.json
 providers.json
 pdfs.json
 favorites.json
+shelf.json
 plugin_state.json
 .pdfs/
 *.pyc

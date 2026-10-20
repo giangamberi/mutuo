@@ -38,6 +38,7 @@ UPLOAD_DIR = BASE / ".torrents"
 PDF_DIR = BASE / ".pdfs"          # direct .pdf files dropped into the reader
 PDFS_INDEX = BASE / "pdfs.json"   # registry of direct PDFs (id -> name/size/provider)
 FAVORITES_INDEX = BASE / "favorites.json"  # user's favorite documents (global)
+SHELF_INDEX = BASE / "shelf.json"  # user's personal shelf (superset of favorites)
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     # startup
@@ -55,6 +56,19 @@ async def _lifespan(app: FastAPI):
     # enqueue torrents that are catalogued but not yet in the session
     for item in catalog.items():
         engine.add_torrent_async(item.magnet)
+    # one-time migration: when the shelf feature is first introduced, any
+    # existing favorites are added to the shelf (favorites ⊆ shelf). Skipped
+    # once shelf.json exists so a user can remove a favorited book from the
+    # shelf without it reappearing on the next restart.
+    if not SHELF_INDEX.exists():
+        shelf = _load_shelf()
+        shelf_keys = {s["key"] for s in shelf}
+        for f in _load_favorites():
+            if f["key"] not in shelf_keys:
+                shelf.append(dict(f))
+                shelf_keys.add(f["key"])
+        if shelf:
+            _save_shelf(shelf)
     try:
         yield
     finally:
@@ -756,6 +770,20 @@ def _save_favorites(favs: list) -> None:
     tmp.replace(FAVORITES_INDEX)
 
 
+def _load_shelf() -> list:
+    try:
+        data = json.loads(SHELF_INDEX.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _save_shelf(shelf: list) -> None:
+    tmp = SHELF_INDEX.with_suffix(".tmp")
+    tmp.write_text(json.dumps(shelf, indent=2), encoding="utf-8")
+    tmp.replace(SHELF_INDEX)
+
+
 def _pdf_meta(path: str) -> dict:
     """Extract filterable metadata from a PDF (title/author/subject/keywords/
     page count) plus the file's mtime. Returns {} on any error so a broken or
@@ -872,6 +900,7 @@ class FavoriteRequest(BaseModel):
     kind: str = ""
     provider: str = "local"
     status: str = "toread"   # toread | reading | complete
+    tags: list = []          # custom user tags (free-form strings)
 
 
 class FavoriteStatusRequest(BaseModel):
@@ -879,9 +908,31 @@ class FavoriteStatusRequest(BaseModel):
     status: str   # toread | reading | complete
 
 
+class FavoriteTagsRequest(BaseModel):
+    key: str
+    tags: list    # full replacement of the favorite's tag list
+
+
+class ShelfPositionRequest(BaseModel):
+    key: str
+    page: int = 0        # 1-based PDF page (0 = not a PDF / unknown)
+    scroll: float = 0.0  # 0..1 fraction through a plain-text document
+
+
 @app.get("/api/favorites")
 def list_favorites() -> JSONResponse:
     return JSONResponse(_load_favorites())
+
+
+@app.get("/api/favorites/tags")
+def list_favorite_tags() -> JSONResponse:
+    """All distinct custom tags across favorites (sorted)."""
+    tags = set()
+    for f in _load_favorites():
+        for t in f.get("tags", []):
+            if t:
+                tags.add(t)
+    return JSONResponse(sorted(tags))
 
 
 @app.post("/api/favorites")
@@ -889,12 +940,98 @@ def add_favorite(req: FavoriteRequest) -> JSONResponse:
     favs = _load_favorites()
     if any(f["key"] == req.key for f in favs):
         return JSONResponse({"ok": True, "added": False})
-    favs.append({"key": req.key, "name": req.name, "type": req.type,
-                 "ih": req.ih, "pdf": req.pdf, "url": req.url,
-                 "magnet": req.magnet, "kind": req.kind, "provider": req.provider,
-                 "status": req.status, "added_at": time.time()})
+    fav = {"key": req.key, "name": req.name, "type": req.type,
+           "ih": req.ih, "pdf": req.pdf, "url": req.url,
+           "magnet": req.magnet, "kind": req.kind, "provider": req.provider,
+           "status": req.status, "tags": req.tags, "added_at": time.time()}
+    favs.append(fav)
     _save_favorites(favs)
+    # a favorite is always on the shelf (favorites ⊆ shelf)
+    shelf = _load_shelf()
+    if not any(s["key"] == fav["key"] for s in shelf):
+        shelf.append(dict(fav))
+        _save_shelf(shelf)
     return JSONResponse({"ok": True, "added": True})
+
+
+@app.get("/api/shelf")
+def list_shelf() -> JSONResponse:
+    return JSONResponse(_load_shelf())
+
+
+@app.post("/api/shelf")
+def add_to_shelf(req: FavoriteRequest) -> JSONResponse:
+    shelf = _load_shelf()
+    if any(s["key"] == req.key for s in shelf):
+        return JSONResponse({"ok": True, "added": False})
+    shelf.append({"key": req.key, "name": req.name, "type": req.type,
+                  "ih": req.ih, "pdf": req.pdf, "url": req.url,
+                  "magnet": req.magnet, "kind": req.kind, "provider": req.provider,
+                  "status": req.status, "tags": req.tags, "added_at": time.time()})
+    _save_shelf(shelf)
+    return JSONResponse({"ok": True, "added": True})
+
+
+@app.delete("/api/shelf")
+def remove_from_shelf(key: str) -> JSONResponse:
+    shelf = _load_shelf()
+    kept = [s for s in shelf if s["key"] != key]
+    if len(kept) == len(shelf):
+        raise HTTPException(404, "not on shelf")
+    _save_shelf(kept)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/shelf/tags")
+def list_shelf_tags() -> JSONResponse:
+    """All distinct custom tags across shelf entries (sorted)."""
+    tags = set()
+    for s in _load_shelf():
+        for t in s.get("tags", []):
+            if t:
+                tags.add(t)
+    return JSONResponse(sorted(tags))
+
+
+@app.post("/api/shelf/status")
+def set_shelf_status(req: FavoriteStatusRequest) -> JSONResponse:
+    shelf = _load_shelf()
+    for s in shelf:
+        if s["key"] == req.key:
+            s["status"] = req.status
+            _save_shelf(shelf)
+            return JSONResponse({"ok": True})
+    raise HTTPException(404, "not on shelf")
+
+
+@app.post("/api/shelf/tags")
+def set_shelf_tags(req: FavoriteTagsRequest) -> JSONResponse:
+    shelf = _load_shelf()
+    for s in shelf:
+        if s["key"] == req.key:
+            s["tags"] = req.tags
+            _save_shelf(shelf)
+            return JSONResponse({"ok": True})
+    raise HTTPException(404, "not on shelf")
+
+
+@app.post("/api/shelf/position")
+def set_shelf_position(req: ShelfPositionRequest) -> JSONResponse:
+    """Remember where the reader stopped so she can pick up where she left
+    off. Opening a book is what makes it "in progress", so the first saved
+    position also promotes a toread book to reading."""
+    shelf = _load_shelf()
+    for s in shelf:
+        if s["key"] == req.key:
+            s["page"] = req.page
+            s["scroll"] = req.scroll
+            # actually reading (past the first page / a bit into the text)
+            # promotes a toread book to in-progress
+            if s.get("status", "toread") == "toread" and (req.page > 1 or req.scroll > 0.02):
+                s["status"] = "reading"
+            _save_shelf(shelf)
+            return JSONResponse({"ok": True})
+    raise HTTPException(404, "not on shelf")
 
 
 @app.post("/api/favorites/status")
@@ -903,6 +1040,17 @@ def set_favorite_status(req: FavoriteStatusRequest) -> JSONResponse:
     for f in favs:
         if f["key"] == req.key:
             f["status"] = req.status
+            _save_favorites(favs)
+            return JSONResponse({"ok": True})
+    raise HTTPException(404, "favorite not found")
+
+
+@app.post("/api/favorites/tags")
+def set_favorite_tags(req: FavoriteTagsRequest) -> JSONResponse:
+    favs = _load_favorites()
+    for f in favs:
+        if f["key"] == req.key:
+            f["tags"] = req.tags
             _save_favorites(favs)
             return JSONResponse({"ok": True})
     raise HTTPException(404, "favorite not found")

@@ -76,12 +76,77 @@
   }
   aside .titem .fav:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
   aside .titem .fav.on { color:#ffd24a; border-color:#6b5a1e; }
+  /* 📖 add/remove from the personal shelf (browse rows) — left of the star */
+  aside .titem .shelfbtn {
+    position:absolute; top:8px; right:60px; padding:3px 6px; font-size:12px; line-height:1;
+    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+  }
+  aside .titem .shelfbtn:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
+  aside .titem .shelfbtn.on { color:var(--acc); border-color:#2f4a7a; }
+  /* reserve room for the row's right-side controls */
+  aside .titem.has-shelf button.open { padding-right:90px; }
   aside .titem .status {
     position:absolute; top:8px; right:8px; width:96px; font-size:11px; line-height:1.2;
     padding:3px 4px; background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
   }
   aside .titem .status:hover { border-color:var(--acc); color:var(--text); }
   aside .titem.has-status button.open { padding-right:112px; }
+  /* Favorites rows: the ★ sits to the left of the status select (same row) */
+  aside .titem.has-fav-status .fav { right:112px; }
+  aside .titem.has-fav-status button.open { padding-right:146px; }
+  /* My Shelf rows: the ★ drops down beside the tag button (2nd row) */
+  aside .titem.has-fav-status .fav { top:33px; right:48px; }
+  /* 🗑 remove from the shelf — right end of the tag row; the tag + star shift
+     left to make room (scoped to .has-remove so Favorites rows are untouched) */
+  aside .titem .rmshelf {
+    position:absolute; top:33px; right:8px; padding:3px 6px; font-size:12px; line-height:1;
+    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+  }
+  aside .titem .rmshelf:hover { background:#232a36; border-color:#c0564a; color:#e08a80; }
+  aside .titem.has-remove .tagbtn { right:36px; }
+  aside .titem.has-remove .fav { right:76px; }
+  /* tag button sits below the status select so the title keeps its width */
+  aside .titem .tagbtn {
+    position:absolute; top:33px; right:8px; padding:3px 6px; font-size:11px; line-height:1;
+    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+  }
+  aside .titem .tagbtn:hover { border-color:var(--acc); color:var(--text); }
+  /* where the reader last stopped (p. N / %), shown under the tag button */
+  aside .titem .poshint {
+    position:absolute; top:58px; right:8px; font-size:10px; line-height:1;
+    color:var(--dim); background:#0f1115; border:1px solid #262c38; border-radius:6px;
+    padding:2px 6px; pointer-events:none;
+  }
+  /* ↺ clear the saved position — right of the hint chip, only when one exists */
+  aside .titem .resetpos {
+    position:absolute; top:58px; right:8px; padding:2px 6px; font-size:10px; line-height:1;
+    background:#0f1115; color:var(--dim); border:1px solid #262c38; border-radius:6px; cursor:pointer;
+  }
+  aside .titem .resetpos:hover { border-color:var(--acc); color:var(--text); }
+  aside .titem.has-reset .poshint { right:34px; }
+  .tagfilter { display:flex; flex-wrap:wrap; gap:4px; padding:6px 10px 2px; }
+  .tagfilter button {
+    font-size:11px; padding:2px 8px; background:transparent; color:var(--dim);
+    border:1px solid #333a47; border-radius:10px; cursor:pointer;
+  }
+  .tagfilter button:hover { border-color:var(--acc); color:var(--text); }
+  .tagfilter button.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--text); }
+  .tagpop {
+    position:fixed; z-index:100; min-width:170px; max-width:240px;
+    background:var(--panel); border:1px solid #333a47; border-radius:8px; box-shadow:0 8px 24px #000a;
+    padding:8px; font-size:12px;
+  }
+  .tagpop-list { display:flex; flex-direction:column; gap:2px; max-height:220px; overflow-y:auto; overflow-x:hidden; min-height:24px; }
+  .tagpop-list label { display:flex; align-items:center; gap:6px; color:var(--text); cursor:pointer; padding:3px 4px; border-radius:5px; }
+  .tagpop-list label:hover { background:#232a36; }
+  .tagpop-list label:has(input:checked) { color:var(--acc); }
+  /* the global `input { min-width:280px }` rule would stretch the checkbox and
+     push the tag name off to the right — reset it to a normal checkbox */
+  .tagpop-list input[type=checkbox] { width:auto; min-width:0; flex:0 0 auto; margin:0; }
+  .tagpop-add { display:flex; gap:4px; margin-top:8px; }
+  .tagpop-add input { flex:1; min-width:0; font-size:12px; padding:3px 6px; background:#0f1115; color:var(--text); border:1px solid #333a47; border-radius:6px; }
+  .tagpop-add button { font-size:12px; padding:3px 8px; background:transparent; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer; }
+  .tagpop-add button:hover { border-color:var(--acc); color:var(--text); }
   .menu { display:none; position:absolute; right:8px; z-index:50; min-width:190px;
     background:var(--panel); border:1px solid #333a47; border-radius:8px; box-shadow:0 8px 24px #000a; }
   .menu.open { display:block; }
@@ -400,10 +465,16 @@ let waitTimer = null; // retry timer for the "waiting on the swarm" page
 let activeProvider = 'local'; // which provider tab the list shows
 let providers = []; // [{id, name, feed, description, enabled}]
 let favorites = []; // [{key, name, type, ih, pdf, url, magnet, kind, provider}]
+let shelf = []; // personal shelf — a superset of favorites (favorites ⊆ shelf)
 // left rail: which top-level view the sidebar shows
 let view = 'shelf'; // 'shelf' | 'favorites' | 'reading'
 let shelfSub = 'providers'; // 'providers' | 'plugins' (Shelf sub-explorers)
-let readingSub = 'toread'; // 'toread' | 'reading' | 'complete' (Reading sub-tabs)
+let readingSub = 'all'; // 'all' | 'toread' | 'reading' | 'complete' (My Shelf sub-tabs)
+let favSub = 'all'; // 'all' | 'toread' | 'reading' | 'complete' (Favorites sub-tabs)
+let tagFilter = null; // active custom-tag filter (My Shelf + Favorites views; null = all)
+let allTags = []; // distinct custom tags across favorites
+let openShelfKey = null; // shelf key of the book currently open in the viewer (for position save/restore)
+let posTimer = null; // debounce timer for saving the reading position
 let plugins = []; // [{id, name, description}] — custom behaviours
 let page = 1; // current page of the (paginated) list
 let perPage = parseInt(localStorage.getItem('per-page'), 10) || 25; // items per page (0 = all)
@@ -424,14 +495,14 @@ async function refresh() {
     const directPdfs = await j('/api/pdfs').then(r => r.json());
     plugins = await j('/api/plugins').then(r => r.json());
     favorites = await j('/api/favorites').then(r => r.json());
+    shelf = await j('/api/shelf').then(r => r.json());
+    allTags = await j('/api/shelf/tags').then(r => r.json());
     const byMagnet = Object.fromEntries(catalog.map(c => [magnetKey(c.magnet), c]));
     const provOf = t => (byMagnet[magnetKey(t.magnet)] || {}).provider || 'local';
     renderRail();
-    if (view === 'favorites') {
-      document.getElementById('tabs').style.display = 'none';
-      renderFavorites(torrents, directPdfs, byMagnet, provOf, { showStar: true });
-      return;
-    }
+    syncTagPop(); // keep an open tag popover in sync with the re-rendered list
+    pollPosition(); // persist the open book's reading position a few times a minute
+    if (view === 'favorites') { renderFavorites(torrents, directPdfs, byMagnet, provOf); return; }
     if (view === 'reading') { renderReading(torrents, directPdfs, byMagnet, provOf); return; }
     renderShelf(torrents, directPdfs, catalog, byMagnet, provOf);
   } catch (e) { /* server still starting */ }
@@ -492,17 +563,19 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
       if (!t) continue; // direct PDF, rendered below
       const pct = Math.round(t.progress * 100);
       const item = document.createElement('div');
-      item.className = 'titem' + (selected === t.info_hash ? ' active' : '');
       item.dataset.ih = t.info_hash;
       const meta = `${esc(t.state)} · ${pct}% · ${t.num_seeds || 0}⇩${t.num_peers}peers` +
         (t.is_paused ? ' · ⏸' : '');
       const favKey = 'torrent:' + t.info_hash;
       const isFav = favorites.some(f => f.key === favKey);
+      const isShelved = shelf.some(s => s.key === favKey);
+      item.className = 'titem has-shelf' + (selected === t.info_hash ? ' active' : '');
       item.innerHTML = `<button type="button" class="open" data-ih="${t.info_hash}" data-name="${esc(c.name || t.name || '')}">
           <div class="name">${esc(c.name || t.name || t.info_hash)}</div>
           <div class="meta">${meta}</div>
           <div class="bar"><div style="width:${pct}%"></div></div>
         </button>
+        <button type="button" class="shelfbtn${isShelved ? ' on' : ''}" data-favkey="${esc(favKey)}" data-favtype="torrent" data-favname="${esc(c.name || t.name || t.info_hash)}" data-favih="${t.info_hash}" data-favprovider="${esc(provOf(t))}" title="${isShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>
         <button type="button" class="fav${isFav ? ' on' : ''}" data-favkey="${esc(favKey)}" data-favtype="torrent" data-favname="${esc(c.name || t.name || t.info_hash)}" data-favih="${t.info_hash}" data-favprovider="${esc(provOf(t))}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">${isFav ? '★' : '☆'}</button>
         <button type="button" class="cog" data-ih="${t.info_hash}" aria-label="torrent actions">⋯</button>
         <div class="menu">
@@ -521,16 +594,18 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
       if (!p) continue; // torrent, rendered above
       const fromFolder = p.source === 'folder';
       const item = document.createElement('div');
-      item.className = 'titem' + (selected === 'pdf:' + p.id ? ' active' : '');
+      item.className = 'titem has-shelf' + (selected === 'pdf:' + p.id ? ' active' : '');
       item.dataset.pdf = p.id;
       const pdfMeta = [fromFolder ? 'from folder' : 'direct file', fmtSize(p.size),
         p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · ');
       const pdfFavKey = 'pdf:' + p.id;
       const pdfIsFav = favorites.some(f => f.key === pdfFavKey);
+      const pdfShelved = shelf.some(s => s.key === pdfFavKey);
       item.innerHTML = `<button type="button" class="open" data-pdf="${p.id}" data-name="${esc(p.name)}" data-source="${fromFolder ? 'folder' : 'upload'}">
           <div class="name">&#128196; ${esc(p.name)}</div>
           <div class="meta">${esc(pdfMeta)}</div>
         </button>
+        <button type="button" class="shelfbtn${pdfShelved ? ' on' : ''}" data-favkey="${esc(pdfFavKey)}" data-favtype="pdf" data-favname="${esc(p.name)}" data-favpdf="${p.id}" data-favprovider="${esc(p.provider || 'local')}" title="${pdfShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>
         <button type="button" class="fav${pdfIsFav ? ' on' : ''}" data-favkey="${esc(pdfFavKey)}" data-favtype="pdf" data-favname="${esc(p.name)}" data-favpdf="${p.id}" data-favprovider="${esc(p.provider || 'local')}" title="${pdfIsFav ? 'Remove from favorites' : 'Add to favorites'}">${pdfIsFav ? '★' : '☆'}</button>
         <button type="button" class="cog" data-pdf="${p.id}" aria-label="pdf actions">⋯</button>
         <div class="menu">
@@ -714,14 +789,16 @@ function renderLiveProvider(prov) {
   const kindIcon = { pdf: '&#128196;', text: '&#128221;', html: '&#127760;', epub: '&#128218;', torrent: '&#128279;' };
   for (const it of liveResults) {
     const item = document.createElement('div');
-    item.className = 'titem';
+    item.className = 'titem has-shelf';
     const kind = it.magnet ? 'torrent' : (it.kind || 'pdf');
     const liveFavKey = 'live:' + (it.magnet || it.url || it.name);
     const liveIsFav = favorites.some(f => f.key === liveFavKey);
+    const liveShelved = shelf.some(s => s.key === liveFavKey);
     item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}">
         <div class="name">${kindIcon[kind] || '&#128196;'} ${esc(it.name)}</div>
         <div class="meta">${esc(it.meta || kind)}</div>
       </button>
+      <button type="button" class="shelfbtn${liveShelved ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>
       <button type="button" class="fav${liveIsFav ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveIsFav ? 'Remove from favorites' : 'Add to favorites'}">${liveIsFav ? '★' : '☆'}</button>`;
     el.appendChild(item);
   }
@@ -820,7 +897,7 @@ function renderRail() {
   };
   mk('📚', 'Shelf — browse providers & plugins', 'shelf');
   mk('★', 'Favorites — your starred documents', 'favorites');
-  mk('📖', 'Reading — to read, in progress & complete', 'reading');
+  mk('📖', 'My Shelf — your books: to read, in progress & complete', 'reading');
 }
 
 // ---- Shelf: the Providers / Plugins sub-explorers ----
@@ -895,13 +972,46 @@ async function toggleFavorite(btn) {
   } catch (e) { alert(e.message); }
 }
 
-// the ★ Favorites tab: every starred document, resolved against the current
-// catalog / direct-PDF / torrent state so it opens exactly like its home tab.
-function renderFavorites(torrents, directPdfs, byMagnet, provOf, opts) {
+// toggle a document's shelf state (📖). Same payload shape as favorites; the
+// shelf is a superset of favorites, so favoriting a book also shelves it.
+async function toggleShelf(btn) {
+  const d = btn.dataset;
+  const on = btn.classList.contains('on');
+  const payload = { key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
+    ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
+    magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local' };
+  try {
+    if (on) await j('/api/shelf?key=' + encodeURIComponent(d.favkey), { method: 'DELETE' });
+    else await j('/api/shelf', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+// remove a book from the personal shelf (🗑 on My Shelf rows). Unlike
+// un-favoriting, this drops the book from the shelf entirely.
+async function removeFromShelf(btn) {
+  const key = btn.dataset.rmkey;
+  if (!confirm('Remove this book from your shelf?')) return;
+  try {
+    await j('/api/shelf?key=' + encodeURIComponent(key), { method: 'DELETE' });
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+// Renders a collection of saved documents (the ★ Favorites list or the � My
+// Shelf / reading list) resolved against the current catalog / direct-PDF /
+// torrent state so each row opens exactly like its home tab.
+//   opts.source: 'favorites' | 'shelf'  — which list to render
+//   opts.showStar:  the ★ favorite toggle (on = currently a favorite)
+function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
   opts = opts || {};
+  const source = opts.source === 'shelf' ? shelf : favorites;
   const showStar = !!opts.showStar;
-  const statusFilter = opts.statusFilter || null;
+  const statusFilter = (opts.statusFilter && opts.statusFilter !== 'all') ? opts.statusFilter : null;
   const showStatus = !!opts.showStatus;
+  const showTags = !!opts.showTags;
+  const showRemove = !!opts.showRemove;
+  const tagFilter = opts.tagFilter || null;
   const el = document.getElementById('catalog');
   el.innerHTML = '';
   document.getElementById('sort').style.display = '';
@@ -911,12 +1021,18 @@ function renderFavorites(torrents, directPdfs, byMagnet, provOf, opts) {
   document.getElementById('filters-btn').style.display = 'none';
   document.getElementById('searchbar').style.display = '';
   document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
-  document.getElementById('search').placeholder = opts.placeholder || 'Search favorites…';
+  document.getElementById('search').placeholder = opts.placeholder || 'Search…';
   const q = (document.getElementById('search').value || '').trim().toLowerCase();
+  // status + tags are managed on the shelf (favorites ⊆ shelf), so resolve
+  // them from the shelf entry when one exists — keeps the Favorites view in
+  // sync with the My Shelf view for the same book
+  const shelfByKey = Object.fromEntries(shelf.map(s => [s.key, s]));
   const rows = [];
-  for (const f of favorites) {
+  for (const f of source) {
+    const eff = shelfByKey[f.key] || f;
     if (q && !(f.name || '').toLowerCase().includes(q)) continue;
-    if (statusFilter && (f.status || 'toread') !== statusFilter) continue;
+    if (statusFilter && (eff.status || 'toread') !== statusFilter) continue;
+    if (tagFilter && !(eff.tags || []).includes(tagFilter)) continue;
     if (f.type === 'torrent') {
       const t = torrents.find(x => x.info_hash === f.ih);
       if (!t) continue; // torrent no longer in the session
@@ -924,29 +1040,34 @@ function renderFavorites(torrents, directPdfs, byMagnet, provOf, opts) {
       const pct = Math.round(t.progress * 100);
       rows.push({ kind: 'torrent', name: c.name || t.name || t.info_hash,
         meta: `${esc(t.state)} · ${pct}% · ${t.num_seeds || 0}⇩${t.num_peers}peers` + (t.is_paused ? ' · ⏸' : ''),
-        bar: pct, ih: t.info_hash, fav: f });
+        bar: pct, ih: t.info_hash, fav: f, eff });
     } else if (f.type === 'pdf') {
       const p = directPdfs.find(x => x.id === f.pdf);
       if (!p) continue; // PDF removed
       rows.push({ kind: 'pdf', name: p.name,
         meta: [p.source === 'folder' ? 'from folder' : 'direct file', fmtSize(p.size), p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · '),
-        pdf: p.id, fav: f });
+        pdf: p.id, fav: f, eff });
     } else { // live result (Gutenberg text/html/epub/pdf, or a torrent magnet)
-      rows.push({ kind: 'live', name: f.name, meta: f.kind || 'favorite',
-        url: f.url, magnet: f.magnet, kind: f.kind, fav: f });
+      rows.push({ kind: 'live', name: f.name, meta: f.kind || 'saved',
+        url: f.url, magnet: f.magnet, kind: f.kind, fav: f, eff });
     }
   }
   for (const r of rows) {
     const item = document.createElement('div');
-    item.className = 'titem' + (showStatus ? ' has-status' : '');
+    item.dataset.shelfkey = r.fav.key;
+    item.className = 'titem' + (showStatus ? ' has-status' : '') + (showTags ? ' has-tags' : '')
+      + (showStar && showStatus ? ' has-fav-status' : '') + (showRemove ? ' has-remove' : '');
     let openBtn;
-    if (r.kind === 'torrent') openBtn = `<button type="button" class="open" data-ih="${r.ih}" data-name="${esc(r.name)}"><div class="name">${esc(r.name)}</div><div class="meta">${r.meta}</div><div class="bar"><div style="width:${r.bar}%"></div></div></button>`;
-    else if (r.kind === 'pdf') openBtn = `<button type="button" class="open" data-pdf="${r.pdf}" data-name="${esc(r.name)}"><div class="name">&#128196; ${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
-    else openBtn = `<button type="button" class="open" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
+    if (r.kind === 'torrent') openBtn = `<button type="button" class="open" data-ih="${r.ih}" data-name="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">${esc(r.name)}</div><div class="meta">${r.meta}</div><div class="bar"><div style="width:${r.bar}%"></div></div></button>`;
+    else if (r.kind === 'pdf') openBtn = `<button type="button" class="open" data-pdf="${r.pdf}" data-name="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">&#128196; ${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
+    else openBtn = `<button type="button" class="open" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
+    // favorite state is read from the favorites list (source of truth), so the
+    // star is correct in both views: always on in Favorites, on/off in My Shelf
+    const isFav = favorites.some(f => f.key === r.fav.key);
     const star = showStar
-      ? `<button type="button" class="fav on" data-favkey="${esc(r.fav.key)}" data-favtype="${esc(r.fav.type)}" data-favname="${esc(r.fav.name)}" data-favih="${esc(r.fav.ih || '')}" data-favpdf="${esc(r.fav.pdf || '')}" data-favurl="${esc(r.fav.url || '')}" data-favmagnet="${esc(r.fav.magnet || '')}" data-favkind="${esc(r.fav.kind || '')}" data-favprovider="${esc(r.fav.provider || 'local')}" title="Remove from favorites">★</button>`
+      ? `<button type="button" class="fav${isFav ? ' on' : ''}" data-favkey="${esc(r.fav.key)}" data-favtype="${esc(r.fav.type)}" data-favname="${esc(r.fav.name)}" data-favih="${esc(r.fav.ih || '')}" data-favpdf="${esc(r.fav.pdf || '')}" data-favurl="${esc(r.fav.url || '')}" data-favmagnet="${esc(r.fav.magnet || '')}" data-favkind="${esc(r.fav.kind || '')}" data-favprovider="${esc(r.fav.provider || 'local')}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">${isFav ? '★' : '☆'}</button>`
       : '';
-    const st = r.fav.status || 'toread';
+    const st = r.eff.status || 'toread';
     const statusSel = showStatus
       ? `<select class="status" data-favkey="${esc(r.fav.key)}" onchange="setStatus(this)" title="Reading status">
            <option value="toread"${st === 'toread' ? ' selected' : ''}>To read</option>
@@ -954,19 +1075,44 @@ function renderFavorites(torrents, directPdfs, byMagnet, provOf, opts) {
            <option value="complete"${st === 'complete' ? ' selected' : ''}>Complete</option>
          </select>`
       : '';
-    item.innerHTML = openBtn + star + statusSel;
+    const nTags = (r.eff.tags || []).length;
+    const tagBtn = showTags
+      ? `<button type="button" class="tagbtn" data-favkey="${esc(r.fav.key)}" title="Tags">${nTags ? '🏷 ' + nTags : '🏷'}</button>`
+      : '';
+    // 🗑 remove from the shelf (My Shelf rows only) — sits left of the star
+    const rmBtn = showRemove
+      ? `<button type="button" class="rmshelf" data-rmkey="${esc(r.fav.key)}" title="Remove from shelf">🗑</button>`
+      : '';
+    item.innerHTML = openBtn + star + statusSel + tagBtn + rmBtn;
+    // where the reader last stopped (p. N for PDFs, % for text)
+    const pos = r.eff;
+    const posLabel = (pos.page > 1) ? `p. ${pos.page}` : (pos.scroll > 0.005 ? Math.round(pos.scroll * 100) + '%' : '');
+    if (posLabel) {
+      const hint = document.createElement('div');
+      hint.className = 'poshint';
+      hint.title = 'Where you left off';
+      hint.textContent = posLabel;
+      item.appendChild(hint);
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'resetpos';
+      reset.dataset.rmkey = r.fav.key;
+      reset.title = 'Reset progress';
+      reset.textContent = '↺';
+      item.appendChild(reset);
+      item.classList.add('has-reset');
+    }
     el.appendChild(item);
   }
   document.getElementById('hdrstat').textContent = rows.length
-    ? `${rows.length} ${opts.statLabel || 'favorite(s)'}`
-    : (opts.emptyMsg || 'no favorites yet — star a document with ☆ to pin it here');
+    ? `${rows.length} ${opts.statLabel || 'item(s)'}`
+    : (opts.emptyMsg || 'nothing here yet');
   document.getElementById('count').textContent = q ? `${rows.length} match` : '';
 }
 
-// ---- Reading view: To Read / Reading / Complete sub-tabs ----
-// Each sub-tab shows the favorites whose reading status matches, with a
-// status control on each row to move it between the three states.
-function renderReading(torrents, directPdfs, byMagnet, provOf) {
+// shared: the To Read / Reading / Complete sub-tab row + the tag filter row,
+// used by both the My Shelf and Favorites views so they offer the same filters
+function buildStatusTabs(activeSub, setActive) {
   const el = document.getElementById('tabs');
   el.style.display = '';
   el.innerHTML = '';
@@ -975,38 +1121,200 @@ function renderReading(torrents, directPdfs, byMagnet, provOf) {
   const mkSub = (label, key) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = readingSub === key ? 'active' : '';
+    b.className = activeSub === key ? 'active' : '';
     b.textContent = label;
-    b.onclick = () => { readingSub = key; refresh(); };
+    b.onclick = () => { setActive(key); refresh(); };
     sub.appendChild(b);
   };
+  mkSub('All', 'all');
   mkSub('To Read', 'toread');
   mkSub('Reading', 'reading');
   mkSub('Complete', 'complete');
   el.appendChild(sub);
+  rebuildTagFilterRow();
+}
 
+// the ★ Favorites tab: every starred document, with the same To Read /
+// Reading / Complete sub-tabs and tag filter as the My Shelf view.
+function renderFavorites(torrents, directPdfs, byMagnet, provOf) {
+  buildStatusTabs(favSub, (k) => { favSub = k; });
   const L = {
-    toread:   { stat: 'to read',     empty: 'nothing to read yet — star a document to add it here', ph: 'Search to read…' },
-    reading:  { stat: 'in progress', empty: 'nothing in progress — start reading from To Read',      ph: 'Search reading…' },
-    complete: { stat: 'completed',   empty: 'nothing completed yet',                                 ph: 'Search completed…' },
-  }[readingSub];
-  renderFavorites(torrents, directPdfs, byMagnet, provOf, {
-    statusFilter: readingSub, showStatus: true,
+    all:      { stat: 'favorite(s)', empty: 'no favorites yet — star a document with ☆',          ph: 'Search favorites…' },
+    toread:   { stat: 'to read',     empty: 'no favorites to read yet — star a document with ☆', ph: 'Search to read…' },
+    reading:  { stat: 'in progress', empty: 'nothing in progress — start reading from To Read',   ph: 'Search reading…' },
+    complete: { stat: 'completed',   empty: 'nothing completed yet',                              ph: 'Search completed…' },
+  }[favSub];
+  renderCollection(torrents, directPdfs, byMagnet, provOf, {
+    source: 'favorites', showStar: true, statusFilter: favSub, showStatus: true, showTags: true, tagFilter,
     statLabel: L.stat, emptyMsg: L.empty, placeholder: L.ph,
   });
 }
 
-// move a favorite between the reading states (To Read / Reading / Complete).
+// ---- My Shelf (📖): To Read / Reading / Complete sub-tabs ----
+// Each sub-tab shows the shelf books whose reading status matches, with a
+// status control on each row to move it between the three states. The shelf
+// is the personal collection (a superset of favorites).
+function renderReading(torrents, directPdfs, byMagnet, provOf) {
+  buildStatusTabs(readingSub, (k) => { readingSub = k; });
+  const L = {
+    all:      { stat: 'book(s)',     empty: 'nothing on your shelf yet — add a book with 📖',          ph: 'Search your shelf…' },
+    toread:   { stat: 'to read',     empty: 'nothing to read yet — add a book to your shelf with 📖', ph: 'Search to read…' },
+    reading:  { stat: 'in progress', empty: 'nothing in progress — start reading from To Read',        ph: 'Search reading…' },
+    complete: { stat: 'completed',   empty: 'nothing completed yet',                                   ph: 'Search completed…' },
+  }[readingSub];
+  renderCollection(torrents, directPdfs, byMagnet, provOf, {
+    source: 'shelf', showStar: true, statusFilter: readingSub, showStatus: true, showTags: true, showRemove: true, tagFilter,
+    statLabel: L.stat, emptyMsg: L.empty, placeholder: L.ph,
+  });
+}
+
+// move a shelf book between the reading states (To Read / Reading / Complete).
 // Exposed on window because the row's inline onchange handler can't see
 // module-scoped functions.
 window.setStatus = async function (sel) {
   const key = sel.dataset.favkey;
   const status = sel.value;
   try {
-    await j('/api/favorites/status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key, status }) });
+    await j('/api/shelf/status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key, status }) });
     refresh();
   } catch (e) { alert(e.message); }
 };
+
+// ---- custom tags: a popover per row to toggle/create tags, plus a filter row ----
+let tagPop = null; // the open tag popover element (if any)
+
+function closeTagPop() {
+  if (tagPop) { tagPop.remove(); tagPop = null; }
+}
+
+// Build the checkbox list of existing tags for a favorite. The primary action
+// is assigning existing tags, so each row is a comfortable, hoverable target.
+function buildTagList(fav, key) {
+  const list = document.createElement('div');
+  list.className = 'tagpop-list';
+  const cur = new Set(fav.tags || []);
+  for (const t of allTags) {
+    const lab = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = cur.has(t);
+    cb.dataset.tag = t;
+    cb.onchange = () => {
+      const s = new Set(fav.tags || []);
+      if (cb.checked) s.add(t); else s.delete(t);
+      saveTags(key, [...s]);
+    };
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(' ' + t));
+    list.appendChild(lab);
+  }
+  return list;
+}
+
+// Keep an open popover in sync after a polling refresh: update checkbox
+// states in place (preserving focus) and rebuild only if the tag set changed.
+// Closes it only if the favorite it belongs to no longer exists.
+function syncTagPop() {
+  if (!tagPop || !tagPop.isConnected) { tagPop = null; return; }
+  const key = tagPop.dataset.for;
+  const fav = shelf.find(f => f.key === key);
+  if (!fav) { closeTagPop(); return; }
+  const list = tagPop.querySelector('.tagpop-list');
+  if (!list) return;
+  const sameSet = [...list.querySelectorAll('input')].map(i => i.dataset.tag).sort().join('\u0000') === [...allTags].sort().join('\u0000');
+  if (!sameSet) { list.replaceWith(buildTagList(fav, key)); return; }
+  const cur = new Set(fav.tags || []);
+  list.querySelectorAll('input').forEach(cb => { cb.checked = cur.has(cb.dataset.tag); });
+}
+
+window.openTagPop = function (btn) {
+  closeTagPop();
+  const key = btn.dataset.favkey;
+  const fav = shelf.find(f => f.key === key);
+  if (!fav) return;
+  const pop = document.createElement('div');
+  pop.className = 'tagpop';
+  pop.appendChild(buildTagList(fav, key));
+  const addRow = document.createElement('div');
+  addRow.className = 'tagpop-add';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.placeholder = 'new tag…';
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.textContent = 'Add';
+  const doAdd = () => {
+    const t = inp.value.trim();
+    if (!t) return;
+    const s = new Set(fav.tags || []);
+    s.add(t);
+    inp.value = '';
+    saveTags(key, [...s]);
+  };
+  add.onclick = doAdd;
+  inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } };
+  addRow.appendChild(inp);
+  addRow.appendChild(add);
+  pop.appendChild(addRow);
+  pop.dataset.for = key;
+  document.body.appendChild(pop);
+  // right-align to the button (it sits at the row's right edge) and clamp to
+  // the viewport so the popover never overflows off-screen
+  const r = btn.getBoundingClientRect();
+  let left = r.right - pop.offsetWidth;
+  left = Math.max(8, Math.min(left, window.innerWidth - pop.offsetWidth - 8));
+  let top = r.bottom + 4;
+  if (top + pop.offsetHeight > window.innerHeight - 8)
+    top = Math.max(8, r.top - pop.offsetHeight - 4);
+  pop.style.top = top + 'px';
+  pop.style.left = left + 'px';
+  tagPop = pop;
+  // focus the first existing tag (the primary action) rather than the new-tag
+  // input, so the user can immediately start assigning tags
+  const first = pop.querySelector('.tagpop-list input');
+  setTimeout(() => (first || inp).focus(), 0);
+};
+
+// Rebuild the tag filter row in place (used after a tag change so the open
+// popover isn't disturbed by a full list re-render).
+function rebuildTagFilterRow() {
+  const el = document.getElementById('tabs');
+  const old = el.querySelector('.tagfilter');
+  if (old) old.remove();
+  if (!allTags.length) return;
+  const tf = document.createElement('div');
+  tf.className = 'tagfilter';
+  const all = document.createElement('button');
+  all.type = 'button';
+  all.className = tagFilter === null ? 'active' : '';
+  all.textContent = 'All';
+  all.onclick = () => { tagFilter = null; refresh(); };
+  tf.appendChild(all);
+  for (const t of allTags) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = tagFilter === t ? 'active' : '';
+    b.textContent = t;
+    b.onclick = () => { tagFilter = tagFilter === t ? null : t; refresh(); };
+    tf.appendChild(b);
+  }
+  el.appendChild(tf);
+}
+
+async function saveTags(key, tags) {
+  try {
+    await j('/api/shelf/tags', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key, tags }) });
+    // apply in place (no full re-render) so the open popover stays put
+    const fav = shelf.find(f => f.key === key);
+    if (fav) fav.tags = tags;
+    const set = new Set();
+    for (const f of shelf) for (const t of (f.tags || [])) if (t) set.add(t);
+    allTags = [...set].sort();
+    const row = document.querySelector(`#catalog .titem .tagbtn[data-favkey="${CSS.escape(key)}"]`);
+    if (row) row.textContent = tags.length ? '🏷 ' + tags.length : '🏷';
+    rebuildTagFilterRow();
+  } catch (e) { alert(e.message); }
+}
 
 function toggleProviderMenu(cog, p) {
   const wasOpen = cog.parentElement.querySelector('.menu')?.classList.contains('open');
@@ -1133,7 +1441,8 @@ function fmtRate(n) { return n > 0 ? fmtSize(n) + '/s' : '—'; }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 // clicking a torrent: open its PDF, or show the loading page while pieces arrive
-async function openTorrent(ih, name) {
+async function openTorrent(ih, name, key) {
+  openShelfKey = key || null;
   selected = ih;
   markActive();
   if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
@@ -1146,11 +1455,11 @@ async function openTorrent(ih, name) {
     return;
   }
   const pdfs = (entry.files || []).filter(f => /\.pdf$/i.test(f.name));
-  if (pdfs.length === 1) { openPdf(ih, pdfs[0].index, pdfs[0].name, pdfs[0].size); return; }
-  if (pdfs.length > 1) { showFileList(ih, pdfs); return; }
+  if (pdfs.length === 1) { openPdf(ih, pdfs[0].index, pdfs[0].name, pdfs[0].size, key); return; }
+  if (pdfs.length > 1) { showFileList(ih, pdfs, key); return; }
   // nothing usable yet — keep the loading page and retry while the swarm works
   showLoading(entry);
-  waitTimer = setTimeout(() => openTorrent(ih, name), 2000);
+  waitTimer = setTimeout(() => openTorrent(ih, name, key), 2000);
 }
 
 function markActive() {
@@ -1211,13 +1520,14 @@ function showLoading(entry, note) {
   el.style.display = '';
 }
 
-function showFileList(ih, pdfs) {
+function showFileList(ih, pdfs, key) {
   hidePdf();
   const pages = document.getElementById('pages');
   pages.innerHTML = '';
   const ul = document.createElement('div');
   ul.className = 'files';
   ul.dataset.ih = ih;
+  ul.dataset.key = key || '';
   for (const f of pdfs) {
     const b = document.createElement('button');
     b.type = 'button';
@@ -1337,7 +1647,132 @@ async function dropPdfFiles(pdfs) {
   }
 }
 
-function openPdf(ih, f, name, size) {
+// ---- reading position: remember where the reader stopped so she can pick
+// up where she left off. The position lives on the shelf entry (page for
+// PDFs, scroll fraction for plain text) and is restored on the next open.
+
+function shelfPos(key) {
+  const s = shelf.find(x => x.key === key);
+  return s ? { page: s.page || 0, scroll: s.scroll || 0 } : null;
+}
+
+function savePosition(key, page, scroll) {
+  if (!key) return;
+  if (posTimer) clearTimeout(posTimer);
+  posTimer = setTimeout(async () => {
+    try {
+      await j('/api/shelf/position', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ key, page, scroll }) });
+      const s = shelf.find(x => x.key === key);
+      if (s) { s.page = page; s.scroll = scroll; }
+      if (s && s.status === 'toread' && (page > 1 || scroll > 0.02)) s.status = 'reading';
+      updatePosHint(key);
+    } catch (e) { /* not on shelf or server hiccup — nothing to do */ }
+  }, 1500);
+}
+
+// read the current position from whichever viewer is showing
+function currentPos() {
+  const pdf = document.getElementById('pdf-frame');
+  if (pdf.style.display !== 'none' && pdf.src) {
+    try {
+      const w = pdf.contentWindow;
+      if (w && w.PDFViewerApplication && w.PDFViewerApplication.pdfDocument)
+        return { page: w.PDFViewerApplication.page, scroll: 0 };
+    } catch (e) { /* viewer not ready yet */ }
+    return null;
+  }
+  const tv = document.getElementById('text-viewer');
+  if (tv.style.display !== 'none') {
+    // while the text is still fetching the viewer is empty — reporting
+    // scroll 0 here would wipe the saved position on the next poll
+    if (!document.getElementById('text-content').textContent) return null;
+    const max = tv.scrollHeight - tv.clientHeight;
+    return { page: 0, scroll: max > 0 ? Math.min(1, tv.scrollTop / max) : 0 };
+  }
+  return null;
+}
+
+// called from refresh(): persist the open book's position a few times a
+// minute so closing the tab doesn't lose more than a page or two
+function pollPosition() {
+  if (!openShelfKey) return;
+  const p = currentPos();
+  if (p) savePosition(openShelfKey, p.page, p.scroll);
+}
+
+// flush the position immediately (page hide / beforeunload)
+function flushPosition() {
+  if (!openShelfKey || !posTimer) return;
+  clearTimeout(posTimer);
+  posTimer = null;
+  const p = currentPos();
+  if (p) {
+    const key = openShelfKey;
+    j('/api/shelf/position', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ key, page: p.page, scroll: p.scroll }) }).catch(() => {});
+  }
+}
+
+// "p. N" / "42%" chip under the tag button, so the shelf shows where you
+// left off; the ↺ button beside it clears the saved position
+function updatePosHint(key) {
+  const p = shelfPos(key);
+  document.querySelectorAll(`#catalog .titem[data-shelfkey="${CSS.escape(key)}"]`).forEach(item => {
+    let hint = item.querySelector('.poshint');
+    let reset = item.querySelector('.resetpos');
+    const label = p ? (p.page > 1 ? `p. ${p.page}` : (p.scroll > 0.005 ? Math.round(p.scroll * 100) + '%' : '')) : '';
+    if (!label) {
+      if (hint) hint.remove();
+      if (reset) reset.remove();
+      item.classList.remove('has-reset');
+      return;
+    }
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.className = 'poshint';
+      hint.title = 'Where you left off';
+      item.appendChild(hint);
+    }
+    hint.textContent = label;
+    if (!reset) {
+      reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'resetpos';
+      reset.dataset.rmkey = key;
+      reset.title = 'Reset progress';
+      reset.textContent = '↺';
+      item.appendChild(reset);
+    }
+    item.classList.add('has-reset');
+  });
+}
+
+// clear the saved position; if the book is open, jump the viewer back to the start
+async function resetProgress(btn) {
+  const key = btn.dataset.rmkey;
+  if (!key) return;
+  // drop any pending debounced save so it can't re-save the old position
+  if (posTimer) { clearTimeout(posTimer); posTimer = null; }
+  try {
+    await j('/api/shelf/position', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ key, page: 0, scroll: 0 }) });
+  } catch (e) { /* not on shelf — nothing to reset */ }
+  const s = shelf.find(x => x.key === key);
+  if (s) { s.page = 0; s.scroll = 0; }
+  updatePosHint(key);
+  if (key === openShelfKey) {
+    const pdf = document.getElementById('pdf-frame');
+    if (pdf.style.display !== 'none' && pdf.src) {
+      try { pdf.contentWindow.PDFViewerApplication.page = 1; } catch (e) { /* viewer not ready */ }
+    }
+    const tv = document.getElementById('text-viewer');
+    if (tv.style.display !== 'none') tv.scrollTop = 0;
+  }
+}
+
+function openPdf(ih, f, name, size, key) {
+  openShelfKey = key || null;
   hideLoading();
   document.getElementById('pages').style.display = 'none';
   document.getElementById('empty').style.display = 'none';
@@ -1351,11 +1786,15 @@ function openPdf(ih, f, name, size) {
   // while the download catches up.
   const frame = document.getElementById('pdf-frame');
   frame.style.display = '';
-  frame.src = `/static/pdfjs-dist/web/viewer.html?file=${encodeURIComponent(`/api/pdf?ih=${ih}&f=${f}`)}`;
+  // resume where the reader left off (the viewer honours #page=N)
+  const pos = key ? shelfPos(key) : null;
+  const pageHash = (pos && pos.page > 1) ? `#page=${pos.page}` : '';
+  frame.src = `/static/pdfjs-dist/web/viewer.html?file=${encodeURIComponent(`/api/pdf?ih=${ih}&f=${f}`)}${pageHash}`;
 }
 
 // open a direct (non-torrent) PDF served from /api/pdf/direct
-function openDirectPdf(id, name, size) {
+function openDirectPdf(id, name, size, key) {
+  openShelfKey = key || null;
   hideLoading();
   document.getElementById('pages').style.display = 'none';
   document.getElementById('empty').style.display = 'none';
@@ -1366,21 +1805,24 @@ function openDirectPdf(id, name, size) {
   status.style.display = '';
   const frame = document.getElementById('pdf-frame');
   frame.style.display = '';
-  frame.src = `/static/pdfjs-dist/web/viewer.html?file=${encodeURIComponent(`/api/pdf/direct?pid=${id}`)}`;
+  const pos = key ? shelfPos(key) : null;
+  const pageHash = (pos && pos.page > 1) ? `#page=${pos.page}` : '';
+  frame.src = `/static/pdfjs-dist/web/viewer.html?file=${encodeURIComponent(`/api/pdf/direct?pid=${id}`)}${pageHash}`;
 }
 
 // open a direct PDF from the sidebar (look up its size for the status line)
-async function openDirectPdfById(id, name) {
+async function openDirectPdfById(id, name, key) {
   selected = 'pdf:' + id;
   markActive();
   let size = 0;
   try { size = (await j('/api/pdfs').then(r => r.json())).find(p => p.id === id)?.size || 0; } catch {}
-  openDirectPdf(id, name, size);
+  openDirectPdf(id, name, size, key);
 }
 
 // open a plain-text result in the in-site reader (fetched via /api/text to
 // dodge CORS — the browser can't fetch gutenberg.org directly)
-async function openTextResult(url, name) {
+async function openTextResult(url, name, key) {
+  openShelfKey = key || null;
   hideLoading();
   document.getElementById('pages').style.display = 'none';
   document.getElementById('empty').style.display = 'none';
@@ -1397,6 +1839,12 @@ async function openTextResult(url, name) {
     const r = await j(`/api/text?url=${encodeURIComponent(url)}`);
     content.textContent = await r.text();
     status.textContent = name || 'text';
+    // resume where the reader left off (fraction through the text)
+    const pos = key ? shelfPos(key) : null;
+    if (pos && pos.scroll > 0.005) {
+      const max = viewer.scrollHeight - viewer.clientHeight;
+      viewer.scrollTop = Math.max(0, Math.min(max, pos.scroll * max));
+    }
   } catch (e) {
     status.textContent = `error: ${e.message}`;
     viewer.style.display = 'none';
@@ -1405,7 +1853,8 @@ async function openTextResult(url, name) {
 
 // open an HTML result in the in-site viewer (the iframe loads /api/html, which
 // proxies the page so CORS isn't an issue; the page's own CSS still loads)
-function openHtmlResult(url, name) {
+function openHtmlResult(url, name, key) {
+  openShelfKey = key || null;
   hideLoading();
   document.getElementById('pages').style.display = 'none';
   document.getElementById('empty').style.display = 'none';
@@ -1420,7 +1869,7 @@ function openHtmlResult(url, name) {
 }
 
 // open a live plugin search result: download its PDF (deduped by URL) and open it
-async function openLiveResult(url, name) {
+async function openLiveResult(url, name, key) {
   const prov = providers.find(p => p.id === activeProvider && p.live);
   if (!prov || !url) return;
   const pid = prov.id.slice(7);
@@ -1430,7 +1879,7 @@ async function openLiveResult(url, name) {
   try {
     const r = await j(`/api/plugins/${pid}/open`, { method: 'POST',
       headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, name }) }).then(r => r.json());
-    openDirectPdf(r.id, name, 0);
+    openDirectPdf(r.id, name, 0, key);
   } catch (e) {
     status.textContent = `error: ${e.message}`;
   }
@@ -1479,10 +1928,10 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     e.preventDefault();
     if (liveBtn.dataset.livemagnet) trackLiveMagnet(liveBtn.dataset.livemagnet, liveBtn.dataset.livename || '');
     // text and HTML open in the in-site reader; other non-PDF editions (EPUB) open in a new tab
-    else if (liveBtn.dataset.livekind === 'text') openTextResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '');
-    else if (liveBtn.dataset.livekind === 'html') openHtmlResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '');
+    else if (liveBtn.dataset.livekind === 'text') openTextResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+    else if (liveBtn.dataset.livekind === 'html') openHtmlResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
     else if (liveBtn.dataset.livekind && liveBtn.dataset.livekind !== 'pdf') window.open(liveBtn.dataset.liveurl, '_blank', 'noopener');
-    else openLiveResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '');
+    else openLiveResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
     return;
   }
   const cfgBtn = e.target.closest('button[data-config]');
@@ -1511,6 +1960,36 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     toggleFavorite(favBtn);
     return;
   }
+  // 📖 add/remove from the personal shelf (browse rows)
+  const shelfBtn = e.target.closest('button.shelfbtn[data-favkey]');
+  if (shelfBtn) {
+    e.preventDefault();
+    toggleShelf(shelfBtn);
+    return;
+  }
+  // 🗑 remove from the shelf (My Shelf rows)
+  const rmBtn = e.target.closest('button.rmshelf[data-rmkey]');
+  if (rmBtn) {
+    e.preventDefault();
+    removeFromShelf(rmBtn);
+    return;
+  }
+  // ↺ reset the saved reading position (My Shelf rows, only when one exists)
+  const resetBtn = e.target.closest('button.resetpos[data-rmkey]');
+  if (resetBtn) {
+    e.preventDefault();
+    resetProgress(resetBtn);
+    return;
+  }
+  const tagBtn = e.target.closest('button.tagbtn[data-favkey]');
+  if (tagBtn) {
+    e.preventDefault();
+    // isConnected: the polling refresh may have re-rendered the list and
+    // detached the popover, leaving a stale tagPop reference
+    if (tagPop && tagPop.isConnected && tagPop.dataset.for === tagBtn.dataset.favkey) closeTagPop();
+    else openTagPop(tagBtn);
+    return;
+  }
   const cog = e.target.closest('.cog[data-ih], .cog[data-pdf]');
   if (cog) {
     e.preventDefault();
@@ -1535,20 +2014,27 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     return;
   }
   const b = e.target.closest('button.open[data-ih]');
-  if (b) { e.preventDefault(); openTorrent(b.dataset.ih, b.dataset.name || ''); return; }
+  if (b) { e.preventDefault(); openTorrent(b.dataset.ih, b.dataset.name || '', b.dataset.shelfkey || null); return; }
   const pb = e.target.closest('button.open[data-pdf]');
-  if (pb) { e.preventDefault(); openDirectPdfById(pb.dataset.pdf, pb.dataset.name || ''); }
+  if (pb) { e.preventDefault(); openDirectPdfById(pb.dataset.pdf, pb.dataset.name || '', pb.dataset.shelfkey || null); }
 });
 
 // close the ⋯ menus on outside click / Escape
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.titem') && !e.target.closest('.tabwrap') && !e.target.closest('.plugin-item'))
     document.querySelectorAll('#catalog .menu.open, #tabs .menu.open').forEach(m => m.classList.remove('open'));
+  // close the tag popover on any click outside it (it lives on <body>, so the
+  // catalog handler alone can't see clicks in the viewer/rail/header). Tag
+  // buttons are handled by the catalog handler, so skip them here.
+  if (tagPop && !e.target.closest('.tagpop') && !e.target.closest('button.tagbtn')) closeTagPop();
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape')
     document.querySelectorAll('#catalog .menu.open, #tabs .menu.open').forEach(m => m.classList.remove('open'));
 });
+// save the reading position when the tab is closed / navigated away
+window.addEventListener('pagehide', flushPosition);
+window.addEventListener('beforeunload', flushPosition);
 
 async function doTorrentAction(ih, act) {
   if (act === 'files') { openFileManager(ih); return; }
@@ -1584,7 +2070,7 @@ function toast(msg) {
 document.getElementById('loading').addEventListener('click', (e) => {
   if (!e.target.closest('#retry')) return;
   e.preventDefault();
-  if (selected) openTorrent(selected, '');
+  if (selected) openTorrent(selected, '', openShelfKey);
 });
 
 // PDF chooser inside the viewer (open a PDF, toggle exclusion, or delete a file)
@@ -1607,7 +2093,7 @@ document.getElementById('pages').addEventListener('click', (e) => {
   if (!b) return;
   e.preventDefault();
   if (/\.pdf$/i.test(b.dataset.name || ''))
-    openPdf(b.dataset.ih, Number(b.dataset.idx), b.dataset.name || b.textContent, 0);
+    openPdf(b.dataset.ih, Number(b.dataset.idx), b.dataset.name || b.textContent, 0, b.closest('.files')?.dataset.key || null);
   else toast('not a PDF');
 });
 
