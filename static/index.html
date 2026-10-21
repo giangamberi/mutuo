@@ -91,9 +91,11 @@
   aside .titem .savetext:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
   aside .titem .savetext.on { color:var(--acc); border-color:#2f4a7a; }
   /* when a saved text also has a position hint, the hint + reset shift left to
-     make room for the save button in the bottom-right corner */
-  aside .titem.has-savetext.has-reset .resetpos { right:34px; }
-  aside .titem.has-savetext.has-reset .poshint { right:60px; }
+     make room for the save button in the bottom-right corner. Offsets account
+     for the real button widths (💾 ~30px, ↺ ~21px, hint ~32px) so they never
+     overlap horizontally. */
+  aside .titem.has-savetext.has-reset .resetpos { right:42px; }
+  aside .titem.has-savetext.has-reset .poshint { right:67px; }
   /* 📁 local (folder) paper — bottom-right; opens the folder in the OS */
   aside .titem .localmark {
     position:absolute; bottom:8px; right:8px; font-size:11px; line-height:1;
@@ -102,8 +104,15 @@
   }
   aside .titem .localmark:hover { border-color:var(--acc); color:var(--text); }
   /* when a local paper also has a position hint, shift the hint + reset left */
-  aside .titem.has-local .resetpos { right:34px; }
-  aside .titem.has-local .poshint { right:60px; }
+  aside .titem.has-local .resetpos { right:42px; }
+  aside .titem.has-local .poshint { right:67px; }
+  /* My Shelf rows stack three control rows (status / tag row / bottom row).
+     Short (single-line) titles make the row shorter than the controls need, so
+     the bottom row (💾/📁/hint/↺ at bottom:8) rises into the tag row (top:33).
+     A min-height guarantees room for all three rows. */
+  aside .titem.has-remove.has-reset,
+  aside .titem.has-remove.has-savetext,
+  aside .titem.has-remove.has-local { min-height:84px; }
   /* reserve room for the row's right-side controls */
   aside .titem.has-shelf button.open { padding-right:90px; }
   aside .titem .status {
