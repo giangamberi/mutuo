@@ -17,17 +17,17 @@
   #resizer { position:absolute; top:0; right:-5px; width:10px; height:100%; cursor:col-resize; z-index:20; touch-action:none; }
   #resizer::after { content:''; position:absolute; top:0; right:4px; width:2px; height:100%; background:transparent; }
   #resizer:hover::after, #resizer.dragging::after { background:var(--acc); }
-  /* minimize the sidebar so the reader can focus on the text. The top bar is
-     offset past the 46px main-tab rail so the rail stays the leftmost,
-     full-height element (the top bar sits above the list, to the rail's right) */
-  #sidebar-top { display:flex; align-items:center; gap:6px; padding:4px 6px 0; margin-left:46px; }
+  /* minimize the sidebar so the reader can focus on the text. The top bar
+     (just the minimize button) sits at the top of the list column, to the
+     right of the full-height main-tab rail */
+  #sidebar-top { display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:4px 6px 0; }
   #sidebar-top #minimize-btn { padding:2px 9px; font-size:12px; line-height:1.4; }
-  /* Providers/Plugins sub-tabs live in the top bar, left of the minimize btn */
-  #sidebar-top .subtabs { flex:1; padding:0; }
   aside.minimized { width:34px !important; min-width:34px !important; }
-  aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; margin-left:0; }
-  aside.minimized #sidebar-top .subtabs { display:none; }
-  aside.minimized #sidebar-row, aside.minimized #resizer { display:none; }
+  /* collapse to just the restore button: hide the rail + the list content,
+     but keep the top bar (which holds the button) visible */
+  aside.minimized #rail { display:none; }
+  aside.minimized #sidebar-main > *:not(#sidebar-top) { display:none; }
+  aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; }
   /* left icon rail: Shelf / Favorites / Reading */
   #sidebar-row { flex:1; display:flex; min-height:0; }
   #rail { flex:0 0 46px; width:46px; border-right:1px solid #000; display:flex;
@@ -37,7 +37,7 @@
   #rail button:hover { background:#232a36; color:var(--text); }
   #rail button.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--text); }
   #sidebar-main { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; }
-  /* sub-tab rows (Reading: Read/Complete · Shelf: Providers/Plugins) */
+  /* sub-tab rows (Reading/Favorites: To Read/Reading/Complete) */
   .subtabs { display:flex; gap:4px; padding:6px 8px 0; }
   .subtabs button { font-size:12px; padding:4px 12px; background:transparent; color:var(--dim);
     border:1px solid transparent; border-radius:6px; cursor:pointer; }
@@ -468,13 +468,12 @@
 </header>
 <main>
   <aside>
-    <div id="sidebar-top">
-      <div id="shelf-subtabs" class="subtabs" style="display:none"></div>
-      <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
-    </div>
     <div id="sidebar-row">
     <div id="rail"></div>
     <div id="sidebar-main">
+    <div id="sidebar-top">
+      <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
+    </div>
     <div id="tabs"></div>
     <div id="searchbar">
       <input id="search" type="search" placeholder="Search documents…" autocomplete="off">
@@ -560,8 +559,7 @@ let providers = []; // [{id, name, feed, description, enabled}]
 let favorites = []; // [{key, name, type, ih, pdf, url, magnet, kind, provider}]
 let shelf = []; // personal shelf — a superset of favorites (favorites ⊆ shelf)
 // left rail: which top-level view the sidebar shows
-let view = 'shelf'; // 'shelf' | 'favorites' | 'reading'
-let shelfSub = 'providers'; // 'providers' | 'plugins' (Shelf sub-explorers)
+let view = 'shelf'; // 'shelf' | 'favorites' | 'reading' | 'plugins'
 let readingSub = 'all'; // 'all' | 'toread' | 'reading' | 'complete' (My Shelf sub-tabs)
 let favSub = 'all'; // 'all' | 'toread' | 'reading' | 'complete' (Favorites sub-tabs)
 let tagFilter = null; // active custom-tag filter (My Shelf + Favorites views; null = all)
@@ -602,6 +600,7 @@ async function refresh() {
     pollPosition(); // persist the open book's reading position a few times a minute
     if (view === 'favorites') { renderFavorites(torrents, directPdfs, byMagnet, provOf); return; }
     if (view === 'reading') { renderReading(torrents, directPdfs, byMagnet, provOf); return; }
+    if (view === 'plugins') { renderPluginView(directPdfs, catalog); return; }
     renderShelf(torrents, directPdfs, catalog, byMagnet, provOf);
   } catch (e) { /* server still starting */ }
 }
@@ -610,7 +609,6 @@ async function refresh() {
 // renders the provider tabs + the active provider's list (live or torrent).
 function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
   renderShelfTabs();
-  if (shelfSub === 'plugins') { renderPluginView(directPdfs, catalog); return; }
   const liveProv = providers.find(p => p.id === activeProvider && p.live);
   if (liveProv) { renderLiveProvider(liveProv); return; }
   // leaving a live tab: restore the torrent-only controls it hid and drop
@@ -1003,33 +1001,17 @@ function renderRail() {
     b.onclick = () => { view = key; refresh(); };
     el.appendChild(b);
   };
-  mk('📚', 'Shelf — browse providers & plugins', 'shelf');
+  mk('📚', 'Shelf — browse providers', 'shelf');
   mk('★', 'Favorites — your starred documents', 'favorites');
   mk('📖', 'My Shelf — your books: to read, in progress & complete', 'reading');
+  mk('🧩', 'Plugins — manage custom sources', 'plugins');
 }
 
-// ---- Shelf: the Providers / Plugins sub-explorers ----
+// ---- Shelf: the provider tabs ----
 function renderShelfTabs() {
   const el = document.getElementById('tabs');
   el.style.display = '';
   el.innerHTML = '';
-  // sub-view toggle: Providers (the provider tabs) or Plugins (the manager)
-  // the Providers/Plugins toggle lives in the top bar (next to the minimize
-  // button), not in the #tabs list area
-  const sub = document.getElementById('shelf-subtabs');
-  sub.style.display = '';
-  sub.innerHTML = '';
-  const mkSub = (label, key) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = shelfSub === key ? 'active' : '';
-    b.textContent = label;
-    b.onclick = () => { shelfSub = key; refresh(); };
-    sub.appendChild(b);
-  };
-  mkSub('Providers', 'providers');
-  mkSub('Plugins', 'plugins');
-  if (shelfSub === 'plugins') return; // the plugin manager fills the list below
   for (const p of providers) {
     const wrap = document.createElement('span');
     wrap.className = 'tabwrap';
@@ -1312,8 +1294,6 @@ function buildStatusTabs(activeSub, setActive) {
   const el = document.getElementById('tabs');
   el.style.display = '';
   el.innerHTML = '';
-  // the Providers/Plugins toggle only belongs to the Shelf (browse) view
-  document.getElementById('shelf-subtabs').style.display = 'none';
   const sub = document.createElement('div');
   sub.className = 'subtabs grow';
   const mkSub = (label, key) => {
@@ -2609,6 +2589,7 @@ async function toggleExcluded(b) {
 let runPluginId = null;
 
 function renderPluginView(directPdfs, catalog) {
+  document.getElementById('tabs').style.display = 'none';
   document.getElementById('searchbar').style.display = 'none';
   document.getElementById('hdrstat').textContent = plugins.length ? `${plugins.length} plugin(s)` : 'no plugins';
   const el = document.getElementById('catalog');
@@ -2689,7 +2670,7 @@ document.getElementById('catalog').addEventListener('change', (e) => {
     headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ active }) })
     .then(r => r.json())
     .then(() => {
-      if (active) { activeProvider = 'plugin:' + pid; view = 'shelf'; shelfSub = 'providers'; }
+      if (active) { activeProvider = 'plugin:' + pid; view = 'shelf'; }
       refresh();
     })
     .catch(err => { alert(err.message); refresh(); });
@@ -2786,7 +2767,7 @@ document.getElementById('plugin-run-ok').onclick = async () => {
     const parts = [`+${r.pdfs} PDF(s)`, `+${r.torrents} torrent(s)`];
     if (r.errors.length) parts.push(`${r.errors.length} failed`);
     activeProvider = r.provider;   // jump to the plugin's content tab
-    view = 'shelf'; shelfSub = 'providers';
+    view = 'shelf';
     page = 1;
     await refresh();
     toast(`plugin: ${parts.join(', ')}`);
