@@ -455,7 +455,7 @@
 </div>
 <header>
   <h1>Shared Knowledge</h1>
-  <input id="magnet" placeholder="magnet:?xt=urn:btih:...">
+  <input id="magnet" placeholder="magnet:?xt=urn:btih:... or a PDF link (e.g. arXiv)">
   <button onclick="addMagnet()">Add</button>
   <button onclick="syncFeed()">Sync feed</button>
   <div class="grow"></div>
@@ -1753,15 +1753,38 @@ function showFileList(ih, pdfs, key) {
 }
 
 window.addMagnet = async function () {
-  const magnet = document.getElementById('magnet').value.trim();
-  if (!magnet.startsWith('magnet:')) { alert('paste a magnet: URI'); return; }
+  const value = document.getElementById('magnet').value.trim();
+  if (!value) return;
+  // a PDF link (http/https) downloads the PDF and opens it; anything else
+  // must be a magnet: URI
+  if (/^https?:\/\//i.test(value)) { addPdfUrl(value); return; }
+  if (!value.startsWith('magnet:')) { alert('paste a magnet: URI or an http(s) PDF link'); return; }
   try {
     await j('/api/catalog', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name: magnet.slice(10, 60), magnet, provider: activeProvider})});
+      body: JSON.stringify({name: value.slice(10, 60), magnet: value, provider: activeProvider})});
     document.getElementById('magnet').value = '';
     refresh();
   } catch (e) { alert(e.message); }
 };
+
+// download a remote PDF (e.g. an arXiv link) into the direct-PDF store and
+// open it right away; re-adding the same URL is a no-op (deduped by URL)
+async function addPdfUrl(url) {
+  const status = document.getElementById('hdrstat');
+  status.textContent = 'downloading PDF…';
+  try {
+    const r = await j('/api/pdf/add-url', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({url})});
+    const data = await r.json();
+    document.getElementById('magnet').value = '';
+    status.textContent = `added ${data.name}`;
+    refresh();
+    openDirectPdf(data.id, data.name, data.size);
+  } catch (e) {
+    status.textContent = `error: ${e.message}`;
+    setTimeout(() => refresh(), 3000);
+  }
+}
 
 window.syncFeed = async function () {
   try {

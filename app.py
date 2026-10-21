@@ -875,6 +875,31 @@ async def upload_pdf(files: List[UploadFile] = File(...),
     return JSONResponse({"ok": True, "added": added, "errors": errors})
 
 
+class AddPdfUrlRequest(BaseModel):
+    url: str
+    name: str = ""
+
+
+@app.post("/api/pdf/add-url")
+def add_pdf_url(req: AddPdfUrlRequest) -> JSONResponse:
+    """Download a remote PDF (e.g. an arXiv link) and register it as a direct
+    PDF, so it can be opened in the viewer. Re-adding the same URL is a no-op
+    (deduped by URL)."""
+    url = req.url.strip()
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(400, "paste an http(s) PDF link")
+    name = req.name.strip() or url.rsplit("/", 1)[-1].split("?")[0] or "document.pdf"
+    # provider "local" so it lists under the Local provider, like uploads
+    try:
+        entry = _download_pdf(url, name, "local")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except Exception as exc:
+        raise HTTPException(502, f"could not download PDF: {exc}")
+    pid = next(k for k, m in _load_pdfs().items() if m.get("url") == url)
+    return JSONResponse({"ok": True, "id": pid, "name": entry["name"], "size": entry["size"]})
+
+
 @app.get("/api/pdfs")
 def list_pdfs() -> JSONResponse:
     reg = _load_pdfs()
