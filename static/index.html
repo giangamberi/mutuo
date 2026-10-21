@@ -125,6 +125,12 @@
   /* when a local paper also has a position hint, shift the hint + reset left */
   aside .titem.has-local .resetpos { right:42px; }
   aside .titem.has-local .poshint { right:67px; }
+  /* when a downloaded PDF (💾 saved + 📁) also has a position hint, shift the
+     hint + reset further left to clear both bottom-right marks. The 💾 badge
+     spans right:42→101 (59px wide), so ↺ sits at right:107 and the hint at
+     right:132 (matching the 6px/4px gaps used by .has-local) */
+  aside .titem.has-savedpdf.has-reset .resetpos { right:107px; }
+  aside .titem.has-savedpdf.has-reset .poshint { right:132px; }
   /* My Shelf rows stack three control rows (status / tag row / bottom row).
      Short (single-line) titles make the row shorter than the controls need, so
      the bottom row (💾/📁/hint/↺ at bottom:8) rises into the tag row (top:33).
@@ -1237,7 +1243,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       if (!p) continue; // PDF removed
       rows.push({ kind: 'pdf', name: p.name,
         meta: [p.source === 'folder' ? 'from folder' : 'direct file', fmtSize(p.size), p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · '),
-        pdf: p.id, source: p.source, fav: f, eff });
+        pdf: p.id, source: p.source, url: p.url || '', fav: f, eff });
     } else { // live result (Gutenberg text/html/epub/pdf, or a torrent magnet)
       const saved = (f.kind === 'text' && f.url) ? savedByUrl[f.url] : null;
       rows.push({ kind: 'live', name: f.name, meta: (f.kind || 'saved') + (saved ? ' · 💾 saved' : ''),
@@ -1309,6 +1315,22 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       mark.textContent = '📁';
       item.appendChild(mark);
       item.classList.add('has-local');
+    }
+    // 💾 saved + 📁 for a PDF downloaded from a link (same as the browse view)
+    if (r.kind === 'pdf' && r.source !== 'folder' && r.url) {
+      const badge = document.createElement('span');
+      badge.className = 'savedmark';
+      badge.title = 'Downloaded from a link — saved on disk';
+      badge.textContent = '💾 saved';
+      item.appendChild(badge);
+      const mark = document.createElement('button');
+      mark.type = 'button';
+      mark.className = 'localmark';
+      mark.dataset.pdf = r.pdf;
+      mark.title = 'Open folder';
+      mark.textContent = '📁';
+      item.appendChild(mark);
+      item.classList.add('has-savedpdf');
     }
     el.appendChild(item);
   }
