@@ -115,6 +115,12 @@
     padding:2px 6px; cursor:pointer;
   }
   aside .titem .localmark:hover { border-color:var(--acc); color:var(--text); }
+  /* 💾 this PDF was downloaded from a link — it's on disk for later reading */
+  aside .titem .savedmark {
+    position:absolute; bottom:8px; right:8px; font-size:11px; line-height:1;
+    color:var(--acc); background:#0f1115; border:1px solid #2f4a7a; border-radius:6px;
+    padding:2px 6px; pointer-events:none;
+  }
   /* when a local paper also has a position hint, shift the hint + reset left */
   aside .titem.has-local .resetpos { right:42px; }
   aside .titem.has-local .poshint { right:67px; }
@@ -701,6 +707,9 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
       item.dataset.pdf = p.id;
       const pdfMeta = [fromFolder ? 'from folder' : 'direct file', fmtSize(p.size),
         p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · ');
+      // a PDF downloaded from a link (top field / live result) carries its url —
+      // mark it so it's clear the file is already on disk for later reading
+      const saved = !fromFolder && !!p.url;
       const pdfFavKey = 'pdf:' + p.id;
       const pdfIsFav = favorites.some(f => f.key === pdfFavKey);
       const pdfShelved = shelf.some(s => s.key === pdfFavKey);
@@ -714,7 +723,7 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
         <div class="menu">
           <button data-pdfact="open" data-pdf="${p.id}">Open</button>
           <button data-pdfact="remove" data-pdf="${p.id}" data-source="${fromFolder ? 'folder' : 'upload'}" class="danger">${fromFolder ? 'Remove from list…' : 'Remove &amp; delete…'}</button>
-        </div>` + (fromFolder ? `<button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>` : '');
+        </div>` + (fromFolder ? `<button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>` : (saved ? `<span class="savedmark" title="Downloaded from a link — saved on disk">💾 saved</span>` : ''));
       el.appendChild(item);
     }
     const shown = tItems.length + pItems.length;
