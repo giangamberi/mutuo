@@ -85,7 +85,7 @@
   aside .titem .shelfbtn.on { color:var(--acc); border-color:#2f4a7a; }
   /* 💾 save a text locally for offline reading — bottom-right of the row */
   aside .titem .savetext {
-    position:absolute; top:58px; right:8px; padding:3px 6px; font-size:12px; line-height:1;
+    position:absolute; bottom:8px; right:8px; padding:3px 6px; font-size:12px; line-height:1;
     background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
   }
   aside .titem .savetext:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
@@ -96,7 +96,7 @@
   aside .titem.has-savetext.has-reset .poshint { right:60px; }
   /* 📁 local (folder) paper — bottom-right; opens the folder in the OS */
   aside .titem .localmark {
-    position:absolute; top:58px; right:8px; font-size:11px; line-height:1;
+    position:absolute; bottom:8px; right:8px; font-size:11px; line-height:1;
     color:var(--dim); background:#0f1115; border:1px solid #262c38; border-radius:6px;
     padding:2px 6px; cursor:pointer;
   }
@@ -134,13 +134,13 @@
   aside .titem .tagbtn:hover { border-color:var(--acc); color:var(--text); }
   /* where the reader last stopped (p. N / %), shown under the tag button */
   aside .titem .poshint {
-    position:absolute; top:58px; right:8px; font-size:10px; line-height:1;
+    position:absolute; bottom:8px; right:8px; font-size:10px; line-height:1;
     color:var(--dim); background:#0f1115; border:1px solid #262c38; border-radius:6px;
     padding:2px 6px; pointer-events:none;
   }
   /* ↺ clear the saved position — right of the hint chip, only when one exists */
   aside .titem .resetpos {
-    position:absolute; top:58px; right:8px; padding:2px 6px; font-size:10px; line-height:1;
+    position:absolute; bottom:8px; right:8px; padding:2px 6px; font-size:10px; line-height:1;
     background:#0f1115; color:var(--dim); border:1px solid #262c38; border-radius:6px; cursor:pointer;
   }
   aside .titem .resetpos:hover { border-color:var(--acc); color:var(--text); }
