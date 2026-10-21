@@ -17,13 +17,15 @@
   #resizer { position:absolute; top:0; right:-5px; width:10px; height:100%; cursor:col-resize; z-index:20; touch-action:none; }
   #resizer::after { content:''; position:absolute; top:0; right:4px; width:2px; height:100%; background:transparent; }
   #resizer:hover::after, #resizer.dragging::after { background:var(--acc); }
-  /* minimize the sidebar so the reader can focus on the text */
-  #sidebar-top { display:flex; align-items:center; gap:6px; padding:4px 6px 0; }
+  /* minimize the sidebar so the reader can focus on the text. The top bar is
+     offset past the 46px main-tab rail so the rail stays the leftmost,
+     full-height element (the top bar sits above the list, to the rail's right) */
+  #sidebar-top { display:flex; align-items:center; gap:6px; padding:4px 6px 0; margin-left:46px; }
   #sidebar-top #minimize-btn { padding:2px 9px; font-size:12px; line-height:1.4; }
   /* Providers/Plugins sub-tabs live in the top bar, left of the minimize btn */
   #sidebar-top .subtabs { flex:1; padding:0; }
   aside.minimized { width:34px !important; min-width:34px !important; }
-  aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; }
+  aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; margin-left:0; }
   aside.minimized #sidebar-top .subtabs { display:none; }
   aside.minimized #sidebar-row, aside.minimized #resizer { display:none; }
   /* left icon rail: Shelf / Favorites / Reading */
