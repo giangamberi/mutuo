@@ -14,6 +14,7 @@ An item may also carry a "meta" string shown as a subtitle line.
 CONFIG exposes settings the UI renders and passes back as the `config` dict.
 """
 import json
+import time
 import urllib.parse
 import urllib.request
 
@@ -22,6 +23,27 @@ DESCRIPTION = "Search the Project Gutenberg book archive (via Gutendex) and read
 
 SEARCH_URL = "https://gutendex.com/books"
 UA = {"User-Agent": "pdf-torrent-reader/1.0"}
+
+
+def _get_json(url, attempts=5, timeout=12):
+    """GET a URL and parse JSON, retrying on transient failures.
+
+    Gutendex intermittently hangs or answers 503 for up to a minute or two;
+    several retries with a short backoff ride out those bad windows instead
+    of surfacing a 502 in the UI. A healthy Gutendex answers in ~0.1s, so the
+    per-attempt timeout only costs anything during a bad window.
+    """
+    last = None
+    for i in range(attempts):
+        try:
+            req = urllib.request.Request(url, headers=UA)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.load(resp)
+        except Exception as e:
+            last = e
+            if i < attempts - 1:
+                time.sleep(2 * (i + 1))
+    raise last
 
 # Settings the UI renders and passes to search(). These map onto Gutendex's
 # own query parameters (sort, languages, topic, copyright, author years).
@@ -36,6 +58,15 @@ CONFIG = [
          {"value": "title-desc", "label": "Title Z\u2013A"},
          {"value": "author-asc", "label": "Author A\u2013Z"},
          {"value": "author-desc", "label": "Author Z\u2013A"},
+     ]},
+    {"key": "format", "label": "Format", "type": "select",
+     "default": "any",
+     "options": [
+         {"value": "any", "label": "Any (PDF preferred)"},
+         {"value": "pdf", "label": "PDF"},
+         {"value": "text", "label": "Plain text"},
+         {"value": "html", "label": "HTML"},
+         {"value": "epub", "label": "EPUB"},
      ]},
     {"key": "language", "label": "Language", "type": "select",
      "default": "",
@@ -117,9 +148,25 @@ FALLBACK_FORMATS = [
 ]
 
 
-def _pick_format(formats: dict):
-    """(url, kind) for a book: its PDF if available, else the best fallback
-    format. Returns (None, None) if the book has no usable edition."""
+# format select value -> the (mime, kind) editions to return, in priority
+# order. "any" is handled separately (PDF preferred, else best fallback).
+FORMATS = {
+    "pdf": [("application/pdf", "pdf")],
+    "text": [("text/plain; charset=utf-8", "text"), ("text/plain", "text")],
+    "html": [("text/html", "html")],
+    "epub": [("application/epub+zip", "epub")],
+}
+
+
+def _pick_format(formats: dict, fmt: str = "any"):
+    """(url, kind) for a book. With fmt="any" (default) it returns the PDF if
+    available, else the best fallback. With a specific fmt it returns that
+    edition only, or (None, None) if the book has no such edition."""
+    if fmt in FORMATS:
+        for mime, kind in FORMATS[fmt]:
+            if formats.get(mime):
+                return formats[mime], kind
+        return None, None
     if formats.get("application/pdf"):
         return formats["application/pdf"], "pdf"
     for mime, kind in FALLBACK_FORMATS:
@@ -129,7 +176,8 @@ def _pick_format(formats: dict):
 
 
 def search(query: str, config: dict) -> list[dict]:
-    """Search Gutendex and return matching books (PDF, else text/HTML/EPUB)."""
+    """Search Gutendex and return matching books in the requested format
+    (default "any" = PDF, else text/HTML/EPUB)."""
     params = {}
     q = (query or "").strip()
     if q:
@@ -156,9 +204,7 @@ def search(query: str, config: dict) -> list[dict]:
         if end is not None:
             params["author_year_end"] = end
     url = f"{SEARCH_URL}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=45) as resp:
-        data = json.load(resp)
+    data = _get_json(url)
     results = data.get("results", [])
     # client-side sorts Gutendex can't do server-side (reorder the returned page)
     if sort == "title-asc":
@@ -169,12 +215,13 @@ def search(query: str, config: dict) -> list[dict]:
         results.sort(key=_author_key)
     elif sort == "author-desc":
         results.sort(key=_author_key, reverse=True)
+    fmt = (config or {}).get("format") or "any"
     items = []
     for b in results:
         name = _book_name(b)
         if not name:
             continue
-        url, kind = _pick_format(b.get("formats") or {})
+        url, kind = _pick_format(b.get("formats") or {}, fmt)
         if not url:
             continue  # no usable edition at all
         item = {"name": name, "url": url, "kind": kind}

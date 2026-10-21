@@ -3,10 +3,12 @@ downloads/
 catalog.json
 providers.json
 pdfs.json
+texts.json
 favorites.json
 shelf.json
 plugin_state.json
 .pdfs/
+.texts/
 *.pyc
 __pycache__/
 .torrents/

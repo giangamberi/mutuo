@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>PDF Torrent Reader</title>
+<title>Shared Knowledge</title>
 <style>
   :root { --bg:#14161a; --panel:#1e2128; --text:#e6e9ef; --dim:#8a93a5; --acc:#4f8cff; }
   * { box-sizing: border-box; }
@@ -83,6 +83,27 @@
   }
   aside .titem .shelfbtn:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
   aside .titem .shelfbtn.on { color:var(--acc); border-color:#2f4a7a; }
+  /* 💾 save a text locally for offline reading — bottom-right of the row */
+  aside .titem .savetext {
+    position:absolute; top:58px; right:8px; padding:3px 6px; font-size:12px; line-height:1;
+    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+  }
+  aside .titem .savetext:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
+  aside .titem .savetext.on { color:var(--acc); border-color:#2f4a7a; }
+  /* when a saved text also has a position hint, the hint + reset shift left to
+     make room for the save button in the bottom-right corner */
+  aside .titem.has-savetext.has-reset .resetpos { right:34px; }
+  aside .titem.has-savetext.has-reset .poshint { right:60px; }
+  /* 📁 local (folder) paper — bottom-right; opens the folder in the OS */
+  aside .titem .localmark {
+    position:absolute; top:58px; right:8px; font-size:11px; line-height:1;
+    color:var(--dim); background:#0f1115; border:1px solid #262c38; border-radius:6px;
+    padding:2px 6px; cursor:pointer;
+  }
+  aside .titem .localmark:hover { border-color:var(--acc); color:var(--text); }
+  /* when a local paper also has a position hint, shift the hint + reset left */
+  aside .titem.has-local .resetpos { right:34px; }
+  aside .titem.has-local .poshint { right:60px; }
   /* reserve room for the row's right-side controls */
   aside .titem.has-shelf button.open { padding-right:90px; }
   aside .titem .status {
@@ -185,10 +206,29 @@
   #status { font-size:12px; color:var(--dim); padding:6px 12px; border-bottom:1px solid #000; }
   #pdf-frame { flex:1; width:100%; border:0; background:#0f1115; min-height:0; }
   #text-viewer { flex:1; min-height:0; overflow:auto; background:#0f1115; }
+  /* sticky toolbar at the top of the text reader — shows/hides with the viewer */
+  #text-toolbar { position:sticky; top:0; z-index:5; display:flex; gap:6px; align-items:center;
+    justify-content:center; padding:6px; background:#0f1115; border-bottom:1px solid #000; }
+  #text-toolbar button { padding:3px 10px; font-size:13px; line-height:1.3; }
+  #text-toolbar select { padding:3px 6px; font-size:12px; }
+  #text-toolbar .tlabel { font-size:12px; color:var(--dim); min-width:26px; text-align:center; }
+  #text-toolbar .tsep { width:1px; height:18px; background:#333a47; margin:0 2px; }
+  #text-progress { margin-left:auto; font-size:12px; color:var(--dim); min-width:34px; text-align:right; }
   #text-viewer pre { margin:0 auto; max-width:720px; padding:24px 28px 60px;
     font-family:Georgia,'Times New Roman',serif; font-size:16px; line-height:1.7;
     color:#d7dbe0; white-space:pre-wrap; word-wrap:break-word; }
+  /* reading themes — override the viewer + text + toolbar colours */
+  #text-viewer.theme-light { background:#ffffff; }
+  #text-viewer.theme-light pre { color:#1a1a1a; }
+  #text-viewer.theme-light #text-toolbar { background:#ffffff; border-bottom-color:#e2e2e2; }
+  #text-viewer.theme-sepia { background:#f4ecd8; }
+  #text-viewer.theme-sepia pre { color:#433422; }
+  #text-viewer.theme-sepia #text-toolbar { background:#f4ecd8; border-bottom-color:#e0d5b8; }
   #html-frame { flex:1; width:100%; border:0; background:#fff; min-height:0; }
+  #epub-viewer { flex:1; min-height:0; overflow:hidden; background:#0f1115; }
+  /* epub.js renders its own scrollable region; keep the book centred like the
+     text reader and let its theme CSS do the rest */
+  #epub-viewer .epub-view { height:100%; }
   .empty { color:var(--dim); font-size:13px; margin-top:24px; padding:0 16px; }
   #loading { width:min(560px,92%); margin-top:36px; text-align:center; align-self:center; }
   #loading h2 { font-size:15px; margin:0 0 4px; word-break:break-all; }
@@ -403,7 +443,7 @@
   </div>
 </div>
 <header>
-  <h1>PDF Torrent Reader</h1>
+  <h1>Shared Knowledge</h1>
   <input id="magnet" placeholder="magnet:?xt=urn:btih:...">
   <button onclick="addMagnet()">Add</button>
   <button onclick="syncFeed()">Sync feed</button>
@@ -454,11 +494,47 @@
     <div id="status" style="display:none"></div>
     <div class="empty" id="empty">Pick a torrent from the list. Nothing downloads until you open a PDF (or include a file) — that’s how you choose what to fetch.</div>
     <iframe id="pdf-frame" style="display:none" title="PDF viewer"></iframe>
-    <div id="text-viewer" style="display:none"><pre id="text-content"></pre></div>
+    <div id="text-viewer" style="display:none">
+      <div id="text-toolbar">
+        <button id="font-dec" type="button" title="Smaller text">A−</button>
+        <span id="font-size-label" class="tlabel">16</span>
+        <button id="font-inc" type="button" title="Larger text">A+</button>
+        <span class="tsep"></span>
+        <select id="font-family" title="Font">
+          <option value="serif">Serif</option>
+          <option value="sans">Sans</option>
+          <option value="mono">Mono</option>
+        </select>
+        <span class="tsep"></span>
+        <select id="text-theme" title="Theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="sepia">Sepia</option>
+        </select>
+        <span class="tsep"></span>
+        <select id="text-spacing" title="Line spacing">
+          <option value="compact">Compact</option>
+          <option value="normal">Normal</option>
+          <option value="relaxed">Relaxed</option>
+        </select>
+        <span class="tsep"></span>
+        <select id="text-width" title="Text width">
+          <option value="narrow">Narrow</option>
+          <option value="normal">Normal</option>
+          <option value="wide">Wide</option>
+        </select>
+        <span id="text-progress" title="Reading progress"></span>
+      </div>
+      <pre id="text-content"></pre>
+    </div>
     <iframe id="html-frame" style="display:none" title="HTML viewer"></iframe>
+    <div id="epub-viewer" style="display:none"></div>
     <div id="pages" style="display:none"></div>
   </section>
 </main>
+<!-- epub.js + JSZip (its zip dependency) — bundled locally, no CDN -->
+<script src="/static/epubjs/jszip.min.js"></script>
+<script src="/static/epubjs/epub.min.js"></script>
 <script type="module">
 let selected = null; // info_hash of the torrent the user picked
 let waitTimer = null; // retry timer for the "waiting on the swarm" page
@@ -475,12 +551,16 @@ let tagFilter = null; // active custom-tag filter (My Shelf + Favorites views; n
 let allTags = []; // distinct custom tags across favorites
 let openShelfKey = null; // shelf key of the book currently open in the viewer (for position save/restore)
 let posTimer = null; // debounce timer for saving the reading position
+let epubBook = null; // active epub.js Book (null when no EPUB is open)
+let epubRendition = null; // the book's rendition (display/themes live here)
+let epubLoc = null; // current EPUB location (updated on every page turn)
 let plugins = []; // [{id, name, description}] — custom behaviours
 let page = 1; // current page of the (paginated) list
 let perPage = parseInt(localStorage.getItem('per-page'), 10) || 25; // items per page (0 = all)
 // live plugin provider: results are fetched on demand (not from the catalog)
 let liveResults = []; // [{name, url|magnet|path, meta?}] for the active live tab
 let liveLoading = false;
+let savedTexts = []; // [{id, name, size, url, provider}] — texts saved locally for offline reading
 let liveSeq = 0; // guards against out-of-order search responses
 // metadata filters for local (non-live) providers: PDF fields + torrent state/size
 let localFilters = { author:'', subject:'', keywords:'', minPages:'', maxPages:'', state:'', minSize:'', maxSize:'' };
@@ -497,6 +577,7 @@ async function refresh() {
     favorites = await j('/api/favorites').then(r => r.json());
     shelf = await j('/api/shelf').then(r => r.json());
     allTags = await j('/api/shelf/tags').then(r => r.json());
+    savedTexts = await j('/api/texts').then(r => r.json());
     const byMagnet = Object.fromEntries(catalog.map(c => [magnetKey(c.magnet), c]));
     const provOf = t => (byMagnet[magnetKey(t.magnet)] || {}).provider || 'local';
     renderRail();
@@ -594,7 +675,7 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
       if (!p) continue; // torrent, rendered above
       const fromFolder = p.source === 'folder';
       const item = document.createElement('div');
-      item.className = 'titem has-shelf' + (selected === 'pdf:' + p.id ? ' active' : '');
+      item.className = 'titem has-shelf' + (selected === 'pdf:' + p.id ? ' active' : '') + (fromFolder ? ' has-local' : '');
       item.dataset.pdf = p.id;
       const pdfMeta = [fromFolder ? 'from folder' : 'direct file', fmtSize(p.size),
         p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · ');
@@ -611,7 +692,7 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
         <div class="menu">
           <button data-pdfact="open" data-pdf="${p.id}">Open</button>
           <button data-pdfact="remove" data-pdf="${p.id}" data-source="${fromFolder ? 'folder' : 'upload'}" class="danger">${fromFolder ? 'Remove from list…' : 'Remove &amp; delete…'}</button>
-        </div>`;
+        </div>` + (fromFolder ? `<button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>` : '');
       el.appendChild(item);
     }
     const shown = tItems.length + pItems.length;
@@ -787,6 +868,7 @@ function renderLiveProvider(prov) {
     return;
   }
   const kindIcon = { pdf: '&#128196;', text: '&#128221;', html: '&#127760;', epub: '&#128218;', torrent: '&#128279;' };
+  const savedByUrl = Object.fromEntries(savedTexts.map(t => [t.url, t]));
   for (const it of liveResults) {
     const item = document.createElement('div');
     item.className = 'titem has-shelf';
@@ -794,10 +876,19 @@ function renderLiveProvider(prov) {
     const liveFavKey = 'live:' + (it.magnet || it.url || it.name);
     const liveIsFav = favorites.some(f => f.key === liveFavKey);
     const liveShelved = shelf.some(s => s.key === liveFavKey);
-    item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}">
+    // a text result can be saved locally for offline reading; once saved it
+    // opens from disk (no re-fetch) and is marked with a 💾 badge
+    const saved = (kind === 'text' && it.url) ? savedByUrl[it.url] : null;
+    if (saved) item.classList.add('has-savetext');
+    const saveBtn = (kind === 'text' && it.url)
+      ? `<button type="button" class="savetext${saved ? ' on' : ''}" data-saveurl="${esc(it.url)}" data-savename="${esc(it.name)}" data-saveprovider="${esc(prov.id)}" data-savedid="${saved ? esc(saved.id) : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${saved ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${saved ? '💾' : '⬇'}</button>`
+      : '';
+    const metaLine = (it.meta || kind) + (saved ? ' · 💾 saved' : '');
+    item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}" data-saved="${saved ? esc(saved.id) : ''}">
         <div class="name">${kindIcon[kind] || '&#128196;'} ${esc(it.name)}</div>
-        <div class="meta">${esc(it.meta || kind)}</div>
+        <div class="meta">${esc(metaLine)}</div>
       </button>
+      ${saveBtn}
       <button type="button" class="shelfbtn${liveShelved ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>
       <button type="button" class="fav${liveIsFav ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveIsFav ? 'Remove from favorites' : 'Add to favorites'}">${liveIsFav ? '★' : '☆'}</button>`;
     el.appendChild(item);
@@ -989,6 +1080,74 @@ async function toggleShelf(btn) {
 
 // remove a book from the personal shelf (🗑 on My Shelf rows). Unlike
 // un-favoriting, this drops the book from the shelf entirely.
+// 💾 save a live text result to disk so it can be read offline (no re-fetch,
+// no CORS). Re-saving the same URL is a no-op on the server.
+async function saveText(btn) {
+  try {
+    await j('/api/text/save', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ url: btn.dataset.saveurl, name: btn.dataset.savename || '', provider: btn.dataset.saveprovider || 'local' }) });
+    // auto-add to the shelf so the saved text shows up in My Shelf (idempotent)
+    const d = btn.dataset;
+    if (d.favkey) {
+      await j('/api/shelf', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
+          ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
+          magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local' }) });
+    }
+    refresh();
+  } catch (e) { alert('could not save: ' + e.message); }
+}
+
+// 📁 open the folder a local (folder) paper lives in, in the OS file manager
+async function openPdfFolder(btn) {
+  try {
+    await j(`/api/pdfs/${btn.dataset.pdf}/open-folder`, { method: 'POST' });
+  } catch (e) { alert('could not open folder: ' + e.message); }
+}
+
+// remove a locally-saved text (with a confirm, since it deletes the file)
+async function removeSavedText(btn) {
+  const ok = await askConfirm('Remove this saved text and delete it from disk?');
+  if (!ok) return;
+  try {
+    await j(`/api/texts/${btn.dataset.savedid}`, { method: 'DELETE' });
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+// open a locally-saved text in the in-site reader (served from disk, so it
+// works offline). Position restore mirrors openTextResult.
+async function openSavedText(id, name, key) {
+  openShelfKey = key || null;
+  hideLoading();
+  document.getElementById('pages').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('html-frame').style.display = 'none';
+  hideEpub();
+  const status = document.getElementById('status');
+  status.textContent = `loading ${name || 'text'}…`;
+  status.style.display = '';
+  const viewer = document.getElementById('text-viewer');
+  const content = document.getElementById('text-content');
+  content.textContent = '';
+  viewer.style.display = '';
+  try {
+    const r = await j(`/api/texts/${id}`);
+    content.textContent = await r.text();
+    status.textContent = name || 'text';
+    const pos = key ? shelfPos(key) : null;
+    if (pos && pos.scroll > 0.005) {
+      const max = viewer.scrollHeight - viewer.clientHeight;
+      viewer.scrollTop = Math.max(0, Math.min(max, pos.scroll * max));
+    }
+    updateTextProgress();
+  } catch (e) {
+    status.textContent = `error: ${e.message}`;
+    viewer.style.display = 'none';
+  }
+}
+
 async function removeFromShelf(btn) {
   const key = btn.dataset.rmkey;
   if (!confirm('Remove this book from your shelf?')) return;
@@ -1027,6 +1186,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
   // them from the shelf entry when one exists — keeps the Favorites view in
   // sync with the My Shelf view for the same book
   const shelfByKey = Object.fromEntries(shelf.map(s => [s.key, s]));
+  const savedByUrl = Object.fromEntries(savedTexts.map(t => [t.url, t]));
   const rows = [];
   for (const f of source) {
     const eff = shelfByKey[f.key] || f;
@@ -1046,21 +1206,27 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       if (!p) continue; // PDF removed
       rows.push({ kind: 'pdf', name: p.name,
         meta: [p.source === 'folder' ? 'from folder' : 'direct file', fmtSize(p.size), p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · '),
-        pdf: p.id, fav: f, eff });
+        pdf: p.id, source: p.source, fav: f, eff });
     } else { // live result (Gutenberg text/html/epub/pdf, or a torrent magnet)
-      rows.push({ kind: 'live', name: f.name, meta: f.kind || 'saved',
-        url: f.url, magnet: f.magnet, kind: f.kind, fav: f, eff });
+      const saved = (f.kind === 'text' && f.url) ? savedByUrl[f.url] : null;
+      rows.push({ kind: 'live', name: f.name, meta: (f.kind || 'saved') + (saved ? ' · 💾 saved' : ''),
+        url: f.url, magnet: f.magnet, kind: f.kind, saved: saved ? saved.id : '', fav: f, eff });
     }
   }
   for (const r of rows) {
     const item = document.createElement('div');
     item.dataset.shelfkey = r.fav.key;
+    // 💾 save/remove a text locally (live text rows only); saved rows open from disk
+    const saveBtn = (r.kind === 'text' && r.url)
+      ? `<button type="button" class="savetext${r.saved ? ' on' : ''}" data-saveurl="${esc(r.url)}" data-savename="${esc(r.name)}" data-saveprovider="${esc(r.fav.provider || 'local')}" data-savedid="${esc(r.saved || '')}" data-favkey="${esc(r.fav.key)}" data-favtype="${esc(r.fav.type)}" data-favname="${esc(r.fav.name)}" data-favurl="${esc(r.fav.url || '')}" data-favmagnet="${esc(r.fav.magnet || '')}" data-favkind="${esc(r.fav.kind || '')}" data-favprovider="${esc(r.fav.provider || 'local')}" title="${r.saved ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${r.saved ? '💾' : '⬇'}</button>`
+      : '';
     item.className = 'titem' + (showStatus ? ' has-status' : '') + (showTags ? ' has-tags' : '')
-      + (showStar && showStatus ? ' has-fav-status' : '') + (showRemove ? ' has-remove' : '');
+      + (showStar && showStatus ? ' has-fav-status' : '') + (showRemove ? ' has-remove' : '')
+      + (saveBtn ? ' has-savetext' : '');
     let openBtn;
     if (r.kind === 'torrent') openBtn = `<button type="button" class="open" data-ih="${r.ih}" data-name="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">${esc(r.name)}</div><div class="meta">${r.meta}</div><div class="bar"><div style="width:${r.bar}%"></div></div></button>`;
     else if (r.kind === 'pdf') openBtn = `<button type="button" class="open" data-pdf="${r.pdf}" data-name="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">&#128196; ${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
-    else openBtn = `<button type="button" class="open" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
+    else openBtn = `<button type="button" class="open" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}" data-saved="${esc(r.saved || '')}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
     // favorite state is read from the favorites list (source of truth), so the
     // star is correct in both views: always on in Favorites, on/off in My Shelf
     const isFav = favorites.some(f => f.key === r.fav.key);
@@ -1083,7 +1249,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
     const rmBtn = showRemove
       ? `<button type="button" class="rmshelf" data-rmkey="${esc(r.fav.key)}" title="Remove from shelf">🗑</button>`
       : '';
-    item.innerHTML = openBtn + star + statusSel + tagBtn + rmBtn;
+    item.innerHTML = openBtn + saveBtn + star + statusSel + tagBtn + rmBtn;
     // where the reader last stopped (p. N for PDFs, % for text)
     const pos = r.eff;
     const posLabel = (pos.page > 1) ? `p. ${pos.page}` : (pos.scroll > 0.005 ? Math.round(pos.scroll * 100) + '%' : '');
@@ -1101,6 +1267,17 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       reset.textContent = '↺';
       item.appendChild(reset);
       item.classList.add('has-reset');
+    }
+    // 📁 local (folder) paper — opens the folder in the OS file manager
+    if (r.kind === 'pdf' && r.source === 'folder') {
+      const mark = document.createElement('button');
+      mark.type = 'button';
+      mark.className = 'localmark';
+      mark.dataset.pdf = r.pdf;
+      mark.title = 'Open folder';
+      mark.textContent = '📁';
+      item.appendChild(mark);
+      item.classList.add('has-local');
     }
     el.appendChild(item);
   }
@@ -1476,14 +1653,25 @@ function hideLoading() {
   document.getElementById('loading').style.display = 'none';
 }
 
+// tear down the EPUB viewer (epub.js keeps rendering into its div until
+// destroyed, so a stale book would otherwise linger behind the new view)
+function hideEpub() {
+  if (epubBook) { try { epubBook.destroy(); } catch (e) {} epubBook = null; }
+  epubRendition = null;
+  epubLoc = null;
+  document.getElementById('epub-viewer').style.display = 'none';
+}
+
 // hide the PDF viewer (and its status line / file list) so a previously open
 // PDF doesn't linger behind the loading page or a new torrent's file list
 function hidePdf() {
   document.getElementById('pdf-frame').style.display = 'none';
   document.getElementById('text-viewer').style.display = 'none';
   document.getElementById('html-frame').style.display = 'none';
+  hideEpub();
   document.getElementById('status').style.display = 'none';
   document.getElementById('pages').style.display = 'none';
+  updateTextProgress(); // clear the progress label now the text viewer is hidden
 }
 
 function showEmpty(msg) {
@@ -1495,6 +1683,7 @@ function showEmpty(msg) {
   document.getElementById('pdf-frame').style.display = 'none';
   document.getElementById('text-viewer').style.display = 'none';
   document.getElementById('html-frame').style.display = 'none';
+  hideEpub();
   document.getElementById('status').style.display = 'none';
 }
 
@@ -1653,18 +1842,18 @@ async function dropPdfFiles(pdfs) {
 
 function shelfPos(key) {
   const s = shelf.find(x => x.key === key);
-  return s ? { page: s.page || 0, scroll: s.scroll || 0 } : null;
+  return s ? { page: s.page || 0, scroll: s.scroll || 0, cfi: s.cfi || '' } : null;
 }
 
-function savePosition(key, page, scroll) {
+function savePosition(key, page, scroll, cfi) {
   if (!key) return;
   if (posTimer) clearTimeout(posTimer);
   posTimer = setTimeout(async () => {
     try {
       await j('/api/shelf/position', { method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ key, page, scroll }) });
+        body: JSON.stringify({ key, page, scroll, cfi: cfi || '' }) });
       const s = shelf.find(x => x.key === key);
-      if (s) { s.page = page; s.scroll = scroll; }
+      if (s) { s.page = page; s.scroll = scroll; s.cfi = cfi || ''; }
       if (s && s.status === 'toread' && (page > 1 || scroll > 0.02)) s.status = 'reading';
       updatePosHint(key);
     } catch (e) { /* not on shelf or server hiccup — nothing to do */ }
@@ -1690,6 +1879,14 @@ function currentPos() {
     const max = tv.scrollHeight - tv.clientHeight;
     return { page: 0, scroll: max > 0 ? Math.min(1, tv.scrollTop / max) : 0 };
   }
+  const ev = document.getElementById('epub-viewer');
+  if (ev.style.display !== 'none' && epubLoc) {
+    // while the book is still loading there's no location yet — reporting
+    // nothing here would wipe the saved position on the next poll
+    const pct = (typeof epubLoc.percentage === 'number') ? epubLoc.percentage : 0;
+    const cfi = (epubLoc.start && epubLoc.start.cfi) || epubLoc.cfi || '';
+    return { page: 0, scroll: pct, cfi };
+  }
   return null;
 }
 
@@ -1698,7 +1895,7 @@ function currentPos() {
 function pollPosition() {
   if (!openShelfKey) return;
   const p = currentPos();
-  if (p) savePosition(openShelfKey, p.page, p.scroll);
+  if (p) savePosition(openShelfKey, p.page, p.scroll, p.cfi);
 }
 
 // flush the position immediately (page hide / beforeunload)
@@ -1710,7 +1907,7 @@ function flushPosition() {
   if (p) {
     const key = openShelfKey;
     j('/api/shelf/position', { method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ key, page: p.page, scroll: p.scroll }) }).catch(() => {});
+      body: JSON.stringify({ key, page: p.page, scroll: p.scroll, cfi: p.cfi || '' }) }).catch(() => {});
   }
 }
 
@@ -1756,10 +1953,10 @@ async function resetProgress(btn) {
   if (posTimer) { clearTimeout(posTimer); posTimer = null; }
   try {
     await j('/api/shelf/position', { method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ key, page: 0, scroll: 0 }) });
+      body: JSON.stringify({ key, page: 0, scroll: 0, cfi: '' }) });
   } catch (e) { /* not on shelf — nothing to reset */ }
   const s = shelf.find(x => x.key === key);
-  if (s) { s.page = 0; s.scroll = 0; }
+  if (s) { s.page = 0; s.scroll = 0; s.cfi = ''; }
   updatePosHint(key);
   if (key === openShelfKey) {
     const pdf = document.getElementById('pdf-frame');
@@ -1768,6 +1965,10 @@ async function resetProgress(btn) {
     }
     const tv = document.getElementById('text-viewer');
     if (tv.style.display !== 'none') tv.scrollTop = 0;
+    const ev = document.getElementById('epub-viewer');
+    if (ev.style.display !== 'none' && epubRendition) {
+      try { epubRendition.display(0); } catch (e) { /* book not ready */ }
+    }
   }
 }
 
@@ -1778,6 +1979,7 @@ function openPdf(ih, f, name, size, key) {
   document.getElementById('empty').style.display = 'none';
   document.getElementById('text-viewer').style.display = 'none';
   document.getElementById('html-frame').style.display = 'none';
+  hideEpub();
   const status = document.getElementById('status');
   status.textContent = name;
   status.style.display = '';
@@ -1800,6 +2002,7 @@ function openDirectPdf(id, name, size, key) {
   document.getElementById('empty').style.display = 'none';
   document.getElementById('text-viewer').style.display = 'none';
   document.getElementById('html-frame').style.display = 'none';
+  hideEpub();
   const status = document.getElementById('status');
   status.textContent = name;
   status.style.display = '';
@@ -1819,6 +2022,116 @@ async function openDirectPdfById(id, name, key) {
   openDirectPdf(id, name, size, key);
 }
 
+// ---- text reader: font size (persisted across sessions) ----
+let textFontSize = Number(localStorage.getItem('textFontSize')) || 16;
+function applyTextFontSize() {
+  const pre = document.getElementById('text-content');
+  if (pre) pre.style.fontSize = textFontSize + 'px';
+  const label = document.getElementById('font-size-label');
+  if (label) label.textContent = textFontSize;
+}
+function changeTextFontSize(delta) {
+  textFontSize = Math.max(10, Math.min(32, textFontSize + delta));
+  localStorage.setItem('textFontSize', String(textFontSize));
+  applyTextFontSize();
+}
+document.getElementById('font-dec').addEventListener('click', () => changeTextFontSize(-1));
+document.getElementById('font-inc').addEventListener('click', () => changeTextFontSize(1));
+applyTextFontSize();
+
+// font family (persisted) — the <pre> default is serif; sans/mono override it
+const FONT_FAMILIES = {
+  serif: "Georgia,'Times New Roman',serif",
+  sans: "system-ui,-apple-system,'Segoe UI',sans-serif",
+  mono: "'Cascadia Code',Consolas,'SF Mono',Menlo,monospace"
+};
+let textFontFamily = localStorage.getItem('textFontFamily') || 'serif';
+function applyTextFontFamily() {
+  const pre = document.getElementById('text-content');
+  if (pre) pre.style.fontFamily = FONT_FAMILIES[textFontFamily] || FONT_FAMILIES.serif;
+  const sel = document.getElementById('font-family');
+  if (sel) sel.value = textFontFamily;
+}
+document.getElementById('font-family').addEventListener('change', (e) => {
+  textFontFamily = e.target.value;
+  localStorage.setItem('textFontFamily', textFontFamily);
+  applyTextFontFamily();
+});
+applyTextFontFamily();
+
+// reading theme (persisted) — dark is the default; light/sepia add a class
+let textTheme = localStorage.getItem('textTheme') || 'dark';
+function applyTextTheme() {
+  const viewer = document.getElementById('text-viewer');
+  viewer.classList.remove('theme-light', 'theme-sepia');
+  if (textTheme !== 'dark') viewer.classList.add('theme-' + textTheme);
+  const sel = document.getElementById('text-theme');
+  if (sel) sel.value = textTheme;
+}
+document.getElementById('text-theme').addEventListener('change', (e) => {
+  textTheme = e.target.value;
+  localStorage.setItem('textTheme', textTheme);
+  applyTextTheme();
+});
+applyTextTheme();
+
+// line spacing (persisted) — line-height on the <pre>
+const LINE_SPACING = { compact: 1.4, normal: 1.7, relaxed: 2.0 };
+let textSpacing = localStorage.getItem('textSpacing') || 'normal';
+function applyTextSpacing() {
+  const pre = document.getElementById('text-content');
+  if (pre) pre.style.lineHeight = LINE_SPACING[textSpacing] || LINE_SPACING.normal;
+  const sel = document.getElementById('text-spacing');
+  if (sel) sel.value = textSpacing;
+}
+document.getElementById('text-spacing').addEventListener('change', (e) => {
+  textSpacing = e.target.value;
+  localStorage.setItem('textSpacing', textSpacing);
+  applyTextSpacing();
+});
+applyTextSpacing();
+
+// text width (persisted) — max-width of the reading column
+const TEXT_WIDTHS = { narrow: 560, normal: 720, wide: 960 };
+let textWidth = localStorage.getItem('textWidth') || 'normal';
+function applyTextWidth() {
+  const pre = document.getElementById('text-content');
+  if (pre) pre.style.maxWidth = (TEXT_WIDTHS[textWidth] || TEXT_WIDTHS.normal) + 'px';
+  const sel = document.getElementById('text-width');
+  if (sel) sel.value = textWidth;
+}
+document.getElementById('text-width').addEventListener('change', (e) => {
+  textWidth = e.target.value;
+  localStorage.setItem('textWidth', textWidth);
+  applyTextWidth();
+});
+applyTextWidth();
+
+// live reading progress — % through the text, shown at the right of the toolbar
+function updateTextProgress() {
+  const viewer = document.getElementById('text-viewer');
+  const label = document.getElementById('text-progress');
+  if (!viewer || !label) return;
+  if (viewer.style.display === 'none') { label.textContent = ''; return; }
+  const pre = document.getElementById('text-content');
+  if (!pre || !pre.textContent) { label.textContent = ''; return; }
+  const max = viewer.scrollHeight - viewer.clientHeight;
+  const pct = max > 0 ? Math.min(100, Math.round(viewer.scrollTop / max * 100)) : 100;
+  label.textContent = pct + '%';
+}
+document.getElementById('text-viewer').addEventListener('scroll', updateTextProgress, { passive: true });
+
+// keyboard shortcuts for the text reader — +/= enlarge, - shrink. Only active
+// while the text viewer is open and the user isn't typing in a field.
+document.addEventListener('keydown', (e) => {
+  const viewer = document.getElementById('text-viewer');
+  if (!viewer || viewer.style.display === 'none') return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+  if (e.key === '+' || e.key === '=') { e.preventDefault(); changeTextFontSize(1); }
+  else if (e.key === '-' || e.key === '_') { e.preventDefault(); changeTextFontSize(-1); }
+});
+
 // open a plain-text result in the in-site reader (fetched via /api/text to
 // dodge CORS — the browser can't fetch gutenberg.org directly)
 async function openTextResult(url, name, key) {
@@ -1828,6 +2141,7 @@ async function openTextResult(url, name, key) {
   document.getElementById('empty').style.display = 'none';
   document.getElementById('pdf-frame').style.display = 'none';
   document.getElementById('html-frame').style.display = 'none';
+  hideEpub();
   const status = document.getElementById('status');
   status.textContent = `loading ${name || 'text'}…`;
   status.style.display = '';
@@ -1845,6 +2159,7 @@ async function openTextResult(url, name, key) {
       const max = viewer.scrollHeight - viewer.clientHeight;
       viewer.scrollTop = Math.max(0, Math.min(max, pos.scroll * max));
     }
+    updateTextProgress();
   } catch (e) {
     status.textContent = `error: ${e.message}`;
     viewer.style.display = 'none';
@@ -1860,12 +2175,67 @@ function openHtmlResult(url, name, key) {
   document.getElementById('empty').style.display = 'none';
   document.getElementById('pdf-frame').style.display = 'none';
   document.getElementById('text-viewer').style.display = 'none';
+  hideEpub();
   const status = document.getElementById('status');
   status.textContent = name || 'html';
   status.style.display = '';
   const frame = document.getElementById('html-frame');
   frame.style.display = '';
   frame.src = `/api/html?url=${encodeURIComponent(url)}`;
+}
+
+// open an EPUB in the in-site reader (epub.js). The file is fetched via
+// /api/epub to dodge CORS, then handed to epub.js as an ArrayBuffer.
+// Position is tracked by CFI (the EPUB's canonical location) and shown as a
+// derived "p. N" from the location percentage.
+async function openEpubResult(url, name, key) {
+  openShelfKey = key || null;
+  hideLoading();
+  document.getElementById('pages').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('text-viewer').style.display = 'none';
+  document.getElementById('html-frame').style.display = 'none';
+  hideEpub();
+  const status = document.getElementById('status');
+  status.textContent = `loading ${name || 'EPUB'}…`;
+  status.style.display = '';
+  const viewer = document.getElementById('epub-viewer');
+  viewer.style.display = '';
+  try {
+    const r = await j(`/api/epub?url=${encodeURIComponent(url)}`);
+    const buf = await r.arrayBuffer();
+    const book = ePub(buf);
+    epubBook = book;
+    const rendition = book.renderTo(viewer, { width: '100%', height: '100%', flow: 'paginated' });
+    epubRendition = rendition;
+    // match the text reader's serif look (epub.js 0.3.x: themes.override per property)
+    rendition.themes.override('font-family', "Georgia,'Times New Roman',serif");
+    rendition.themes.override('font-size', '16px');
+    rendition.themes.override('line-height', '1.7');
+    // locations power the % hint + CFI restore; needs the book rendered
+    await book.ready.then(() => book.locations.generate(1600));
+    const pos = key ? shelfPos(key) : null;
+    // display() lives on the rendition; a CFI resumes where the reader left off
+    await rendition.display(pos && pos.cfi ? pos.cfi : undefined);
+    status.textContent = name || 'EPUB';
+    // relocated fires on every page turn — track the location (currentLocation()
+    // is async, so the event is the only synchronous source) and save progress
+    rendition.on('relocated', (loc) => {
+      if (!loc) return;
+      epubLoc = loc;
+      // the relocated Location carries its own percentage (0..1) and CFI;
+      // loc.start is a Cfi object, so read the string off it
+      const pct = (typeof loc.percentage === 'number') ? loc.percentage : 0;
+      const cfi = (loc.start && loc.start.cfi) || loc.cfi || '';
+      // EPUBs reflow (no real pages) — track a percentage like the text reader;
+      // the CFI is the actual restore point
+      if (openShelfKey) savePosition(openShelfKey, 0, pct, cfi);
+    });
+  } catch (e) {
+    status.textContent = `error: ${e.message}`;
+    hideEpub();
+  }
 }
 
 // open a live plugin search result: download its PDF (deduped by URL) and open it
@@ -1927,9 +2297,14 @@ document.getElementById('catalog').addEventListener('click', (e) => {
   if (liveBtn) {
     e.preventDefault();
     if (liveBtn.dataset.livemagnet) trackLiveMagnet(liveBtn.dataset.livemagnet, liveBtn.dataset.livename || '');
-    // text and HTML open in the in-site reader; other non-PDF editions (EPUB) open in a new tab
-    else if (liveBtn.dataset.livekind === 'text') openTextResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+    // text, HTML and EPUB open in the in-site reader; other non-PDF editions open in a new tab
+    else if (liveBtn.dataset.livekind === 'text') {
+      // a saved text opens from disk (offline); otherwise it's fetched live
+      if (liveBtn.dataset.saved) openSavedText(liveBtn.dataset.saved, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+      else openTextResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+    }
     else if (liveBtn.dataset.livekind === 'html') openHtmlResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+    else if (liveBtn.dataset.livekind === 'epub') openEpubResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
     else if (liveBtn.dataset.livekind && liveBtn.dataset.livekind !== 'pdf') window.open(liveBtn.dataset.liveurl, '_blank', 'noopener');
     else openLiveResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
     return;
@@ -1960,7 +2335,22 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     toggleFavorite(favBtn);
     return;
   }
-  // 📖 add/remove from the personal shelf (browse rows)
+  // � save/remove a text locally for offline reading (live text rows)
+  // 📁 open the folder a local paper lives in (OS file manager)
+  const localBtn = e.target.closest('button.localmark[data-pdf]');
+  if (localBtn) {
+    e.preventDefault();
+    openPdfFolder(localBtn);
+    return;
+  }
+  const saveBtn = e.target.closest('button.savetext[data-saveurl]');
+  if (saveBtn) {
+    e.preventDefault();
+    if (saveBtn.dataset.savedid) removeSavedText(saveBtn);
+    else saveText(saveBtn);
+    return;
+  }
+  // �📖 add/remove from the personal shelf (browse rows)
   const shelfBtn = e.target.closest('button.shelfbtn[data-favkey]');
   if (shelfBtn) {
     e.preventDefault();

@@ -14,6 +14,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -37,6 +39,8 @@ BASE = Path(__file__).parent
 UPLOAD_DIR = BASE / ".torrents"
 PDF_DIR = BASE / ".pdfs"          # direct .pdf files dropped into the reader
 PDFS_INDEX = BASE / "pdfs.json"   # registry of direct PDFs (id -> name/size/provider)
+TEXT_DIR = BASE / ".texts"        # plain-text documents saved locally for offline reading
+TEXTS_INDEX = BASE / "texts.json"  # registry of saved texts (id -> name/size/url/provider)
 FAVORITES_INDEX = BASE / "favorites.json"  # user's favorite documents (global)
 SHELF_INDEX = BASE / "shelf.json"  # user's personal shelf (superset of favorites)
 @asynccontextmanager
@@ -784,6 +788,19 @@ def _save_shelf(shelf: list) -> None:
     tmp.replace(SHELF_INDEX)
 
 
+def _load_texts() -> dict:
+    try:
+        return json.loads(TEXTS_INDEX.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_texts(reg: dict) -> None:
+    tmp = TEXTS_INDEX.with_suffix(".tmp")
+    tmp.write_text(json.dumps(reg, indent=2), encoding="utf-8")
+    tmp.replace(TEXTS_INDEX)
+
+
 def _pdf_meta(path: str) -> dict:
     """Extract filterable metadata from a PDF (title/author/subject/keywords/
     page count) plus the file's mtime. Returns {} on any error so a broken or
@@ -874,6 +891,30 @@ def list_pdfs() -> JSONResponse:
     ])
 
 
+@app.post("/api/pdfs/{pid}/open-folder")
+def open_pdf_folder(pid: str) -> JSONResponse:
+    """Open the folder a folder-loaded PDF lives in, in the OS file manager.
+    Only folder PDFs have a real path; uploaded PDFs live in .pdfs/."""
+    reg = _load_pdfs()
+    m = reg.get(pid)
+    if not m:
+        raise HTTPException(404, "pdf not found")
+    path = m.get("path")
+    if not path or not Path(path).is_file():
+        raise HTTPException(400, "not a folder PDF")
+    folder = Path(path).parent
+    try:
+        if os.name == "nt":
+            os.startfile(str(folder))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(folder)])
+        else:
+            subprocess.Popen(["xdg-open", str(folder)])
+    except Exception as exc:
+        raise HTTPException(500, f"could not open folder: {exc}")
+    return JSONResponse({"ok": True, "path": str(folder)})
+
+
 @app.delete("/api/pdfs/{pid}")
 def delete_pdf(pid: str) -> JSONResponse:
     reg = _load_pdfs()
@@ -917,6 +958,7 @@ class ShelfPositionRequest(BaseModel):
     key: str
     page: int = 0        # 1-based PDF page (0 = not a PDF / unknown)
     scroll: float = 0.0  # 0..1 fraction through a plain-text document
+    cfi: str = ""        # EPUB CFI (empty = not an EPUB)
 
 
 @app.get("/api/favorites")
@@ -1025,8 +1067,9 @@ def set_shelf_position(req: ShelfPositionRequest) -> JSONResponse:
         if s["key"] == req.key:
             s["page"] = req.page
             s["scroll"] = req.scroll
-            # actually reading (past the first page / a bit into the text)
-            # promotes a toread book to in-progress
+            s["cfi"] = req.cfi
+            # actually reading (past the first page — PDF or EPUB location — /
+            # a bit into the text) promotes a toread book to in-progress
             if s.get("status", "toread") == "toread" and (req.page > 1 or req.scroll > 0.02):
                 s["status"] = "reading"
             _save_shelf(shelf)
@@ -1130,6 +1173,92 @@ def proxy_html(url: str) -> Response:
     except Exception as exc:
         raise HTTPException(502, f"could not fetch html: {exc}")
     return Response(data, media_type=ctype)
+
+
+@app.get("/api/epub")
+def proxy_epub(url: str) -> Response:
+    """Fetch a remote EPUB and return the raw bytes so the in-site reader
+    (epub.js) can parse it (the browser can't fetch gutenberg.org directly —
+    no CORS). Only http(s) URLs are allowed."""
+    if not re.match(r"^https?://", url):
+        raise HTTPException(400, "only http(s) URLs are allowed")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "pdf-torrent-reader/1.0"})
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = resp.read()
+    except Exception as exc:
+        raise HTTPException(502, f"could not fetch epub: {exc}")
+    return Response(data, media_type="application/epub+zip")
+
+
+# ---------- saved texts ----------
+# A remote plain-text document can be saved to disk under .texts/ so it can be
+# read offline (no re-fetch, no CORS). The registry (texts.json) maps id ->
+# metadata so the UI can mark which live results are already saved locally.
+
+class SaveTextRequest(BaseModel):
+    url: str
+    name: str = ""
+    provider: str = "local"
+
+
+@app.post("/api/text/save")
+def save_text(req: SaveTextRequest) -> JSONResponse:
+    """Fetch a remote plain-text document and store it locally for offline
+    reading. Re-saving the same URL is a no-op (deduped by URL)."""
+    if not re.match(r"^https?://", req.url):
+        raise HTTPException(400, "only http(s) URLs are allowed")
+    reg = _load_texts()
+    for tid, m in reg.items():
+        if m.get("url") == req.url:
+            return JSONResponse({"ok": True, "id": tid, "added": False})
+    try:
+        r = urllib.request.Request(req.url, headers={"User-Agent": "pdf-torrent-reader/1.0"})
+        with urllib.request.urlopen(r, timeout=60) as resp:
+            data = resp.read()
+    except Exception as exc:
+        raise HTTPException(502, f"could not fetch text: {exc}")
+    if not data.strip():
+        raise HTTPException(400, "empty document")
+    TEXT_DIR.mkdir(exist_ok=True)
+    tid = uuid.uuid4().hex
+    (TEXT_DIR / f"{tid}.txt").write_bytes(data)
+    reg[tid] = {"name": req.name, "size": len(data), "url": req.url,
+                "provider": req.provider, "added_at": time.time()}
+    _save_texts(reg)
+    return JSONResponse({"ok": True, "id": tid, "added": True})
+
+
+@app.get("/api/texts")
+def list_texts() -> JSONResponse:
+    return JSONResponse([
+        {"id": tid, "name": m["name"], "size": m["size"], "url": m.get("url", ""),
+         "provider": m.get("provider", "local")}
+        for tid, m in _load_texts().items()
+    ])
+
+
+@app.get("/api/texts/{tid}")
+def get_text(tid: str) -> Response:
+    """Serve a saved text so the in-site reader can show it offline."""
+    reg = _load_texts()
+    if tid not in reg:
+        raise HTTPException(404, "text not found")
+    path = TEXT_DIR / f"{tid}.txt"
+    if not path.is_file():
+        raise HTTPException(404, "text file missing")
+    return Response(path.read_bytes(), media_type="text/plain; charset=utf-8")
+
+
+@app.delete("/api/texts/{tid}")
+def delete_text(tid: str) -> JSONResponse:
+    reg = _load_texts()
+    if tid not in reg:
+        raise HTTPException(404, "text not found")
+    del reg[tid]
+    _save_texts(reg)
+    (TEXT_DIR / f"{tid}.txt").unlink(missing_ok=True)
+    return JSONResponse({"ok": True})
 
 
 def _ih_from_magnet(magnet: str) -> str | None:
