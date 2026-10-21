@@ -125,12 +125,12 @@
   /* when a local paper also has a position hint, shift the hint + reset left */
   aside .titem.has-local .resetpos { right:42px; }
   aside .titem.has-local .poshint { right:67px; }
-  /* when a downloaded PDF (💾 saved + 📁) also has a position hint, shift the
-     hint + reset further left to clear both bottom-right marks. The 💾 badge
-     spans right:42→101 (59px wide), so ↺ sits at right:107 and the hint at
-     right:132 (matching the 6px/4px gaps used by .has-local) */
-  aside .titem.has-savedpdf.has-reset .resetpos { right:107px; }
-  aside .titem.has-savedpdf.has-reset .poshint { right:132px; }
+  /* when a downloaded PDF (💾 + 📁) also has a position hint, shift the hint
+     + reset further left to clear both bottom-right marks. The 💾 badge is
+     ~28px wide (right:42→70), so ↺ sits at right:76 and the hint at right:101
+     (matching the 6px/4px gaps used by .has-local) */
+  aside .titem.has-savedpdf.has-reset .resetpos { right:76px; }
+  aside .titem.has-savedpdf.has-reset .poshint { right:101px; }
   /* My Shelf rows stack three control rows (status / tag row / bottom row).
      Short (single-line) titles make the row shorter than the controls need, so
      the bottom row (💾/📁/hint/↺ at bottom:8) rises into the tag row (top:33).
@@ -733,7 +733,7 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
         </div>` + (fromFolder
           ? `<button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>`
           : (saved
-            ? `<span class="savedmark" title="Downloaded from a link — saved on disk">💾 saved</span><button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>`
+            ? `<span class="savedmark" title="Downloaded from a link — saved on disk">💾</span><button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>`
             : ''));
       el.appendChild(item);
     }
@@ -933,7 +933,7 @@ function renderLiveProvider(prov, directPdfs) {
     const savePdfBtn = (kind === 'pdf' && it.url)
       ? `<button type="button" class="savepdf${dl ? ' on' : ''}" data-pdfurl="${esc(it.url)}" data-pdfname="${esc(it.name)}" data-pdfid="${dl ? esc(dl.id) : ''}" title="${dl ? 'Downloaded — click to open' : 'Download for later reading'}">${dl ? '💾' : '⬇'}</button>`
       : '';
-    const metaLine = (it.meta || kind) + (saved ? ' · 💾 saved' : '') + (dl ? ' · 💾 downloaded' : '');
+    const metaLine = (it.meta || kind) + (dl ? ' · 💾 downloaded' : '');
     item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}" data-saved="${saved ? esc(saved.id) : ''}">
         <div class="name">${kindIcon[kind] || '&#128196;'} ${esc(it.name)}</div>
         <div class="meta">${esc(metaLine)}</div>
@@ -1246,7 +1246,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
         pdf: p.id, source: p.source, url: p.url || '', fav: f, eff });
     } else { // live result (Gutenberg text/html/epub/pdf, or a torrent magnet)
       const saved = (f.kind === 'text' && f.url) ? savedByUrl[f.url] : null;
-      rows.push({ kind: 'live', name: f.name, meta: (f.kind || 'saved') + (saved ? ' · 💾 saved' : ''),
+      rows.push({ kind: 'live', name: f.name, meta: (f.kind || 'saved'),
         url: f.url, magnet: f.magnet, kind: f.kind, saved: saved ? saved.id : '', fav: f, eff });
     }
   }
@@ -1316,12 +1316,12 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       item.appendChild(mark);
       item.classList.add('has-local');
     }
-    // 💾 saved + 📁 for a PDF downloaded from a link (same as the browse view)
+    // 💾 + 📁 for a PDF downloaded from a link (same as the browse view)
     if (r.kind === 'pdf' && r.source !== 'folder' && r.url) {
       const badge = document.createElement('span');
       badge.className = 'savedmark';
       badge.title = 'Downloaded from a link — saved on disk';
-      badge.textContent = '💾 saved';
+      badge.textContent = '💾';
       item.appendChild(badge);
       const mark = document.createElement('button');
       mark.type = 'button';
