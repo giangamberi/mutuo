@@ -18,10 +18,13 @@
   #resizer::after { content:''; position:absolute; top:0; right:4px; width:2px; height:100%; background:transparent; }
   #resizer:hover::after, #resizer.dragging::after { background:var(--acc); }
   /* minimize the sidebar so the reader can focus on the text */
-  #sidebar-top { display:flex; justify-content:flex-end; padding:4px 6px 0; }
+  #sidebar-top { display:flex; align-items:center; gap:6px; padding:4px 6px 0; }
   #sidebar-top #minimize-btn { padding:2px 9px; font-size:12px; line-height:1.4; }
+  /* Providers/Plugins sub-tabs live in the top bar, left of the minimize btn */
+  #sidebar-top .subtabs { flex:1; padding:0; }
   aside.minimized { width:34px !important; min-width:34px !important; }
   aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; }
+  aside.minimized #sidebar-top .subtabs { display:none; }
   aside.minimized #sidebar-row, aside.minimized #resizer { display:none; }
   /* left icon rail: Shelf / Favorites / Reading */
   #sidebar-row { flex:1; display:flex; min-height:0; }
@@ -464,6 +467,7 @@
 <main>
   <aside>
     <div id="sidebar-top">
+      <div id="shelf-subtabs" class="subtabs" style="display:none"></div>
       <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
     </div>
     <div id="sidebar-row">
@@ -1008,8 +1012,11 @@ function renderShelfTabs() {
   el.style.display = '';
   el.innerHTML = '';
   // sub-view toggle: Providers (the provider tabs) or Plugins (the manager)
-  const sub = document.createElement('div');
-  sub.className = 'subtabs grow';
+  // the Providers/Plugins toggle lives in the top bar (next to the minimize
+  // button), not in the #tabs list area
+  const sub = document.getElementById('shelf-subtabs');
+  sub.style.display = '';
+  sub.innerHTML = '';
   const mkSub = (label, key) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -1020,7 +1027,6 @@ function renderShelfTabs() {
   };
   mkSub('Providers', 'providers');
   mkSub('Plugins', 'plugins');
-  el.appendChild(sub);
   if (shelfSub === 'plugins') return; // the plugin manager fills the list below
   for (const p of providers) {
     const wrap = document.createElement('span');
@@ -1304,6 +1310,8 @@ function buildStatusTabs(activeSub, setActive) {
   const el = document.getElementById('tabs');
   el.style.display = '';
   el.innerHTML = '';
+  // the Providers/Plugins toggle only belongs to the Shelf (browse) view
+  document.getElementById('shelf-subtabs').style.display = 'none';
   const sub = document.createElement('div');
   sub.className = 'subtabs grow';
   const mkSub = (label, key) => {
