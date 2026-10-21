@@ -115,9 +115,10 @@
     padding:2px 6px; cursor:pointer;
   }
   aside .titem .localmark:hover { border-color:var(--acc); color:var(--text); }
-  /* 💾 this PDF was downloaded from a link — it's on disk for later reading */
+  /* 💾 this PDF was downloaded from a link — it's on disk for later reading.
+     Sits to the LEFT of the 📁 open-folder button (right:8) so they don't overlap */
   aside .titem .savedmark {
-    position:absolute; bottom:8px; right:8px; font-size:11px; line-height:1;
+    position:absolute; bottom:8px; right:42px; font-size:11px; line-height:1;
     color:var(--acc); background:#0f1115; border:1px solid #2f4a7a; border-radius:6px;
     padding:2px 6px; pointer-events:none;
   }
@@ -723,7 +724,11 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
         <div class="menu">
           <button data-pdfact="open" data-pdf="${p.id}">Open</button>
           <button data-pdfact="remove" data-pdf="${p.id}" data-source="${fromFolder ? 'folder' : 'upload'}" class="danger">${fromFolder ? 'Remove from list…' : 'Remove &amp; delete…'}</button>
-        </div>` + (fromFolder ? `<button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>` : (saved ? `<span class="savedmark" title="Downloaded from a link — saved on disk">💾 saved</span>` : ''));
+        </div>` + (fromFolder
+          ? `<button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>`
+          : (saved
+            ? `<span class="savedmark" title="Downloaded from a link — saved on disk">💾 saved</span><button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>`
+            : ''));
       el.appendChild(item);
     }
     const shown = tItems.length + pItems.length;

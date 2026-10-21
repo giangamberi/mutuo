@@ -919,16 +919,21 @@ def list_pdfs() -> JSONResponse:
 
 @app.post("/api/pdfs/{pid}/open-folder")
 def open_pdf_folder(pid: str) -> JSONResponse:
-    """Open the folder a folder-loaded PDF lives in, in the OS file manager.
-    Only folder PDFs have a real path; uploaded PDFs live in .pdfs/."""
+    """Open the folder a PDF lives in, in the OS file manager. Folder-loaded
+    PDFs open their source folder; downloaded/uploaded PDFs open .pdfs/."""
     reg = _load_pdfs()
     m = reg.get(pid)
     if not m:
         raise HTTPException(404, "pdf not found")
     path = m.get("path")
-    if not path or not Path(path).is_file():
-        raise HTTPException(400, "not a folder PDF")
-    folder = Path(path).parent
+    if path and Path(path).is_file():
+        folder = Path(path).parent
+    else:
+        # downloaded/uploaded PDFs are stored in PDF_DIR as <pid>.pdf
+        candidate = PDF_DIR / f"{pid}.pdf"
+        if not candidate.is_file():
+            raise HTTPException(400, "file not found on disk")
+        folder = PDF_DIR
     try:
         if os.name == "nt":
             os.startfile(str(folder))  # type: ignore[attr-defined]
