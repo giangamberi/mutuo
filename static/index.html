@@ -95,6 +95,13 @@
   }
   aside .titem .savetext:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
   aside .titem .savetext.on { color:var(--acc); border-color:#2f4a7a; }
+  /* ⬇ download a PDF result for later reading — bottom-right of the row */
+  aside .titem .savepdf {
+    position:absolute; bottom:8px; right:8px; padding:3px 6px; font-size:12px; line-height:1;
+    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+  }
+  aside .titem .savepdf:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
+  aside .titem .savepdf.on { color:var(--acc); border-color:#2f4a7a; }
   /* when a saved text also has a position hint, the hint + reset shift left to
      make room for the save button in the bottom-right corner. Offsets account
      for the real button widths (💾 ~30px, ↺ ~21px, hint ~32px) so they never
@@ -610,7 +617,7 @@ async function refresh() {
 function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
   renderShelfTabs();
   const liveProv = providers.find(p => p.id === activeProvider && p.live);
-  if (liveProv) { renderLiveProvider(liveProv); return; }
+  if (liveProv) { renderLiveProvider(liveProv, directPdfs); return; }
   // leaving a live tab: restore the torrent-only controls it hid and drop
   // the live provider's config controls (sort/language/…) from the bar
   document.getElementById('sort').style.display = '';
@@ -820,7 +827,7 @@ function liveCfgValue(key) {
   return el ? el.value : '';
 }
 
-function renderLiveProvider(prov) {
+function renderLiveProvider(prov, directPdfs) {
   const el = document.getElementById('catalog');
   el.innerHTML = '';
   const sb = document.getElementById('searchbar');
@@ -884,6 +891,8 @@ function renderLiveProvider(prov) {
   }
   const kindIcon = { pdf: '&#128196;', text: '&#128221;', html: '&#127760;', epub: '&#128218;', torrent: '&#128279;' };
   const savedByUrl = Object.fromEntries(savedTexts.map(t => [t.url, t]));
+  // PDFs already downloaded to disk (for later reading) — matched by URL
+  const downloadedByUrl = Object.fromEntries(directPdfs.filter(p => p.url).map(p => [p.url, p]));
   for (const it of liveResults) {
     const item = document.createElement('div');
     item.className = 'titem has-shelf';
@@ -898,12 +907,19 @@ function renderLiveProvider(prov) {
     const saveBtn = (kind === 'text' && it.url)
       ? `<button type="button" class="savetext${saved ? ' on' : ''}" data-saveurl="${esc(it.url)}" data-savename="${esc(it.name)}" data-saveprovider="${esc(prov.id)}" data-savedid="${saved ? esc(saved.id) : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${saved ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${saved ? '💾' : '⬇'}</button>`
       : '';
-    const metaLine = (it.meta || kind) + (saved ? ' · 💾 saved' : '');
+    // a PDF result can be downloaded to disk for later reading; once downloaded
+    // it's marked with a 💾 badge and opens from the cached copy
+    const dl = (kind === 'pdf' && it.url) ? downloadedByUrl[it.url] : null;
+    const savePdfBtn = (kind === 'pdf' && it.url)
+      ? `<button type="button" class="savepdf${dl ? ' on' : ''}" data-pdfurl="${esc(it.url)}" data-pdfname="${esc(it.name)}" data-pdfid="${dl ? esc(dl.id) : ''}" title="${dl ? 'Downloaded — click to open' : 'Download for later reading'}">${dl ? '💾' : '⬇'}</button>`
+      : '';
+    const metaLine = (it.meta || kind) + (saved ? ' · 💾 saved' : '') + (dl ? ' · 💾 downloaded' : '');
     item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}" data-saved="${saved ? esc(saved.id) : ''}">
         <div class="name">${kindIcon[kind] || '&#128196;'} ${esc(it.name)}</div>
         <div class="meta">${esc(metaLine)}</div>
       </button>
       ${saveBtn}
+      ${savePdfBtn}
       <button type="button" class="shelfbtn${liveShelved ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>
       <button type="button" class="fav${liveIsFav ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveIsFav ? 'Remove from favorites' : 'Add to favorites'}">${liveIsFav ? '★' : '☆'}</button>`;
     el.appendChild(item);
@@ -2279,6 +2295,20 @@ async function openLiveResult(url, name, key) {
   }
 }
 
+// download a live PDF result to disk (Local provider) for later reading,
+// without opening it. Re-downloading the same URL is a no-op (deduped).
+async function downloadLivePdf(url, name) {
+  if (!url) return;
+  try {
+    await j('/api/pdf/add-url', { method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url, name }) });
+    toast(`downloaded ${name || 'PDF'} for later`);
+    refresh();
+  } catch (e) {
+    toast(`download failed: ${e.message}`);
+  }
+}
+
 // track a live plugin search result that is a torrent: add it to the catalog
 // (tagged with the plugin's provider) and to the session, like the magnet box
 async function trackLiveMagnet(magnet, name) {
@@ -2372,6 +2402,14 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     e.preventDefault();
     if (saveBtn.dataset.savedid) removeSavedText(saveBtn);
     else saveText(saveBtn);
+    return;
+  }
+  // ⬇ download a PDF result for later reading (or open it if already downloaded)
+  const savePdfBtn = e.target.closest('button.savepdf[data-pdfurl]');
+  if (savePdfBtn) {
+    e.preventDefault();
+    if (savePdfBtn.dataset.pdfid) openDirectPdfById(savePdfBtn.dataset.pdfid, savePdfBtn.dataset.pdfname || '', null);
+    else downloadLivePdf(savePdfBtn.dataset.pdfurl, savePdfBtn.dataset.pdfname || '');
     return;
   }
   // �📖 add/remove from the personal shelf (browse rows)

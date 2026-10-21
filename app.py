@@ -909,6 +909,7 @@ def list_pdfs() -> JSONResponse:
         {"id": pid, "name": m["name"], "size": m["size"],
          "provider": m.get("provider", "local"),
          "source": m.get("source", "upload"),
+         "url": m.get("url", ""),
          "title": m.get("title", ""), "author": m.get("author", ""),
          "subject": m.get("subject", ""), "keywords": m.get("keywords", ""),
          "pages": m.get("pages", 0), "mtime": m.get("mtime", 0)}
