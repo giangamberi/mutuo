@@ -109,10 +109,12 @@
   /* My Shelf rows stack three control rows (status / tag row / bottom row).
      Short (single-line) titles make the row shorter than the controls need, so
      the bottom row (💾/📁/hint/↺ at bottom:8) rises into the tag row (top:33).
-     A min-height guarantees room for all three rows. */
-  aside .titem.has-remove.has-reset,
-  aside .titem.has-remove.has-savetext,
-  aside .titem.has-remove.has-local { min-height:84px; }
+     The min-height goes on button.open (not .titem) so the clickable area
+     stretches to fill the row box — otherwise a short-title row leaves a
+     non-clickable strip at the bottom of the visible box. */
+  aside .titem.has-remove.has-reset button.open,
+  aside .titem.has-remove.has-savetext button.open,
+  aside .titem.has-remove.has-local button.open { min-height:84px; }
   /* reserve room for the row's right-side controls */
   aside .titem.has-shelf button.open { padding-right:90px; }
   aside .titem .status {
