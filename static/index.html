@@ -249,6 +249,17 @@
   #text-toolbar select { padding:3px 6px; font-size:12px; }
   #text-toolbar .tlabel { font-size:12px; color:var(--dim); min-width:26px; text-align:center; }
   #text-toolbar .tsep { width:1px; height:18px; background:#333a47; margin:0 2px; }
+  #text-search { width:130px; padding:3px 8px; font-size:12px; background:#0f1115; color:var(--text);
+    border:1px solid #333a47; border-radius:6px; }
+  #text-search:focus { outline:none; border-color:var(--acc); }
+  #text-search-count { font-size:11px; color:var(--dim); min-width:38px; text-align:center; }
+  /* search hits in the text; the current hit is accented */
+  #text-content mark { background:#3a3320; color:#ffd76a; border-radius:2px; }
+  #text-content mark.cur { background:var(--acc); color:#fff; }
+  #text-viewer.theme-light #text-content mark { background:#ffe9a3; color:#5c4a00; }
+  #text-viewer.theme-light #text-content mark.cur { background:var(--acc); color:#fff; }
+  #text-viewer.theme-sepia #text-content mark { background:#e8d9a8; color:#5c4a00; }
+  #text-viewer.theme-sepia #text-content mark.cur { background:var(--acc); color:#fff; }
   #text-progress { margin-left:auto; font-size:12px; color:var(--dim); min-width:34px; text-align:right; }
   #text-viewer pre { margin:0 auto; max-width:720px; padding:24px 28px 60px;
     font-family:Georgia,'Times New Roman',serif; font-size:16px; line-height:1.7;
@@ -535,6 +546,11 @@
         <button id="font-dec" type="button" title="Smaller text">A−</button>
         <span id="font-size-label" class="tlabel">16</span>
         <button id="font-inc" type="button" title="Larger text">A+</button>
+        <span class="tsep"></span>
+        <input id="text-search" type="search" placeholder="Search…" title="Search this text (Enter = next match)">
+        <button id="text-search-prev" type="button" title="Previous match">↑</button>
+        <button id="text-search-next" type="button" title="Next match">↓</button>
+        <span id="text-search-count"></span>
         <span class="tsep"></span>
         <select id="font-family" title="Font">
           <option value="serif">Serif</option>
@@ -1168,6 +1184,8 @@ async function openSavedText(id, name, key) {
   const viewer = document.getElementById('text-viewer');
   const content = document.getElementById('text-content');
   content.textContent = '';
+  clearTextSearch();
+  document.getElementById('text-search').value = '';
   viewer.style.display = '';
   try {
     const r = await j(`/api/texts/${id}`);
@@ -2197,6 +2215,74 @@ function updateTextProgress() {
 }
 document.getElementById('text-viewer').addEventListener('scroll', updateTextProgress, { passive: true });
 
+// in-text search — case-insensitive find with prev/next navigation. The text
+// is re-wrapped in <mark> spans on every keystroke (Gutenberg books are a few
+// MB at most, so a full re-highlight is cheap); the current hit gets .cur and
+// is scrolled into view.
+const textSearch = { matches: [], idx: -1 };
+function clearTextSearch() {
+  textSearch.matches = [];
+  textSearch.idx = -1;
+  const pre = document.getElementById('text-content');
+  pre.querySelectorAll('mark').forEach(m => m.replaceWith(document.createTextNode(m.textContent)));
+  const cnt = document.getElementById('text-search-count');
+  if (cnt) cnt.textContent = '';
+}
+function runTextSearch() {
+  const pre = document.getElementById('text-content');
+  const input = document.getElementById('text-search');
+  const cnt = document.getElementById('text-search-count');
+  const q = input.value;
+  if (!q) { clearTextSearch(); return; }
+  const text = pre.textContent;
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  const found = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    found.push([m.index, m.index + m[0].length]);
+    if (m[0].length === 0) re.lastIndex++; // zero-length guard
+  }
+  pre.innerHTML = '';
+  if (!found.length) {
+    pre.appendChild(document.createTextNode(text));
+    cnt.textContent = '0/0';
+    return;
+  }
+  let last = 0;
+  found.forEach(([s, e], i) => {
+    if (s > last) pre.appendChild(document.createTextNode(text.slice(last, s)));
+    const mk = document.createElement('mark');
+    mk.textContent = text.slice(s, e);
+    if (i === 0) mk.classList.add('cur');
+    pre.appendChild(mk);
+    last = e;
+  });
+  if (last < text.length) pre.appendChild(document.createTextNode(text.slice(last)));
+  textSearch.matches = [...pre.querySelectorAll('mark')];
+  textSearch.idx = 0;
+  cnt.textContent = `1/${found.length}`;
+  textSearch.matches[0].scrollIntoView({ block: 'center' });
+}
+function stepTextSearch(dir) {
+  const n = textSearch.matches.length;
+  if (!n) return;
+  const prev = textSearch.matches[textSearch.idx];
+  if (prev) prev.classList.remove('cur');
+  textSearch.idx = (textSearch.idx + dir + n) % n;
+  const cur = textSearch.matches[textSearch.idx];
+  cur.classList.add('cur');
+  cur.scrollIntoView({ block: 'center' });
+  const cnt = document.getElementById('text-search-count');
+  if (cnt) cnt.textContent = `${textSearch.idx + 1}/${n}`;
+}
+document.getElementById('text-search').addEventListener('input', runTextSearch);
+document.getElementById('text-search').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); stepTextSearch(e.shiftKey ? -1 : 1); }
+  else if (e.key === 'Escape') { e.target.value = ''; clearTextSearch(); }
+});
+document.getElementById('text-search-next').addEventListener('click', () => stepTextSearch(1));
+document.getElementById('text-search-prev').addEventListener('click', () => stepTextSearch(-1));
+
 // keyboard shortcuts for the text reader — +/= enlarge, - shrink. Only active
 // while the text viewer is open and the user isn't typing in a field.
 document.addEventListener('keydown', (e) => {
@@ -2224,6 +2310,8 @@ async function openTextResult(url, name, key) {
   const viewer = document.getElementById('text-viewer');
   const content = document.getElementById('text-content');
   content.textContent = '';
+  clearTextSearch();
+  document.getElementById('text-search').value = '';
   viewer.style.display = '';
   try {
     const r = await j(`/api/text?url=${encodeURIComponent(url)}`);
