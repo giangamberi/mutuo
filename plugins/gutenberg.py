@@ -138,18 +138,8 @@ def _book_meta(b: dict) -> str:
     return " · ".join(parts)
 
 
-# format preference when a book has no PDF: plain text first (readable in any
-# browser tab), then HTML, then EPUB.
-FALLBACK_FORMATS = [
-    ("text/plain; charset=utf-8", "text"),
-    ("text/plain", "text"),
-    ("text/html", "html"),
-    ("application/epub+zip", "epub"),
-]
-
-
-# format select value -> the (mime, kind) editions to return, in priority
-# order. "any" is handled separately (PDF preferred, else best fallback).
+# format select value -> the kinds to return when the user picks a specific
+# format (instead of "any").
 FORMATS = {
     "pdf": [("application/pdf", "pdf")],
     "text": [("text/plain; charset=utf-8", "text"), ("text/plain", "text")],
@@ -158,21 +148,44 @@ FORMATS = {
 }
 
 
-def _pick_format(formats: dict, fmt: str = "any"):
-    """(url, kind) for a book. With fmt="any" (default) it returns the PDF if
-    available, else the best fallback. With a specific fmt it returns that
-    edition only, or (None, None) if the book has no such edition."""
+# mime -> kind label for the editions the UI can offer. Everything else a
+# book carries (RDF metadata, cover JPEGs) is not a readable edition.
+MIME_KINDS = {
+    "application/pdf": "pdf",
+    "text/plain": "text",
+    "text/html": "html",
+    "application/epub+zip": "epub",
+    "application/x-mobipocket-ebook": "mobi",
+    "application/octet-stream": "file",  # Gutenberg's pgNN-h.zip (HTML bundle)
+}
+
+# listing order when a book has several editions of the same kind
+KIND_ORDER = {"pdf": 0, "text": 1, "html": 2, "epub": 3, "mobi": 4, "file": 5}
+
+
+def _edition_name(url: str) -> str:
+    # the file's basename (e.g. "84.txt.utf-8") — distinguishes editions that
+    # share a kind, like the two plain-text variants of one book
+    return urllib.parse.urlparse(url).path.rsplit("/", 1)[-1] or url
+
+
+def _book_editions(formats: dict, fmt: str = "any") -> list[dict]:
+    """Every readable edition a book offers, each as {"url", "kind", "name"},
+    so the UI can list them all in one result box. Repeated kinds (e.g. two
+    text files) are all kept, told apart by filename. With a specific fmt only
+    that kind is returned."""
+    wanted = None
     if fmt in FORMATS:
-        for mime, kind in FORMATS[fmt]:
-            if formats.get(mime):
-                return formats[mime], kind
-        return None, None
-    if formats.get("application/pdf"):
-        return formats["application/pdf"], "pdf"
-    for mime, kind in FALLBACK_FORMATS:
-        if formats.get(mime):
-            return formats[mime], kind
-    return None, None
+        wanted = {kind for _, kind in FORMATS[fmt]}
+    out = []
+    for mime, url in formats.items():
+        base = mime.split(";")[0].strip()  # "text/plain; charset=utf-8" -> "text/plain"
+        kind = MIME_KINDS.get(base)
+        if not kind or (wanted and kind not in wanted):
+            continue
+        out.append({"url": url, "kind": kind, "name": _edition_name(url)})
+    out.sort(key=lambda e: KIND_ORDER.get(e["kind"], 99))
+    return out
 
 
 def search(query: str, config: dict) -> list[dict]:
@@ -221,10 +234,14 @@ def search(query: str, config: dict) -> list[dict]:
         name = _book_name(b)
         if not name:
             continue
-        url, kind = _pick_format(b.get("formats") or {}, fmt)
-        if not url:
+        editions = _book_editions(b.get("formats") or {}, fmt)
+        if not editions:
             continue  # no usable edition at all
+        url, kind = editions[0]["url"], editions[0]["kind"]
         item = {"name": name, "url": url, "kind": kind}
+        if len(editions) > 1:
+            # the UI lists every edition in an expandable list in the same box
+            item["editions"] = editions
         meta = _book_meta(b)
         if kind != "pdf":
             meta = f"{meta} · {kind}" if meta else kind

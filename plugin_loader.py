@@ -200,6 +200,21 @@ def search_plugin(pid: str, query: str, config: dict) -> list[dict]:
         meta = str(entry.get("meta", "")).strip()
         if meta:
             item["meta"] = meta
+        # a book's other editions (e.g. Gutenberg PDF/text/HTML/EPUB) — the UI
+        # lists them as chips in the same result box
+        editions = entry.get("editions")
+        if isinstance(editions, list) and editions:
+            clean = []
+            for ed in editions:
+                if not isinstance(ed, dict):
+                    continue
+                u = str(ed.get("url", "")).strip()
+                k = str(ed.get("kind", "")).strip()
+                if u and k:
+                    clean.append({"url": u, "kind": k,
+                                  "name": str(ed.get("name", "")).strip()})
+            if clean:
+                item["editions"] = clean
         items.append(item)
     return items
 

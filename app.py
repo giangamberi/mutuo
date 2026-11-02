@@ -41,6 +41,10 @@ PDF_DIR = BASE / ".pdfs"          # direct .pdf files dropped into the reader
 PDFS_INDEX = BASE / "pdfs.json"   # registry of direct PDFs (id -> name/size/provider)
 TEXT_DIR = BASE / ".texts"        # plain-text documents saved locally for offline reading
 TEXTS_INDEX = BASE / "texts.json"  # registry of saved texts (id -> name/size/url/provider)
+EPUB_DIR = BASE / ".epubs"        # EPUB documents saved locally for offline reading
+EPUBS_INDEX = BASE / "epubs.json"  # registry of saved EPUBs (id -> name/size/url/provider)
+FILES_DIR = BASE / ".files"        # other saved documents (html/mobi/file) for offline reading
+FILES_INDEX = BASE / "files.json"  # registry of saved files (id -> name/size/url/provider/kind)
 FAVORITES_INDEX = BASE / "favorites.json"  # user's favorite documents (global)
 SHELF_INDEX = BASE / "shelf.json"  # user's personal shelf (superset of favorites)
 @asynccontextmanager
@@ -801,6 +805,32 @@ def _save_texts(reg: dict) -> None:
     tmp.replace(TEXTS_INDEX)
 
 
+def _load_epubs() -> dict:
+    try:
+        return json.loads(EPUBS_INDEX.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_epubs(reg: dict) -> None:
+    tmp = EPUBS_INDEX.with_suffix(".tmp")
+    tmp.write_text(json.dumps(reg, indent=2), encoding="utf-8")
+    tmp.replace(EPUBS_INDEX)
+
+
+def _load_files() -> dict:
+    try:
+        return json.loads(FILES_INDEX.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_files(reg: dict) -> None:
+    tmp = FILES_INDEX.with_suffix(".tmp")
+    tmp.write_text(json.dumps(reg, indent=2), encoding="utf-8")
+    tmp.replace(FILES_INDEX)
+
+
 def _pdf_meta(path: str) -> dict:
     """Extract filterable metadata from a PDF (title/author/subject/keywords/
     page count) plus the file's mtime. Returns {} on any error so a broken or
@@ -973,6 +1003,7 @@ class FavoriteRequest(BaseModel):
     provider: str = "local"
     status: str = "toread"   # toread | reading | complete
     tags: list = []          # custom user tags (free-form strings)
+    group: str = ""          # entries sharing a group render as one expandable box
 
 
 class FavoriteStatusRequest(BaseModel):
@@ -1016,7 +1047,8 @@ def add_favorite(req: FavoriteRequest) -> JSONResponse:
     fav = {"key": req.key, "name": req.name, "type": req.type,
            "ih": req.ih, "pdf": req.pdf, "url": req.url,
            "magnet": req.magnet, "kind": req.kind, "provider": req.provider,
-           "status": req.status, "tags": req.tags, "added_at": time.time()}
+           "status": req.status, "tags": req.tags, "group": req.group,
+           "added_at": time.time()}
     favs.append(fav)
     _save_favorites(favs)
     # a favorite is always on the shelf (favorites ⊆ shelf)
@@ -1040,7 +1072,8 @@ def add_to_shelf(req: FavoriteRequest) -> JSONResponse:
     shelf.append({"key": req.key, "name": req.name, "type": req.type,
                   "ih": req.ih, "pdf": req.pdf, "url": req.url,
                   "magnet": req.magnet, "kind": req.kind, "provider": req.provider,
-                  "status": req.status, "tags": req.tags, "added_at": time.time()})
+                  "status": req.status, "tags": req.tags, "group": req.group,
+                  "added_at": time.time()})
     _save_shelf(shelf)
     return JSONResponse({"ok": True, "added": True})
 
@@ -1173,6 +1206,19 @@ def stream_direct_pdf(pid: str, request: Request) -> Response:
     return Response(data, status_code=status_code, media_type="application/pdf", headers=headers)
 
 
+def _utf8(data: bytes) -> bytes:
+    """Normalize a plain-text document to UTF-8.
+
+    Older Gutenberg files are Windows-1252 (single-byte), not UTF-8. Serving
+    those raw with a utf-8 charset makes the browser mangle the high bytes
+    (prime marks, degree signs, math operators). Decode as UTF-8 when valid,
+    else fall back to cp1252, and always re-encode to UTF-8."""
+    try:
+        return data.decode("utf-8").encode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("cp1252").encode("utf-8")
+
+
 @app.get("/api/text")
 def proxy_text(url: str) -> Response:
     """Fetch a remote plain-text document and return it so the in-site reader
@@ -1186,7 +1232,7 @@ def proxy_text(url: str) -> Response:
             data = resp.read()
     except Exception as exc:
         raise HTTPException(502, f"could not fetch text: {exc}")
-    return Response(data, media_type="text/plain; charset=utf-8")
+    return Response(_utf8(data), media_type="text/plain; charset=utf-8")
 
 
 @app.get("/api/html")
@@ -1249,6 +1295,7 @@ def save_text(req: SaveTextRequest) -> JSONResponse:
             data = resp.read()
     except Exception as exc:
         raise HTTPException(502, f"could not fetch text: {exc}")
+    data = _utf8(data)  # store as UTF-8 so offline reads match the live view
     if not data.strip():
         raise HTTPException(400, "empty document")
     TEXT_DIR.mkdir(exist_ok=True)
@@ -1278,7 +1325,9 @@ def get_text(tid: str) -> Response:
     path = TEXT_DIR / f"{tid}.txt"
     if not path.is_file():
         raise HTTPException(404, "text file missing")
-    return Response(path.read_bytes(), media_type="text/plain; charset=utf-8")
+    # _utf8 is a no-op for already-UTF-8 files; it rescues any saved before the
+    # save path normalized encoding
+    return Response(_utf8(path.read_bytes()), media_type="text/plain; charset=utf-8")
 
 
 @app.delete("/api/texts/{tid}")
@@ -1289,6 +1338,153 @@ def delete_text(tid: str) -> JSONResponse:
     del reg[tid]
     _save_texts(reg)
     (TEXT_DIR / f"{tid}.txt").unlink(missing_ok=True)
+    return JSONResponse({"ok": True})
+
+
+# ---------- saved EPUBs ----------
+# A remote EPUB can be saved to disk under .epubs/ so it can be read offline
+# (no re-fetch, no CORS). The registry (epubs.json) maps id -> metadata, the
+# same pattern as saved texts.
+
+class SaveEpubRequest(BaseModel):
+    url: str
+    name: str = ""
+    provider: str = "local"
+
+
+@app.post("/api/epub/save")
+def save_epub(req: SaveEpubRequest) -> JSONResponse:
+    """Fetch a remote EPUB and store it locally for offline reading.
+    Re-saving the same URL is a no-op (deduped by URL)."""
+    if not re.match(r"^https?://", req.url):
+        raise HTTPException(400, "only http(s) URLs are allowed")
+    reg = _load_epubs()
+    for tid, m in reg.items():
+        if m.get("url") == req.url:
+            return JSONResponse({"ok": True, "id": tid, "added": False})
+    try:
+        r = urllib.request.Request(req.url, headers={"User-Agent": "pdf-torrent-reader/1.0"})
+        with urllib.request.urlopen(r, timeout=120) as resp:
+            data = resp.read()
+    except Exception as exc:
+        raise HTTPException(502, f"could not fetch epub: {exc}")
+    if not data.strip():
+        raise HTTPException(400, "empty document")
+    EPUB_DIR.mkdir(exist_ok=True)
+    tid = uuid.uuid4().hex
+    (EPUB_DIR / f"{tid}.epub").write_bytes(data)
+    reg[tid] = {"name": req.name, "size": len(data), "url": req.url,
+                "provider": req.provider, "added_at": time.time()}
+    _save_epubs(reg)
+    return JSONResponse({"ok": True, "id": tid, "added": True})
+
+
+@app.get("/api/epubs")
+def list_epubs() -> JSONResponse:
+    return JSONResponse([
+        {"id": tid, "name": m["name"], "size": m["size"], "url": m.get("url", ""),
+         "provider": m.get("provider", "local")}
+        for tid, m in _load_epubs().items()
+    ])
+
+
+@app.get("/api/epubs/{tid}")
+def get_epub(tid: str) -> Response:
+    """Serve a saved EPUB so the in-site reader can show it offline."""
+    reg = _load_epubs()
+    if tid not in reg:
+        raise HTTPException(404, "epub not found")
+    path = EPUB_DIR / f"{tid}.epub"
+    if not path.is_file():
+        raise HTTPException(404, "epub file missing")
+    return Response(path.read_bytes(), media_type="application/epub+zip")
+
+
+@app.delete("/api/epubs/{tid}")
+def delete_epub(tid: str) -> JSONResponse:
+    reg = _load_epubs()
+    if tid not in reg:
+        raise HTTPException(404, "epub not found")
+    del reg[tid]
+    _save_epubs(reg)
+    (EPUB_DIR / f"{tid}.epub").unlink(missing_ok=True)
+    return JSONResponse({"ok": True})
+
+
+# ---------- saved files (html / mobi / other) ----------
+# The remaining live-result kinds (HTML, MOBI, generic files) can be saved to
+# disk under .files/ for offline reading, the same pattern as saved texts and
+# EPUBs. The registry (files.json) also records the kind so the UI can pick
+# the right content type when serving.
+
+FILE_KINDS = {"html", "mobi", "file"}
+FILE_MIME = {"html": "text/html", "mobi": "application/x-mobipocket-ebook", "file": "application/octet-stream"}
+
+
+class SaveFileRequest(BaseModel):
+    url: str
+    name: str = ""
+    provider: str = "local"
+    kind: str = "file"
+
+
+@app.post("/api/file/save")
+def save_file(req: SaveFileRequest) -> JSONResponse:
+    """Fetch a remote document (html/mobi/file) and store it locally for
+    offline reading. Re-saving the same URL is a no-op (deduped by URL)."""
+    if not re.match(r"^https?://", req.url):
+        raise HTTPException(400, "only http(s) URLs are allowed")
+    kind = req.kind if req.kind in FILE_KINDS else "file"
+    reg = _load_files()
+    for tid, m in reg.items():
+        if m.get("url") == req.url:
+            return JSONResponse({"ok": True, "id": tid, "added": False})
+    try:
+        r = urllib.request.Request(req.url, headers={"User-Agent": "pdf-torrent-reader/1.0"})
+        with urllib.request.urlopen(r, timeout=120) as resp:
+            data = resp.read()
+    except Exception as exc:
+        raise HTTPException(502, f"could not fetch file: {exc}")
+    if not data.strip():
+        raise HTTPException(400, "empty document")
+    FILES_DIR.mkdir(exist_ok=True)
+    tid = uuid.uuid4().hex
+    (FILES_DIR / f"{tid}.bin").write_bytes(data)
+    reg[tid] = {"name": req.name, "size": len(data), "url": req.url,
+                "provider": req.provider, "kind": kind, "added_at": time.time()}
+    _save_files(reg)
+    return JSONResponse({"ok": True, "id": tid, "added": True})
+
+
+@app.get("/api/files")
+def list_files() -> JSONResponse:
+    return JSONResponse([
+        {"id": tid, "name": m["name"], "size": m["size"], "url": m.get("url", ""),
+         "provider": m.get("provider", "local"), "kind": m.get("kind", "file")}
+        for tid, m in _load_files().items()
+    ])
+
+
+@app.get("/api/files/{tid}")
+def get_file(tid: str) -> Response:
+    """Serve a saved file so the in-site reader can show it offline."""
+    reg = _load_files()
+    if tid not in reg:
+        raise HTTPException(404, "file not found")
+    path = FILES_DIR / f"{tid}.bin"
+    if not path.is_file():
+        raise HTTPException(404, "file missing")
+    return Response(path.read_bytes(), media_type=FILE_MIME.get(reg[tid].get("kind", "file"), "application/octet-stream"))
+
+
+@app.delete("/api/files/{tid}")
+def delete_file(tid: str) -> JSONResponse:
+    reg = _load_files()
+    if tid not in reg:
+        raise HTTPException(404, "file not found")
+    del reg[tid]
+    _save_files(reg)
+    (FILES_DIR / f"{tid}.bin").unlink(missing_ok=True)
     return JSONResponse({"ok": True})
 
 

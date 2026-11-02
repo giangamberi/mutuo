@@ -4,16 +4,51 @@
 <meta charset="utf-8">
 <title>Shared Knowledge</title>
 <style>
-  :root { --bg:#14161a; --panel:#1e2128; --text:#e6e9ef; --dim:#8a93a5; --acc:#4f8cff; }
+  /* ---- theme palettes: dark is the default; light/sepia override on body ---- */
+  :root {
+    --app-text-scale:1; --app-icon-scale:1;
+    --bg:#14161a; --panel:#1e2128; --text:#e6e9ef; --dim:#8a93a5; --acc:#4f8cff;
+    --input-bg:#0f1115; --border:#333a47; --border-soft:#262b34; --border-soft2:#262c38;
+    --border-faint:#1c2027; --border-strong:#000; --hover:#232a36; --rail-bg:#191c22;
+    --mark-bg:#3a3320; --mark-fg:#ffd76a; --reader-text:#d7dbe0;
+    --danger-bg:#3a1f24; --danger-fg:#ff6b6b; --danger-hover-fg:#e08a80;
+    --fav:#ffd24a; --fav-border:#6b5a1e; --acc-border:#2f4a7a;
+    --acc-soft:rgba(79,140,255,.14); --acc-soft2:rgba(79,140,255,.12);
+    --overlay:rgba(15,17,21,.7); --overlay-strong:rgba(15,17,21,.88);
+    --shadow:#000a; --shadow-strong:#000c;
+  }
+  body.theme-light {
+    --bg:#f4f5f7; --panel:#ffffff; --text:#1a1a1a; --dim:#6b7280; --acc:#2f6fe0;
+    --input-bg:#ffffff; --border:#d5d9e0; --border-soft:#e2e5ea; --border-soft2:#e2e5ea;
+    --border-faint:#eceef1; --border-strong:#c8ccd3; --hover:#eef1f5; --rail-bg:#eef0f3;
+    --mark-bg:#ffe9a3; --mark-fg:#5c4a00; --reader-text:#1a1a1a;
+    --danger-bg:#fdecec; --danger-fg:#d64545; --danger-hover-fg:#b5342f;
+    --fav:#c99a1e; --fav-border:#a8842a; --acc-border:#9dbdf0;
+    --acc-soft:rgba(47,111,224,.12); --acc-soft2:rgba(47,111,224,.10);
+    --overlay:rgba(240,242,245,.7); --overlay-strong:rgba(240,242,245,.88);
+    --shadow:#00000014; --shadow-strong:#00000022;
+  }
+  body.theme-sepia {
+    --bg:#e8dcc0; --panel:#f4ecd8; --text:#433422; --dim:#8a7a5c; --acc:#a06a2c;
+    --input-bg:#faf4e6; --border:#d8c9a3; --border-soft:#e0d5b8; --border-soft2:#e0d5b8;
+    --border-faint:#e8dfc8; --border-strong:#c9b98f; --hover:#ece1c6; --rail-bg:#e6d9bd;
+    --mark-bg:#e8d9a8; --mark-fg:#5c4a00; --reader-text:#433422;
+    --danger-bg:#f0d9c8; --danger-fg:#b5502f; --danger-hover-fg:#9a3f22;
+    --fav:#b8860b; --fav-border:#9a7420; --acc-border:#c9a878;
+    --acc-soft:rgba(160,106,44,.14); --acc-soft2:rgba(160,106,44,.12);
+    --overlay:rgba(232,220,192,.7); --overlay-strong:rgba(232,220,192,.88);
+    --shadow:#3a2f1a14; --shadow-strong:#3a2f1a22;
+  }
   * { box-sizing: border-box; }
   body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
-  header { display:flex; gap:8px; align-items:center; padding:8px 14px; background:var(--panel); border-bottom:1px solid #000; }
-  header h1 { font-size:15px; margin:0 14px 0 0; font-weight:600; }
+  header { display:flex; gap:8px; align-items:center; padding:8px 14px; background:var(--panel); border-bottom:1px solid var(--border-strong); }
+  header h1 { font-size:calc(15px * var(--app-text-scale)); margin:0 14px 0 0; font-weight:600; }
   header .grow { flex:1; }
-  button, input, select { background:#0f1115; color:var(--text); border:1px solid #333a47; border-radius:6px; padding:6px 10px; font-size:13px; }
+  button, input, select { background:var(--input-bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:calc(13px * var(--app-text-scale)); }
+  button { cursor:pointer; }
   input { min-width:280px; }
   main { flex:1; display:flex; min-height:0; }
-  aside { width:320px; min-width:200px; background:var(--panel); border-right:1px solid #000; display:flex; flex-direction:column; position:relative; }
+  aside { width:320px; min-width:200px; background:var(--panel); border-right:1px solid var(--border-strong); display:flex; flex-direction:column; position:relative; }
   #resizer { position:absolute; top:0; right:-5px; width:10px; height:100%; cursor:col-resize; z-index:20; touch-action:none; }
   #resizer::after { content:''; position:absolute; top:0; right:4px; width:2px; height:100%; background:transparent; }
   #resizer:hover::after, #resizer.dragging::after { background:var(--acc); }
@@ -21,7 +56,7 @@
      (just the minimize button) sits at the top of the list column, to the
      right of the full-height main-tab rail */
   #sidebar-top { display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:4px 6px 0; }
-  #sidebar-top #minimize-btn { padding:2px 9px; font-size:12px; line-height:1.4; }
+  #sidebar-top #minimize-btn { padding:2px 9px; font-size:calc(12px * var(--app-icon-scale)); line-height:1.4; }
   aside.minimized { width:34px !important; min-width:34px !important; }
   /* collapse to just the restore button: hide the rail + the list content,
      but keep the top bar (which holds the button) visible */
@@ -30,96 +65,173 @@
   aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; }
   /* left icon rail: Shelf / Favorites / Reading */
   #sidebar-row { flex:1; display:flex; min-height:0; }
-  #rail { flex:0 0 46px; width:46px; border-right:1px solid #000; display:flex;
-    flex-direction:column; align-items:center; gap:6px; padding:8px 0; background:#191c22; }
-  #rail button { width:34px; height:34px; font-size:17px; line-height:1; padding:0;
+  #rail { flex:0 0 46px; width:46px; border-right:1px solid var(--border-strong); display:flex;
+    flex-direction:column; align-items:center; gap:6px; padding:8px 0; background:var(--rail-bg); }
+  #rail button { width:34px; height:34px; font-size:calc(17px * var(--app-icon-scale)); line-height:1; padding:0;
     background:transparent; color:var(--dim); border:1px solid transparent; border-radius:8px; cursor:pointer; }
-  #rail button:hover { background:#232a36; color:var(--text); }
-  #rail button.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--text); }
+  #rail button:hover { background:var(--hover); color:var(--text); }
+  #rail button.active { background:var(--acc-soft); border-color:var(--acc); color:var(--text); }
   #sidebar-main { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; }
   /* sub-tab rows (Reading/Favorites: To Read/Reading/Complete) */
   .subtabs { display:flex; gap:4px; padding:6px 8px 0; }
-  .subtabs button { font-size:12px; padding:4px 12px; background:transparent; color:var(--dim);
+  .subtabs button { font-size:calc(12px * var(--app-text-scale)); padding:4px 12px; background:transparent; color:var(--dim);
     border:1px solid transparent; border-radius:6px; cursor:pointer; }
-  .subtabs button:hover { background:#232a36; color:var(--text); }
-  .subtabs button.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--text); }
+  .subtabs button:hover { background:var(--hover); color:var(--text); }
+  .subtabs button.active { background:var(--acc-soft); border-color:var(--acc); color:var(--text); }
   .subtabs.grow button { flex:1; }
-  #tabs { display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:8px 8px 6px; border-bottom:1px solid #000; }
+  #tabs { display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:8px 8px 6px; border-bottom:1px solid var(--border-strong); }
   #tabs .tabwrap { position:relative; display:flex; }
-  #tabs .tab { font-size:12px; padding:4px 10px; background:transparent; color:var(--dim); border:1px solid transparent; border-radius:6px; cursor:pointer; }
-  #tabs .tab:hover { background:#232a36; color:var(--text); }
-  #tabs .tab.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--text); }
+  #tabs .tab { font-size:calc(12px * var(--app-text-scale)); padding:4px 10px; background:transparent; color:var(--dim); border:1px solid transparent; border-radius:6px; cursor:pointer; }
+  #tabs .tab:hover { background:var(--hover); color:var(--text); }
+  #tabs .tab.active { background:var(--acc-soft); border-color:var(--acc); color:var(--text); }
   #tabs .tab.off { opacity:.5; }
   #tabs .tab.add { color:var(--acc); }
-  #tabs .pcog { font-size:11px; line-height:1; padding:4px 6px; margin-left:2px; background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer; }
-  #tabs .pcog:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
+  #tabs .pcog { font-size:calc(11px * var(--app-text-scale)); line-height:1; padding:4px 6px; margin-left:2px; background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
+  #tabs .pcog:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
   #catalog { flex:1; overflow-y:auto; }
-  #searchbar { display:flex; gap:6px; align-items:center; padding:6px 8px; border-bottom:1px solid #000; flex-wrap:wrap; }
-  #searchbar input { flex:1 1 140px; min-width:120px; padding:5px 8px; font-size:12px; }
-  #searchbar select { padding:5px 6px; font-size:12px; max-width:150px; }
-  #searchbar .count { font-size:11px; color:var(--dim); white-space:nowrap; }
-  #searchbar .pg { font-size:11px; color:var(--dim); white-space:nowrap; }
-  #searchbar .pg button { padding:4px 8px; font-size:12px; }
-  aside .titem { position:relative; border-bottom:1px solid #262b34; }
+  #searchbar { display:flex; gap:6px; align-items:center; padding:6px 8px; border-bottom:1px solid var(--border-strong); flex-wrap:wrap; }
+  #searchbar input { flex:1 1 140px; min-width:120px; padding:5px 8px; font-size:calc(12px * var(--app-text-scale)); }
+  #searchbar select { padding:5px 6px; font-size:calc(12px * var(--app-text-scale)); max-width:150px; }
+  #searchbar .count { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); white-space:nowrap; }
+  #searchbar .pg { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); white-space:nowrap; }
+  #searchbar .pg button { padding:4px 8px; font-size:calc(12px * var(--app-text-scale)); }
+  aside .titem { position:relative; border-bottom:1px solid var(--border-soft); }
   aside .titem button.open {
     display:block; width:100%; text-align:left; font:inherit; cursor:pointer;
     background:transparent; color:var(--text); border:0; border-radius:0; padding:10px 44px 10px 14px;
   }
-  aside .titem:hover button.open { background:#232a36; }
-  aside .titem.active button.open { background:rgba(79,140,255,.12); box-shadow:inset 3px 0 0 var(--acc); }
+  aside .titem:hover button.open { background:var(--hover); }
+  aside .titem.active button.open { background:var(--acc-soft2); box-shadow:inset 3px 0 0 var(--acc); }
   aside .titem button.open:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
   /* long filenames wrap instead of overflowing the sidebar */
   aside .titem .name { overflow-wrap:anywhere; }
   aside .titem .cog {
-    position:absolute; top:8px; right:8px; padding:3px 7px; font-size:12px; line-height:1;
-    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+    position:absolute; top:8px; right:8px; padding:3px 7px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
   }
-  aside .titem .cog:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
+  aside .titem .cog:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
   aside .titem .fav {
-    position:absolute; top:8px; right:34px; padding:3px 6px; font-size:12px; line-height:1;
-    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+    position:absolute; top:8px; right:34px; padding:3px 6px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
   }
-  aside .titem .fav:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
-  aside .titem .fav.on { color:#ffd24a; border-color:#6b5a1e; }
+  aside .titem .fav:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
+  aside .titem .fav.on { color:var(--fav); border-color:var(--fav-border); }
   /* 📖 add/remove from the personal shelf (browse rows) — left of the star */
   aside .titem .shelfbtn {
-    position:absolute; top:8px; right:60px; padding:3px 6px; font-size:12px; line-height:1;
-    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+    position:absolute; top:8px; right:60px; padding:3px 6px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
   }
-  aside .titem .shelfbtn:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
-  aside .titem .shelfbtn.on { color:var(--acc); border-color:#2f4a7a; }
+  aside .titem .shelfbtn:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
+  aside .titem .shelfbtn.on { color:#fff; background:var(--acc); border-color:var(--acc); }
   /* 💾 save a text locally for offline reading — bottom-right of the row */
   aside .titem .savetext {
-    position:absolute; bottom:8px; right:8px; padding:3px 6px; font-size:12px; line-height:1;
-    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+    position:absolute; bottom:8px; right:8px; padding:3px 6px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
   }
-  aside .titem .savetext:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
-  aside .titem .savetext.on { color:var(--acc); border-color:#2f4a7a; }
+  aside .titem .savetext:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
+  aside .titem .savetext.on { color:var(--acc); border-color:var(--acc-border); }
+  /* ⬇/💾 save an EPUB locally for offline reading — bottom-right of the row */
+  aside .titem .saveepub {
+    position:absolute; bottom:8px; right:8px; padding:3px 6px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
+  }
+  aside .titem .saveepub:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
+  aside .titem .saveepub.on { color:var(--acc); border-color:var(--acc-border); }
+  /* ⬇/💾 save an html/mobi/file result locally for offline reading */
+  aside .titem .savefile {
+    position:absolute; bottom:8px; right:8px; padding:3px 6px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
+  }
+  aside .titem .savefile:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
+  aside .titem .savefile.on { color:var(--acc); border-color:var(--acc-border); }
   /* ⬇ download a PDF result for later reading — bottom-right of the row */
   aside .titem .savepdf {
-    position:absolute; bottom:8px; right:8px; padding:3px 6px; font-size:12px; line-height:1;
-    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+    position:absolute; bottom:8px; right:8px; padding:3px 6px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
   }
-  aside .titem .savepdf:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
-  aside .titem .savepdf.on { color:var(--acc); border-color:#2f4a7a; }
+  aside .titem .savepdf:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
+  aside .titem .savepdf.on { color:var(--acc); border-color:var(--acc-border); }
+  /* in the search view the main-row download button sits on the title line
+     (top-right, left of the 📖/★) instead of floating at the bottom of the box */
+  aside .titem.has-shelf .savetext, aside .titem.has-shelf .saveepub,
+  aside .titem.has-shelf .savefile, aside .titem.has-shelf .savepdf {
+    top:8px; bottom:auto; right:96px;
+  }
+  /* only rows that actually carry a download button need the extra right
+     padding (browse-view torrent/PDF rows share .has-shelf but have none) */
+  aside .titem.has-shelf:has(.savetext, .saveepub, .savefile, .savepdf) button.open { padding-right:134px; }
+  /* a book with several editions (PDF/text/HTML/EPUB, repeated kinds included)
+     — an expandable list inside the same result box; clicking a row opens that
+     specific edition */
+  aside .titem .edtoggle {
+    display:block; width:100%; text-align:left; font:inherit; cursor:pointer;
+    background:transparent; color:var(--dim); border:0; border-radius:0;
+    padding:2px 14px 8px; font-size:calc(11px * var(--app-text-scale));
+  }
+  aside .titem .edtoggle:hover { color:var(--text); }
+  aside .titem .edlist { display:none; padding:0 14px 10px; }
+  aside .titem .edlist.open { display:block; }
+  aside .titem .edrow {
+    display:flex; align-items:baseline; gap:6px; width:100%; text-align:left;
+    font:inherit; cursor:pointer; background:transparent; color:var(--text);
+    border:0; border-radius:4px; padding:3px 6px; font-size:calc(12px * var(--app-text-scale));
+  }
+  aside .titem .edrow:hover { background:var(--hover); }
+  aside .titem .edrow .edkind { color:var(--dim); white-space:nowrap; }
+  aside .titem .edrow .edname { overflow-wrap:anywhere; flex:1; }
+  /* 📖/★/⬇ per edition — each edition is its own shelf/favorite entry */
+  aside .titem .edrow .edshelf, aside .titem .edrow .edfav, aside .titem .edrow .edsaveepub, aside .titem .edrow .edsavefile, aside .titem .edrow .edsave {
+    padding:2px 5px; font-size:calc(11px * var(--app-text-scale)); line-height:1; cursor:pointer;
+    background:transparent; color:var(--dim); border:1px solid var(--border); border-radius:6px;
+  }
+  aside .titem .edrow .edshelf:hover, aside .titem .edrow .edfav:hover, aside .titem .edrow .edsaveepub:hover, aside .titem .edrow .edsavefile:hover, aside .titem .edrow .edsave:hover { border-color:var(--acc); color:var(--text); }
+  aside .titem .edrow .edshelf.on { color:#fff; background:var(--acc); border-color:var(--acc); }
+  aside .titem .edrow .edfav.on { color:var(--fav); border-color:var(--fav-border); }
+  aside .titem .edrow .edsaveepub.on, aside .titem .edrow .edsavefile.on, aside .titem .edrow .edsave.on { color:var(--acc); border-color:var(--acc-border); }
+  /* a group of editions of the same book (My Shelf) — one expandable box.
+     The header carries the book-level controls (status / tags / remove); each
+     member is a compact edition row (like the search view) with its own
+     download / shelf / favorite buttons. */
+  aside .titem.groupbox .grouphdr {
+    display:flex; align-items:center; gap:8px; padding:10px 14px;
+  }
+  aside .titem.groupbox .grouphdr .grouphdr-toggle {
+    flex:1; min-width:0; text-align:left; font:inherit; cursor:pointer;
+    background:transparent; color:var(--text); border:0; border-radius:0; padding:0;
+  }
+  aside .titem.groupbox:hover .grouphdr { background:var(--hover); }
+  aside .titem.groupbox .grouphdr .name { font-weight:600; }
+  aside .titem.groupbox .grouphdr .meta { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); }
+  aside .titem.groupbox .grouphdr .ghdr-right { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+  /* the header's controls sit inline in the flex row, not absolutely positioned */
+  aside .titem.groupbox .grouphdr .status { position:static; width:96px; }
+  aside .titem.groupbox .grouphdr .tagbtn { position:static; }
+  aside .titem.groupbox .grouphdr .rmshelf { position:static; }
+  aside .titem.groupbox .groupmembers { display:none; padding:0 8px 8px; }
+  aside .titem.groupbox .groupmembers.open { display:block; }
+  aside .titem.groupbox .groupmembers .edrow:not(:last-child) { border-bottom:1px solid var(--border-faint); }
   /* when a saved text also has a position hint, the hint + reset shift left to
      make room for the save button in the bottom-right corner. Offsets account
      for the real button widths (💾 ~30px, ↺ ~21px, hint ~32px) so they never
      overlap horizontally. */
   aside .titem.has-savetext.has-reset .resetpos { right:42px; }
   aside .titem.has-savetext.has-reset .poshint { right:67px; }
+  aside .titem.has-saveepub.has-reset .resetpos { right:42px; }
+  aside .titem.has-saveepub.has-reset .poshint { right:67px; }
+  aside .titem.has-savefile.has-reset .resetpos { right:42px; }
+  aside .titem.has-savefile.has-reset .poshint { right:67px; }
   /* 📁 local (folder) paper — bottom-right; opens the folder in the OS */
   aside .titem .localmark {
-    position:absolute; bottom:8px; right:8px; font-size:11px; line-height:1;
-    color:var(--dim); background:#0f1115; border:1px solid #262c38; border-radius:6px;
+    position:absolute; bottom:8px; right:8px; font-size:calc(11px * var(--app-text-scale)); line-height:1;
+    color:var(--dim); background:var(--input-bg); border:1px solid var(--border-soft2); border-radius:6px;
     padding:2px 6px; cursor:pointer;
   }
   aside .titem .localmark:hover { border-color:var(--acc); color:var(--text); }
   /* 💾 this PDF was downloaded from a link — it's on disk for later reading.
      Sits to the LEFT of the 📁 open-folder button (right:8) so they don't overlap */
   aside .titem .savedmark {
-    position:absolute; bottom:8px; right:42px; font-size:11px; line-height:1;
-    color:var(--acc); background:#0f1115; border:1px solid #2f4a7a; border-radius:6px;
+    position:absolute; bottom:8px; right:42px; font-size:calc(11px * var(--app-text-scale)); line-height:1;
+    color:var(--acc); background:var(--input-bg); border:1px solid var(--acc-border); border-radius:6px;
     padding:2px 6px; pointer-events:none;
   }
   /* when a local paper also has a position hint, shift the hint + reset left */
@@ -139,12 +251,14 @@
      non-clickable strip at the bottom of the visible box. */
   aside .titem.has-remove.has-reset button.open,
   aside .titem.has-remove.has-savetext button.open,
+  aside .titem.has-remove.has-saveepub button.open,
+  aside .titem.has-remove.has-savefile button.open,
   aside .titem.has-remove.has-local button.open { min-height:84px; }
   /* reserve room for the row's right-side controls */
   aside .titem.has-shelf button.open { padding-right:90px; }
   aside .titem .status {
-    position:absolute; top:8px; right:8px; width:96px; font-size:11px; line-height:1.2;
-    padding:3px 4px; background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+    position:absolute; top:8px; right:8px; width:96px; font-size:calc(11px * var(--app-text-scale)); line-height:1.2;
+    padding:3px 4px; background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
   }
   aside .titem .status:hover { border-color:var(--acc); color:var(--text); }
   aside .titem.has-status button.open { padding-right:112px; }
@@ -156,144 +270,142 @@
   /* 🗑 remove from the shelf — right end of the tag row; the tag + star shift
      left to make room (scoped to .has-remove so Favorites rows are untouched) */
   aside .titem .rmshelf {
-    position:absolute; top:33px; right:8px; padding:3px 6px; font-size:12px; line-height:1;
-    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+    position:absolute; top:33px; right:8px; padding:3px 6px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
   }
-  aside .titem .rmshelf:hover { background:#232a36; border-color:#c0564a; color:#e08a80; }
+  aside .titem .rmshelf:hover { background:var(--hover); border-color:var(--danger-fg); color:var(--danger-hover-fg); }
   aside .titem.has-remove .tagbtn { right:36px; }
   aside .titem.has-remove .fav { right:76px; }
   /* tag button sits below the status select so the title keeps its width */
   aside .titem .tagbtn {
-    position:absolute; top:33px; right:8px; padding:3px 6px; font-size:11px; line-height:1;
-    background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer;
+    position:absolute; top:33px; right:8px; padding:3px 6px; font-size:calc(11px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
   }
   aside .titem .tagbtn:hover { border-color:var(--acc); color:var(--text); }
   /* where the reader last stopped (p. N / %), shown under the tag button */
   aside .titem .poshint {
-    position:absolute; bottom:8px; right:8px; font-size:10px; line-height:1;
-    color:var(--dim); background:#0f1115; border:1px solid #262c38; border-radius:6px;
+    position:absolute; bottom:8px; right:8px; font-size:calc(10px * var(--app-text-scale)); line-height:1;
+    color:var(--dim); background:var(--input-bg); border:1px solid var(--border-soft2); border-radius:6px;
     padding:2px 6px; pointer-events:none;
   }
   /* ↺ clear the saved position — right of the hint chip, only when one exists */
   aside .titem .resetpos {
-    position:absolute; bottom:8px; right:8px; padding:2px 6px; font-size:10px; line-height:1;
-    background:#0f1115; color:var(--dim); border:1px solid #262c38; border-radius:6px; cursor:pointer;
+    position:absolute; bottom:8px; right:8px; padding:2px 6px; font-size:calc(10px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border-soft2); border-radius:6px; cursor:pointer;
   }
   aside .titem .resetpos:hover { border-color:var(--acc); color:var(--text); }
   aside .titem.has-reset .poshint { right:34px; }
   .tagfilter { display:flex; flex-wrap:wrap; gap:4px; padding:6px 10px 2px; }
   .tagfilter button {
-    font-size:11px; padding:2px 8px; background:transparent; color:var(--dim);
-    border:1px solid #333a47; border-radius:10px; cursor:pointer;
+    font-size:calc(11px * var(--app-text-scale)); padding:2px 8px; background:transparent; color:var(--dim);
+    border:1px solid var(--border); border-radius:10px; cursor:pointer;
   }
   .tagfilter button:hover { border-color:var(--acc); color:var(--text); }
-  .tagfilter button.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--text); }
+  .tagfilter button.active { background:var(--acc-soft); border-color:var(--acc); color:var(--text); }
   .tagpop {
     position:fixed; z-index:100; min-width:170px; max-width:240px;
-    background:var(--panel); border:1px solid #333a47; border-radius:8px; box-shadow:0 8px 24px #000a;
-    padding:8px; font-size:12px;
+    background:var(--panel); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px var(--shadow);
+    padding:8px; font-size:calc(12px * var(--app-text-scale));
   }
   .tagpop-list { display:flex; flex-direction:column; gap:2px; max-height:220px; overflow-y:auto; overflow-x:hidden; min-height:24px; }
   .tagpop-list label { display:flex; align-items:center; gap:6px; color:var(--text); cursor:pointer; padding:3px 4px; border-radius:5px; }
-  .tagpop-list label:hover { background:#232a36; }
+  .tagpop-list label:hover { background:var(--hover); }
   .tagpop-list label:has(input:checked) { color:var(--acc); }
   /* the global `input { min-width:280px }` rule would stretch the checkbox and
      push the tag name off to the right — reset it to a normal checkbox */
   .tagpop-list input[type=checkbox] { width:auto; min-width:0; flex:0 0 auto; margin:0; }
   .tagpop-add { display:flex; gap:4px; margin-top:8px; }
-  .tagpop-add input { flex:1; min-width:0; font-size:12px; padding:3px 6px; background:#0f1115; color:var(--text); border:1px solid #333a47; border-radius:6px; }
-  .tagpop-add button { font-size:12px; padding:3px 8px; background:transparent; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer; }
+  .tagpop-add input { flex:1; min-width:0; font-size:calc(12px * var(--app-text-scale)); padding:3px 6px; background:var(--input-bg); color:var(--text); border:1px solid var(--border); border-radius:6px; }
+  .tagpop-add button { font-size:calc(12px * var(--app-text-scale)); padding:3px 8px; background:transparent; color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
   .tagpop-add button:hover { border-color:var(--acc); color:var(--text); }
   .menu { display:none; position:absolute; right:8px; z-index:50; min-width:190px;
-    background:var(--panel); border:1px solid #333a47; border-radius:8px; box-shadow:0 8px 24px #000a; }
+    background:var(--panel); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px var(--shadow); }
   .menu.open { display:block; }
   .menu button { display:block; width:100%; text-align:left; border:0; border-radius:0;
-    background:transparent; color:var(--text); padding:8px 12px; font-size:12px; }
-  .menu button:hover { background:#232a36; }
-  .menu .danger { color:#ff6b6b; }
-  .menu .danger:hover { background:#3a1f24; }
-  .t .name { font-size:13px; font-weight:600; }
-  .t .meta { font-size:11px; color:var(--dim); margin-top:3px; }
-  .bar { height:4px; background:#0f1115; border-radius:2px; margin-top:6px; overflow:hidden; }
+    background:transparent; color:var(--text); padding:8px 12px; font-size:calc(12px * var(--app-text-scale)); }
+  .menu button:hover { background:var(--hover); }
+  .menu .danger { color:var(--danger-fg); }
+  .menu .danger:hover { background:var(--danger-bg); }
+  .t .name { font-size:calc(13px * var(--app-text-scale)); font-weight:600; }
+  .t .meta { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:3px; }
+  .bar { height:4px; background:var(--input-bg); border-radius:2px; margin-top:6px; overflow:hidden; }
   .bar > div { height:100%; background:var(--acc); }
-  .files { font-size:12px; margin-top:6px; }
+  .files { font-size:calc(12px * var(--app-text-scale)); margin-top:6px; }
   .files .no-pdf { color:var(--dim); font-style:italic; padding:2px 0; }
   .files button.file-btn {
     display:flex; align-items:center; gap:8px; width:100%; text-align:left;
-    font:inherit; font-size:12px;
-    color:var(--text); background:#0f1115; border:1px solid #333a47;
+    font:inherit; font-size:calc(12px * var(--app-text-scale));
+    color:var(--text); background:var(--input-bg); border:1px solid var(--border);
     border-radius:6px; padding:7px 10px; margin:5px 0; cursor:pointer;
     text-decoration:none; line-height:1.3;
   }
-  .files button.file-btn:hover { background:#232a36; border-color:var(--acc); color:var(--acc); }
+  .files button.file-btn:hover { background:var(--hover); border-color:var(--acc); color:var(--acc); }
   .files button.file-btn:focus-visible { outline:2px solid var(--acc); outline-offset:1px; }
-  .files button.file-btn.active { background:rgba(79,140,255,.14); border-color:var(--acc); color:var(--acc); }
-  .files button.file-btn .icon { flex:0 0 auto; font-size:14px; }
+  .files button.file-btn.active { background:var(--acc-soft); border-color:var(--acc); color:var(--acc); }
+  .files button.file-btn .icon { flex:0 0 auto; font-size:calc(14px * var(--app-icon-scale)); }
   .files button.file-btn .fname { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .files button.file-btn .fsize { flex:0 0 auto; color:var(--dim); font-size:11px; }
+  .files button.file-btn .fsize { flex:0 0 auto; color:var(--dim); font-size:calc(11px * var(--app-text-scale)); }
   .files button.file-btn.excluded { opacity:.55; }
-  .files .excl-toggle { flex:0 0 auto; font-size:11px; padding:2px 7px; cursor:pointer;
-    background:transparent; border:1px solid #333a47; border-radius:5px; color:var(--dim); }
+  .files .excl-toggle { flex:0 0 auto; font-size:calc(11px * var(--app-text-scale)); padding:2px 7px; cursor:pointer;
+    background:transparent; border:1px solid var(--border); border-radius:5px; color:var(--dim); }
   .files .excl-toggle:hover { border-color:var(--acc); color:var(--acc); }
-  .files .del-file { flex:0 0 auto; font-size:12px; padding:2px 5px; cursor:pointer;
+  .files .del-file { flex:0 0 auto; font-size:calc(12px * var(--app-icon-scale)); padding:2px 5px; cursor:pointer;
     background:transparent; border:1px solid transparent; border-radius:5px; color:var(--dim); }
-  .files .del-file:hover { border-color:#ff6b6b; color:#ff6b6b; background:#3a1f24; }
-  #viewer { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; background:#0f1115; }
-  #status { font-size:12px; color:var(--dim); padding:6px 12px; border-bottom:1px solid #000; }
-  #pdf-frame { flex:1; width:100%; border:0; background:#0f1115; min-height:0; }
-  #text-viewer { flex:1; min-height:0; overflow:auto; background:#0f1115; }
+  .files .del-file:hover { border-color:var(--danger-fg); color:var(--danger-fg); background:var(--danger-bg); }
+  #viewer { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--input-bg); }
+  #status { font-size:calc(12px * var(--app-text-scale)); color:var(--dim); padding:6px 12px; border-bottom:1px solid var(--border-strong); }
+  #pdf-frame { flex:1; width:100%; border:0; background:var(--input-bg); min-height:0; }
+  /* reader-scoped colours: default to the app palette so the reader matches
+     the app theme, but #text-viewer.theme-* can override them independently */
+  #text-viewer { flex:1; min-height:0; overflow:auto; background:var(--r-bg);
+    --r-bg:var(--input-bg); --r-border:var(--border); --r-border-strong:var(--border-strong);
+    --r-text:var(--text); --r-mark-bg:var(--mark-bg); --r-mark-fg:var(--mark-fg); --r-reader-text:var(--reader-text); }
+  /* reader theme — independent of the app theme (set on #text-viewer) */
+  #text-viewer.theme-light { --r-bg:#ffffff; --r-border:#e2e2e2; --r-border-strong:#e2e2e2;
+    --r-text:#1a1a1a; --r-mark-bg:#ffe9a3; --r-mark-fg:#5c4a00; --r-reader-text:#1a1a1a; }
+  #text-viewer.theme-sepia { --r-bg:#f4ecd8; --r-border:#e0d5b8; --r-border-strong:#e0d5b8;
+    --r-text:#433422; --r-mark-bg:#e8d9a8; --r-mark-fg:#5c4a00; --r-reader-text:#433422; }
   /* sticky toolbar at the top of the text reader — shows/hides with the viewer */
   #text-toolbar { position:sticky; top:0; z-index:5; display:flex; gap:6px; align-items:center;
-    justify-content:center; padding:6px; background:#0f1115; border-bottom:1px solid #000; }
-  #text-toolbar button { padding:3px 10px; font-size:13px; line-height:1.3; }
-  #text-toolbar select { padding:3px 6px; font-size:12px; }
-  #text-toolbar .tlabel { font-size:12px; color:var(--dim); min-width:26px; text-align:center; }
-  #text-toolbar .tsep { width:1px; height:18px; background:#333a47; margin:0 2px; }
-  #text-search { width:130px; padding:3px 8px; font-size:12px; background:#0f1115; color:var(--text);
-    border:1px solid #333a47; border-radius:6px; }
+    justify-content:center; padding:6px; background:var(--r-bg); border-bottom:1px solid var(--r-border-strong); }
+  #text-toolbar button { padding:3px 10px; font-size:calc(13px * var(--app-text-scale)); line-height:1.3; }
+  #text-toolbar select { padding:3px 6px; font-size:calc(12px * var(--app-text-scale)); }
+  #text-toolbar .tlabel { font-size:calc(12px * var(--app-text-scale)); color:var(--dim); min-width:26px; text-align:center; }
+  #text-toolbar .tsep { width:1px; height:18px; background:var(--r-border); margin:0 2px; }
+  #text-search { width:130px; padding:3px 8px; font-size:calc(12px * var(--app-text-scale)); background:var(--r-bg); color:var(--r-text);
+    border:1px solid var(--r-border); border-radius:6px; }
   #text-search:focus { outline:none; border-color:var(--acc); }
-  #text-search-count { font-size:11px; color:var(--dim); min-width:38px; text-align:center; }
+  #text-search-count { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); min-width:38px; text-align:center; }
   /* search hits in the text; the current hit is accented */
-  #text-content mark { background:#3a3320; color:#ffd76a; border-radius:2px; }
+  #text-content mark { background:var(--r-mark-bg); color:var(--r-mark-fg); border-radius:2px; }
   #text-content mark.cur { background:var(--acc); color:#fff; }
-  #text-viewer.theme-light #text-content mark { background:#ffe9a3; color:#5c4a00; }
-  #text-viewer.theme-light #text-content mark.cur { background:var(--acc); color:#fff; }
-  #text-viewer.theme-sepia #text-content mark { background:#e8d9a8; color:#5c4a00; }
-  #text-viewer.theme-sepia #text-content mark.cur { background:var(--acc); color:#fff; }
-  #text-progress { margin-left:auto; font-size:12px; color:var(--dim); min-width:34px; text-align:right; }
+  #text-progress { margin-left:auto; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); min-width:34px; text-align:right; }
   #text-viewer pre { margin:0 auto; max-width:720px; padding:24px 28px 60px;
     font-family:Georgia,'Times New Roman',serif; font-size:16px; line-height:1.7;
-    color:#d7dbe0; white-space:pre-wrap; word-wrap:break-word; }
-  /* reading themes — override the viewer + text + toolbar colours */
-  #text-viewer.theme-light { background:#ffffff; }
-  #text-viewer.theme-light pre { color:#1a1a1a; }
-  #text-viewer.theme-light #text-toolbar { background:#ffffff; border-bottom-color:#e2e2e2; }
-  #text-viewer.theme-sepia { background:#f4ecd8; }
-  #text-viewer.theme-sepia pre { color:#433422; }
-  #text-viewer.theme-sepia #text-toolbar { background:#f4ecd8; border-bottom-color:#e0d5b8; }
+    color:var(--r-reader-text); white-space:pre-wrap; word-wrap:break-word; }
   #html-frame { flex:1; width:100%; border:0; background:#fff; min-height:0; }
-  #epub-viewer { flex:1; min-height:0; overflow:hidden; background:#0f1115; }
+  #epub-viewer { flex:1; min-height:0; overflow:hidden; background:var(--input-bg); }
   /* epub.js renders its own scrollable region; keep the book centred like the
      text reader and let its theme CSS do the rest */
   #epub-viewer .epub-view { height:100%; }
-  .empty { color:var(--dim); font-size:13px; margin-top:24px; padding:0 16px; }
+  .empty { color:var(--dim); font-size:calc(13px * var(--app-text-scale)); margin-top:24px; padding:0 16px; }
   #loading { width:min(560px,92%); margin-top:36px; text-align:center; align-self:center; }
-  #loading h2 { font-size:15px; margin:0 0 4px; word-break:break-all; }
-  #loading .sub { font-size:12px; color:var(--dim); margin-bottom:10px; }
+  #loading h2 { font-size:calc(15px * var(--app-text-scale)); margin:0 0 4px; word-break:break-all; }
+  #loading .sub { font-size:calc(12px * var(--app-text-scale)); color:var(--dim); margin-bottom:10px; }
   #loading .bar { height:6px; }
   #loading .stats {
     display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 18px;
-    text-align:left; font-size:12px; margin-top:14px;
+    text-align:left; font-size:calc(12px * var(--app-text-scale)); margin-top:14px;
   }
   #loading .stats b { color:var(--dim); font-weight:500; margin-right:6px; }
   #loading .spin {
     width:18px; height:18px; margin:0 auto 10px; border-radius:50%;
-    border:2px solid #333a47; border-top-color:var(--acc); animation:spin .9s linear infinite;
+    border:2px solid var(--border); border-top-color:var(--acc); animation:spin .9s linear infinite;
   }
   @keyframes spin { to { transform:rotate(360deg); } }
   #drop-overlay {
     display:none; position:fixed; inset:0; z-index:99;
-    background:rgba(15,17,21,.88); backdrop-filter:blur(2px);
+    background:var(--overlay-strong); backdrop-filter:blur(2px);
     align-items:center; justify-content:center;
     pointer-events:none; /* let the drop reach the window handler */
   }
@@ -302,78 +414,113 @@
     width:min(520px,80vw); padding:40px; text-align:center;
     border:3px dashed var(--acc); border-radius:14px; background:var(--panel);
   }
-  #drop-overlay .box h2 { margin:0 0 8px; font-size:20px; }
-  #drop-overlay .box p { margin:0; color:var(--dim); font-size:13px; }
-  #prov-modal { display:none; position:fixed; inset:0; z-index:100; background:rgba(15,17,21,.7);
+  #drop-overlay .box h2 { margin:0 0 8px; font-size:calc(20px * var(--app-text-scale)); }
+  #drop-overlay .box p { margin:0; color:var(--dim); font-size:calc(13px * var(--app-text-scale)); }
+  #prov-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay);
     align-items:center; justify-content:center; }
   #prov-modal.open { display:flex; }
-  #prov-modal .card { width:min(440px,90vw); background:var(--panel); border:1px solid #333a47;
-    border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
-  #prov-modal h2 { font-size:15px; margin:0 0 14px; }
-  #prov-modal label { display:block; font-size:12px; color:var(--dim); margin:10px 0 4px; }
+  #prov-modal .card { width:min(440px,90vw); background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px var(--shadow-strong); }
+  #prov-modal h2 { font-size:calc(15px * var(--app-text-scale)); margin:0 0 14px; }
+  #prov-modal label { display:block; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); margin:10px 0 4px; }
   #prov-modal input { width:100%; min-width:0; }
   #prov-modal .feedrow { display:flex; gap:8px; align-items:center; }
   #prov-modal .feedrow input { flex:1; }
   #prov-modal .feedrow button { flex:0 0 auto; white-space:nowrap; }
   #prov-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
-  #confirm-modal { display:none; position:fixed; inset:0; z-index:101; background:rgba(15,17,21,.7);
+  #confirm-modal { display:none; position:fixed; inset:0; z-index:101; background:var(--overlay);
     align-items:center; justify-content:center; }
   #confirm-modal.open { display:flex; }
-  #confirm-modal .card { width:min(400px,90vw); background:var(--panel); border:1px solid #333a47;
-    border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
-  #confirm-modal p { font-size:13px; margin:0 0 16px; }
+  #confirm-modal .card { width:min(400px,90vw); background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px var(--shadow-strong); }
+  #confirm-modal p { font-size:calc(13px * var(--app-text-scale)); margin:0 0 16px; }
   #confirm-modal .row { display:flex; gap:8px; justify-content:flex-end; }
   /* plugin management view */
-  #catalog .plugin-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid #000; }
-  #catalog .plugin-head h3 { margin:0; font-size:13px; }
-  #catalog .plugin-head button { font-size:12px; padding:4px 10px; color:var(--acc); }
-  #catalog .plugin-item { position:relative; border-bottom:1px solid #262b34; padding:10px 14px; }
-  #catalog .plugin-item .pname { font-size:13px; font-weight:600; padding-right:36px; }
-  #catalog .plugin-item .pdesc { font-size:11px; color:var(--dim); margin-top:3px; overflow-wrap:anywhere; }
+  #catalog .plugin-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border-strong); }
+  #catalog .plugin-head h3 { margin:0; font-size:calc(13px * var(--app-text-scale)); }
+  #catalog .plugin-head button { font-size:calc(12px * var(--app-text-scale)); padding:4px 10px; color:var(--acc); }
+  #catalog .plugin-item { position:relative; border-bottom:1px solid var(--border-soft); padding:10px 14px; }
+  #catalog .plugin-item .pname { font-size:calc(13px * var(--app-text-scale)); font-weight:600; padding-right:36px; }
+  #catalog .plugin-item .pdesc { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:3px; overflow-wrap:anywhere; }
   #catalog .plugin-item .prow { display:flex; gap:6px; margin-top:8px; align-items:center; }
-  #catalog .plugin-item .prow button { font-size:12px; padding:4px 10px; }
-  #catalog .plugin-item .loaded { font-size:11px; color:var(--acc); margin-left:auto; }
-  #catalog .plugin-item .cog { position:absolute; top:10px; right:10px; padding:3px 7px; font-size:12px; line-height:1; background:#0f1115; color:var(--dim); border:1px solid #333a47; border-radius:6px; cursor:pointer; }
-  #catalog .plugin-item .cog:hover { background:#232a36; border-color:var(--acc); color:var(--text); }
-  #catalog .plugin-empty { color:var(--dim); font-size:13px; padding:16px 14px; }
+  #catalog .plugin-item .prow button { font-size:calc(12px * var(--app-text-scale)); padding:4px 10px; }
+  #catalog .plugin-item .loaded { font-size:calc(11px * var(--app-text-scale)); color:var(--acc); margin-left:auto; }
+  #catalog .plugin-item .cog { position:absolute; top:10px; right:10px; padding:3px 7px; font-size:calc(12px * var(--app-text-scale)); line-height:1; background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
+  #catalog .plugin-item .cog:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
+  #catalog .plugin-empty { color:var(--dim); font-size:calc(13px * var(--app-text-scale)); padding:16px 14px; }
   /* plugin modals */
-  #plugin-run-modal, #plugin-add-modal { display:none; position:fixed; inset:0; z-index:100; background:rgba(15,17,21,.7); align-items:center; justify-content:center; }
+  #plugin-run-modal, #plugin-add-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
   #plugin-run-modal.open, #plugin-add-modal.open { display:flex; }
-  #plugin-run-modal .card, #plugin-add-modal .card { width:min(520px,92vw); background:var(--panel); border:1px solid #333a47; border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
-  #plugin-run-modal h2, #plugin-add-modal h2 { font-size:15px; margin:0 0 14px; }
-  #plugin-run-modal label, #plugin-add-modal label { display:block; font-size:12px; color:var(--dim); margin:10px 0 4px; }
+  #plugin-run-modal .card, #plugin-add-modal .card { width:min(520px,92vw); background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px var(--shadow-strong); }
+  #plugin-run-modal h2, #plugin-add-modal h2 { font-size:calc(15px * var(--app-text-scale)); margin:0 0 14px; }
+  #plugin-run-modal label, #plugin-add-modal label { display:block; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); margin:10px 0 4px; }
   #plugin-run-modal input, #plugin-add-modal input { width:100%; min-width:0; }
-  #plugin-add-modal textarea { width:100%; min-height:220px; font-family:ui-monospace,Consolas,monospace; font-size:12px; background:#0f1115; color:var(--text); border:1px solid #333a47; border-radius:6px; padding:8px 10px; resize:vertical; }
+  #plugin-add-modal textarea { width:100%; min-height:220px; font-family:ui-monospace,Consolas,monospace; font-size:calc(12px * var(--app-text-scale)); background:var(--input-bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px; resize:vertical; }
   #plugin-run-modal .row, #plugin-add-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
-  #plugin-add-modal .hint { font-size:11px; color:var(--dim); margin-top:6px; line-height:1.5; }
-  #plugin-add-modal label.chk { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text); margin:10px 0 0; cursor:pointer; }
+  #plugin-add-modal .hint { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:6px; line-height:1.5; }
+  #plugin-add-modal label.chk { display:flex; align-items:center; gap:7px; font-size:calc(12px * var(--app-text-scale)); color:var(--text); margin:10px 0 0; cursor:pointer; }
   #plugin-add-modal label.chk input { width:auto; }
   /* live provider: config controls injected into the search bar */
   #searchbar .live-cfg { max-width:150px; }
   #searchbar .live-cfg.txt { flex:0 1 170px; }
-  #searchbar #search-btn { padding:5px 10px; font-size:12px; white-space:nowrap; }
+  #searchbar #search-btn { padding:5px 10px; font-size:calc(12px * var(--app-text-scale)); white-space:nowrap; }
   /* plugin management: active toggle */
-  #catalog .plugin-item .active-tgl { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--text); cursor:pointer; }
+  #catalog .plugin-item .active-tgl { display:flex; align-items:center; gap:5px; font-size:calc(12px * var(--app-text-scale)); color:var(--text); cursor:pointer; }
   #catalog .plugin-item .active-tgl input { width:auto; }
   /* plugin config modal */
-  #plugin-config-modal { display:none; position:fixed; inset:0; z-index:100; background:rgba(15,17,21,.7); align-items:center; justify-content:center; }
+  #plugin-config-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
   #plugin-config-modal.open { display:flex; }
-  #plugin-config-modal .card { width:min(460px,92vw); background:var(--panel); border:1px solid #333a47; border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
-  #plugin-config-modal h2 { font-size:15px; margin:0 0 14px; }
+  #plugin-config-modal .card { width:min(460px,92vw); background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px var(--shadow-strong); }
+  #plugin-config-modal h2 { font-size:calc(15px * var(--app-text-scale)); margin:0 0 14px; }
   #plugin-config-modal .cfg-field { margin-bottom:12px; }
-  #plugin-config-modal .cfg-field label { display:block; font-size:12px; color:var(--dim); margin-bottom:4px; }
+  #plugin-config-modal .cfg-field label { display:block; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); margin-bottom:4px; }
   #plugin-config-modal .cfg-field input, #plugin-config-modal .cfg-field select { width:100%; min-width:0; }
   #plugin-config-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  /* settings view (⚙ in the left rail) */
+  #catalog .settings-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border-strong); }
+  #catalog .settings-head h3 { margin:0; font-size:calc(13px * var(--app-text-scale)); }
+  #catalog .settings-section { padding:10px 14px; border-bottom:1px solid var(--border-soft); }
+  #catalog .settings-section h4 { margin:0 0 8px; font-size:calc(11px * var(--app-text-scale)); color:var(--dim); text-transform:uppercase; letter-spacing:.5px; }
+  #catalog .settings-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  #catalog .settings-row > label:first-child { font-size:calc(12px * var(--app-text-scale)); color:var(--text); min-width:100px; flex:0 0 auto; }
+  #catalog .settings-row select { flex:1; min-width:0; }
+  #catalog .settings-row input[type="range"] { flex:1; min-width:0; }
+  #catalog .settings-row .val { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); min-width:36px; text-align:right; flex:0 0 auto; }
+  #catalog .settings-row button { font-size:calc(12px * var(--app-text-scale)); padding:4px 10px; }
+  #catalog .settings-row label.chk { font-size:calc(12px * var(--app-text-scale)); display:flex; align-items:center; gap:5px; min-width:auto; cursor:pointer; }
+  #catalog .settings-row label.chk input { width:auto; }
+  #catalog .settings-item { border-bottom:1px solid var(--border-faint); padding:8px 0; }
+  #catalog .settings-item:last-child { border-bottom:0; }
+  #catalog .settings-item .sname { font-size:calc(13px * var(--app-text-scale)); font-weight:600; }
+  #catalog .settings-item .sdesc { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  #catalog .settings-item .srow { display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap; }
+  #catalog .settings-item .srow button { font-size:calc(12px * var(--app-text-scale)); padding:4px 10px; }
+  #catalog .settings-item .srow button.danger { color:var(--danger-fg); }
+  #catalog .settings-item .srow button.danger:hover { background:var(--danger-bg); border-color:var(--danger-fg); }
+  #catalog .settings-item .srow label { font-size:calc(12px * var(--app-text-scale)); display:flex; align-items:center; gap:4px; cursor:pointer; }
+  #catalog .settings-item .srow label input { width:auto; }
+  /* provider header row: name on the left, enabled switch pushed to the right */
+  #catalog .settings-item .shead { display:flex; align-items:center; gap:8px; }
+  #catalog .settings-item .shead .sname { flex:1; min-width:0; }
+  #catalog .settings-item .shead .switch { margin-left:auto; }
+  /* on/off switch (provider enabled) — a styled checkbox */
+  .switch { position:relative; display:inline-block; width:34px; height:19px; flex:0 0 auto; cursor:pointer; }
+  .switch input { opacity:0; width:0; height:0; }
+  .switch .track { position:absolute; inset:0; background:var(--border); border-radius:19px; transition:background .15s; }
+  .switch .track::before { content:''; position:absolute; top:2px; left:2px; width:15px; height:15px;
+    background:var(--text); border-radius:50%; transition:transform .15s; }
+  .switch input:checked + .track { background:var(--acc); }
+  .switch input:checked + .track::before { transform:translateX(15px); background:#fff; }
   /* local-provider metadata filters */
-  #searchbar #filters-btn { padding:5px 10px; font-size:12px; white-space:nowrap; }
-  #filters-modal { display:none; position:fixed; inset:0; z-index:100; background:rgba(15,17,21,.7); align-items:center; justify-content:center; }
+  #searchbar #filters-btn { padding:5px 10px; font-size:calc(12px * var(--app-text-scale)); white-space:nowrap; }
+  #filters-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
   #filters-modal.open { display:flex; }
-  #filters-modal .card { width:min(440px,92vw); max-height:88vh; overflow-y:auto; background:var(--panel); border:1px solid #333a47; border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px #000c; }
-  #filters-modal h2 { font-size:15px; margin:0 0 14px; }
+  #filters-modal .card { width:min(440px,92vw); max-height:88vh; overflow-y:auto; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px var(--shadow-strong); }
+  #filters-modal h2 { font-size:calc(15px * var(--app-text-scale)); margin:0 0 14px; }
   #filters-modal .fgroup { margin-bottom:14px; }
-  #filters-modal .fgroup-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); margin-bottom:8px; }
+  #filters-modal .fgroup-label { font-size:calc(11px * var(--app-text-scale)); text-transform:uppercase; letter-spacing:.04em; color:var(--dim); margin-bottom:8px; }
   #filters-modal .cfg-field { margin-bottom:12px; }
-  #filters-modal .cfg-field label { display:block; font-size:12px; color:var(--dim); margin-bottom:4px; }
+  #filters-modal .cfg-field label { display:block; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); margin-bottom:4px; }
   #filters-modal .cfg-field input, #filters-modal .cfg-field select { width:100%; min-width:0; }
   #filters-modal .frow { display:flex; gap:10px; }
   #filters-modal .frow .cfg-field { flex:1; }
@@ -495,7 +642,7 @@
   <button onclick="addMagnet()">Add</button>
   <button onclick="syncFeed()">Sync feed</button>
   <div class="grow"></div>
-  <span id="hdrstat" style="font-size:12px;color:var(--dim)"></span>
+  <span id="hdrstat" style="font-size:calc(12px * var(--app-text-scale));color:var(--dim)"></span>
 </header>
 <main>
   <aside>
@@ -558,12 +705,6 @@
           <option value="mono">Mono</option>
         </select>
         <span class="tsep"></span>
-        <select id="text-theme" title="Theme">
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="sepia">Sepia</option>
-        </select>
-        <span class="tsep"></span>
         <select id="text-spacing" title="Line spacing">
           <option value="compact">Compact</option>
           <option value="normal">Normal</option>
@@ -595,7 +736,7 @@ let providers = []; // [{id, name, feed, description, enabled}]
 let favorites = []; // [{key, name, type, ih, pdf, url, magnet, kind, provider}]
 let shelf = []; // personal shelf — a superset of favorites (favorites ⊆ shelf)
 // left rail: which top-level view the sidebar shows
-let view = 'shelf'; // 'shelf' | 'favorites' | 'reading' | 'plugins'
+let view = 'shelf'; // 'shelf' | 'favorites' | 'reading' | 'plugins' | 'settings'
 let readingSub = 'all'; // 'all' | 'toread' | 'reading' | 'complete' (My Shelf sub-tabs)
 let favSub = 'all'; // 'all' | 'toread' | 'reading' | 'complete' (Favorites sub-tabs)
 let tagFilter = null; // active custom-tag filter (My Shelf + Favorites views; null = all)
@@ -609,9 +750,13 @@ let plugins = []; // [{id, name, description}] — custom behaviours
 let page = 1; // current page of the (paginated) list
 let perPage = parseInt(localStorage.getItem('per-page'), 10) || 25; // items per page (0 = all)
 // live plugin provider: results are fetched on demand (not from the catalog)
-let liveResults = []; // [{name, url|magnet|path, meta?}] for the active live tab
+let liveResults = []; // [{name, url|magnet|path, meta?, editions?}] for the active live tab
 let liveLoading = false;
+let liveExpanded = new Set(); // result indices whose editions list is expanded
+let shelfGroupExpanded = new Set(); // group names expanded in My Shelf
 let savedTexts = []; // [{id, name, size, url, provider}] — texts saved locally for offline reading
+let savedEpubs = []; // [{id, name, size, url, provider}] — EPUBs saved locally for offline reading
+let savedFiles = []; // [{id, name, size, url, provider, kind}] — html/mobi/file saved locally
 let liveSeq = 0; // guards against out-of-order search responses
 // metadata filters for local (non-live) providers: PDF fields + torrent state/size
 let localFilters = { author:'', subject:'', keywords:'', minPages:'', maxPages:'', state:'', minSize:'', maxSize:'' };
@@ -629,6 +774,8 @@ async function refresh() {
     shelf = await j('/api/shelf').then(r => r.json());
     allTags = await j('/api/shelf/tags').then(r => r.json());
     savedTexts = await j('/api/texts').then(r => r.json());
+    savedEpubs = await j('/api/epubs').then(r => r.json());
+    savedFiles = await j('/api/files').then(r => r.json());
     const byMagnet = Object.fromEntries(catalog.map(c => [magnetKey(c.magnet), c]));
     const provOf = t => (byMagnet[magnetKey(t.magnet)] || {}).provider || 'local';
     renderRail();
@@ -637,6 +784,7 @@ async function refresh() {
     if (view === 'favorites') { renderFavorites(torrents, directPdfs, byMagnet, provOf); return; }
     if (view === 'reading') { renderReading(torrents, directPdfs, byMagnet, provOf); return; }
     if (view === 'plugins') { renderPluginView(directPdfs, catalog); return; }
+    if (view === 'settings') { renderSettingsView(); return; }
     renderShelf(torrents, directPdfs, catalog, byMagnet, provOf);
   } catch (e) { /* server still starting */ }
 }
@@ -927,9 +1075,11 @@ function renderLiveProvider(prov, directPdfs) {
   }
   const kindIcon = { pdf: '&#128196;', text: '&#128221;', html: '&#127760;', epub: '&#128218;', torrent: '&#128279;' };
   const savedByUrl = Object.fromEntries(savedTexts.map(t => [t.url, t]));
+  const savedEpubByUrl = Object.fromEntries(savedEpubs.map(t => [t.url, t]));
+  const savedFileByUrl = Object.fromEntries(savedFiles.map(t => [t.url, t]));
   // PDFs already downloaded to disk (for later reading) — matched by URL
   const downloadedByUrl = Object.fromEntries(directPdfs.filter(p => p.url).map(p => [p.url, p]));
-  for (const it of liveResults) {
+  for (const [idx, it] of liveResults.entries()) {
     const item = document.createElement('div');
     item.className = 'titem has-shelf';
     const kind = it.magnet ? 'torrent' : (it.kind || 'pdf');
@@ -949,14 +1099,51 @@ function renderLiveProvider(prov, directPdfs) {
     const savePdfBtn = (kind === 'pdf' && it.url)
       ? `<button type="button" class="savepdf${dl ? ' on' : ''}" data-pdfurl="${esc(it.url)}" data-pdfname="${esc(it.name)}" data-pdfid="${dl ? esc(dl.id) : ''}" title="${dl ? 'Downloaded — click to open' : 'Download for later reading'}">${dl ? '💾' : '⬇'}</button>`
       : '';
+    // an EPUB result can be saved locally for offline reading (like a text)
+    const savedEpub = (kind === 'epub' && it.url) ? savedEpubByUrl[it.url] : null;
+    const saveEpubBtn = (kind === 'epub' && it.url)
+      ? `<button type="button" class="saveepub${savedEpub ? ' on' : ''}" data-saveurl="${esc(it.url)}" data-savename="${esc(it.name)}" data-saveprovider="${esc(prov.id)}" data-savedid="${savedEpub ? esc(savedEpub.id) : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${savedEpub ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${savedEpub ? '💾' : '⬇'}</button>`
+      : '';
+    // html / mobi / generic-file results can also be saved locally for offline reading
+    const savedFile = (['html', 'mobi', 'file'].includes(kind) && it.url) ? savedFileByUrl[it.url] : null;
+    const saveFileBtn = (['html', 'mobi', 'file'].includes(kind) && it.url)
+      ? `<button type="button" class="savefile${savedFile ? ' on' : ''}" data-saveurl="${esc(it.url)}" data-savename="${esc(it.name)}" data-saveprovider="${esc(prov.id)}" data-savekind="${esc(kind)}" data-savedid="${savedFile ? esc(savedFile.id) : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${savedFile ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${savedFile ? '💾' : '⬇'}</button>`
+      : '';
     const metaLine = (it.meta || kind) + (dl ? ' · 💾 downloaded' : '');
-    item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}" data-saved="${saved ? esc(saved.id) : ''}">
+    // a book with several editions gets an expandable list of ALL of them in
+    // the same box (repeated kinds included, told apart by filename); the
+    // main button opens the first (preferred) one
+    const eds = it.editions || [];
+    const edOpen = liveExpanded.has(idx);
+    // each edition is its own shelf/favorite entry (keyed by its URL), so a
+    // book's text and EPUB can be shelved independently
+    const editionsHtml = eds.length > 1
+      ? `<button type="button" class="edtoggle" data-edtoggle="${idx}">${edOpen ? '▾' : '▸'} ${eds.length} editions</button>
+         <div class="edlist${edOpen ? ' open' : ''}">${eds.map(ed => {
+            const edKey = 'live:' + ed.url;
+            const edFav = favorites.some(f => f.key === edKey);
+            const edShelf = shelf.some(s => s.key === edKey);
+            const edSavedEpub = (ed.kind === 'epub') ? savedEpubByUrl[ed.url] : null;
+            const edSaveEpubBtn = (ed.kind === 'epub')
+              ? `<button type="button" class="edsaveepub${edSavedEpub ? ' on' : ''}" data-saveurl="${esc(ed.url)}" data-savename="${esc(it.name)} (${esc(ed.kind)})" data-saveprovider="${esc(prov.id)}" data-savedid="${edSavedEpub ? esc(edSavedEpub.id) : ''}" data-favkey="${esc(edKey)}" data-favtype="live" data-favname="${esc(it.name)} (${esc(ed.kind)})" data-favurl="${esc(ed.url)}" data-favmagnet="" data-favkind="${esc(ed.kind)}" data-favprovider="${esc(prov.id)}" data-favgroup="${esc(it.name)}" title="${edSavedEpub ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${edSavedEpub ? '💾' : '⬇'}</button>`
+              : '';
+            const edSavedFile = (['html', 'mobi', 'file'].includes(ed.kind)) ? savedFileByUrl[ed.url] : null;
+            const edSaveFileBtn = (['html', 'mobi', 'file'].includes(ed.kind))
+              ? `<button type="button" class="edsavefile${edSavedFile ? ' on' : ''}" data-saveurl="${esc(ed.url)}" data-savename="${esc(it.name)} (${esc(ed.kind)})" data-saveprovider="${esc(prov.id)}" data-savekind="${esc(ed.kind)}" data-savedid="${edSavedFile ? esc(edSavedFile.id) : ''}" data-favkey="${esc(edKey)}" data-favtype="live" data-favname="${esc(it.name)} (${esc(ed.kind)})" data-favurl="${esc(ed.url)}" data-favmagnet="" data-favkind="${esc(ed.kind)}" data-favprovider="${esc(prov.id)}" data-favgroup="${esc(it.name)}" title="${edSavedFile ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${edSavedFile ? '💾' : '⬇'}</button>`
+              : '';
+            return `<div class="edrow" data-edurl="${esc(ed.url)}" data-edkind="${esc(ed.kind)}" data-edname="${esc(it.name)}" title="Open ${esc(ed.kind)} edition"><span class="edkind">${kindIcon[ed.kind] || ''} ${esc(ed.kind)}</span><span class="edname">${esc(ed.name || '')}</span>${edSaveEpubBtn}${edSaveFileBtn}<button type="button" class="edshelf${edShelf ? ' on' : ''}" data-favkey="${esc(edKey)}" data-favtype="live" data-favname="${esc(it.name)} (${esc(ed.kind)})" data-favurl="${esc(ed.url)}" data-favmagnet="" data-favkind="${esc(ed.kind)}" data-favprovider="${esc(prov.id)}" data-favgroup="${esc(it.name)}" title="${edShelf ? 'Remove from shelf' : 'Add to shelf'}">📖</button><button type="button" class="edfav${edFav ? ' on' : ''}" data-favkey="${esc(edKey)}" data-favtype="live" data-favname="${esc(it.name)} (${esc(ed.kind)})" data-favurl="${esc(ed.url)}" data-favmagnet="" data-favkind="${esc(ed.kind)}" data-favprovider="${esc(prov.id)}" data-favgroup="${esc(it.name)}" title="${edFav ? 'Remove from favorites' : 'Add to favorites'}">${edFav ? '★' : '☆'}</button></div>`;
+          }).join('')}</div>`
+      : '';
+    item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}" data-saved="${saved ? esc(saved.id) : ''}" data-savedepub="${savedEpub ? esc(savedEpub.id) : ''}" data-savedfile="${savedFile ? esc(savedFile.id) : ''}">
         <div class="name">${kindIcon[kind] || '&#128196;'} ${esc(it.name)}</div>
         <div class="meta">${esc(metaLine)}</div>
       </button>
+      ${editionsHtml}
       ${saveBtn}
       ${savePdfBtn}
-      <button type="button" class="shelfbtn${liveShelved ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>
+      ${saveEpubBtn}
+      ${saveFileBtn}
+      <button type="button" class="shelfbtn${liveShelved ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" data-favgroup="${esc(it.name)}" title="${liveShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>
       <button type="button" class="fav${liveIsFav ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveIsFav ? 'Remove from favorites' : 'Add to favorites'}">${liveIsFav ? '★' : '☆'}</button>`;
     el.appendChild(item);
   }
@@ -976,6 +1163,7 @@ function runLiveSearch() {
   else Object.assign(cfg, prov.config || {});
   const seq = ++liveSeq;
   liveLoading = true;
+  liveExpanded.clear(); // a new result set — old expansion indices are stale
   refresh();
   const params = new URLSearchParams({ query: q, config: JSON.stringify(cfg) });
   j(`/api/plugins/${pid}/search?${params}`)
@@ -1057,6 +1245,7 @@ function renderRail() {
   mk('★', 'Favorites — your starred documents', 'favorites');
   mk('📖', 'My Shelf — your books: to read, in progress & complete', 'reading');
   mk('🧩', 'Plugins — manage custom sources', 'plugins');
+  mk('⚙', 'Settings — reader, display, providers & plugins', 'settings');
 }
 
 // ---- Shelf: the provider tabs ----
@@ -1108,7 +1297,8 @@ async function toggleFavorite(btn) {
   const on = btn.classList.contains('on');
   const payload = { key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
     ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
-    magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local' };
+    magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
+    group: d.favgroup || '' };
   try {
     if (on) await j('/api/favorites?key=' + encodeURIComponent(d.favkey), { method: 'DELETE' });
     else await j('/api/favorites', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
@@ -1123,7 +1313,8 @@ async function toggleShelf(btn) {
   const on = btn.classList.contains('on');
   const payload = { key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
     ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
-    magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local' };
+    magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
+    group: d.favgroup || '' };
   try {
     if (on) await j('/api/shelf?key=' + encodeURIComponent(d.favkey), { method: 'DELETE' });
     else await j('/api/shelf', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
@@ -1145,7 +1336,8 @@ async function saveText(btn) {
       await j('/api/shelf', { method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
           ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
-          magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local' }) });
+          magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
+          group: d.favgroup || '' }) });
     }
     refresh();
   } catch (e) { alert('could not save: ' + e.message); }
@@ -1203,11 +1395,124 @@ async function openSavedText(id, name, key) {
   }
 }
 
+// ⬇/💾 save an EPUB locally for offline reading (mirrors saveText). Re-saving
+// the same URL is a no-op on the server; the button flips to 💾 once saved.
+async function saveEpub(btn) {
+  try {
+    await j('/api/epub/save', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ url: btn.dataset.saveurl, name: btn.dataset.savename || '', provider: btn.dataset.saveprovider || 'local' }) });
+    // auto-add to the shelf so the saved EPUB shows up in My Shelf (idempotent)
+    const d = btn.dataset;
+    if (d.favkey) {
+      await j('/api/shelf', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
+          ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
+          magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
+          group: d.favgroup || '' }) });
+    }
+    refresh();
+  } catch (e) { alert('could not save: ' + e.message); }
+}
+
+// remove a locally-saved EPUB (with a confirm, since it deletes the file)
+async function removeSavedEpub(btn) {
+  const ok = await askConfirm('Remove this saved EPUB and delete it from disk?');
+  if (!ok) return;
+  try {
+    await j(`/api/epubs/${btn.dataset.savedid}`, { method: 'DELETE' });
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+// ⬇/💾 save an html/mobi/file result locally for offline reading (mirrors
+// saveEpub). The kind is carried so the server stores + serves the right type.
+async function saveFile(btn) {
+  try {
+    await j('/api/file/save', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ url: btn.dataset.saveurl, name: btn.dataset.savename || '', provider: btn.dataset.saveprovider || 'local', kind: btn.dataset.savekind || 'file' }) });
+    // auto-add to the shelf so the saved file shows up in My Shelf (idempotent)
+    const d = btn.dataset;
+    if (d.favkey) {
+      await j('/api/shelf', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
+          ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
+          magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
+          group: d.favgroup || '' }) });
+    }
+    refresh();
+  } catch (e) { alert('could not save: ' + e.message); }
+}
+
+// remove a locally-saved html/mobi/file (with a confirm, since it deletes it)
+async function removeSavedFile(btn) {
+  const ok = await askConfirm('Remove this saved file and delete it from disk?');
+  if (!ok) return;
+  try {
+    await j(`/api/files/${btn.dataset.savedid}`, { method: 'DELETE' });
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+// open a locally-saved EPUB in the in-site reader (served from disk, so it
+// works offline). Mirrors openEpubResult but reads the bytes from /api/epubs.
+async function openSavedEpub(id, name, key) {
+  openShelfKey = key || null;
+  hideLoading();
+  document.getElementById('pages').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('pdf-frame').style.display = 'none';
+  document.getElementById('text-viewer').style.display = 'none';
+  document.getElementById('html-frame').style.display = 'none';
+  hideEpub();
+  const status = document.getElementById('status');
+  status.textContent = `loading ${name || 'EPUB'}…`;
+  status.style.display = '';
+  const viewer = document.getElementById('epub-viewer');
+  viewer.style.display = '';
+  try {
+    const r = await j(`/api/epubs/${id}`);
+    const buf = await r.arrayBuffer();
+    const book = ePub(buf);
+    epubBook = book;
+    const rendition = book.renderTo(viewer, { width: '100%', height: '100%', flow: 'paginated' });
+    epubRendition = rendition;
+    rendition.themes.override('font-family', "Georgia,'Times New Roman',serif");
+    rendition.themes.override('font-size', '16px');
+    rendition.themes.override('line-height', '1.7');
+    await book.ready.then(() => book.locations.generate(1600));
+    const pos = key ? shelfPos(key) : null;
+    await rendition.display(pos && pos.cfi ? pos.cfi : undefined);
+    status.textContent = name || 'EPUB';
+    rendition.on('relocated', (loc) => {
+      if (!loc) return;
+      epubLoc = loc;
+      const pct = (typeof loc.percentage === 'number') ? loc.percentage : 0;
+      const cfi = (loc.start && loc.start.cfi) || loc.cfi || '';
+      if (openShelfKey) savePosition(openShelfKey, 0, pct, cfi);
+    });
+  } catch (e) {
+    status.textContent = `error: ${e.message}`;
+    hideEpub();
+  }
+}
+
 async function removeFromShelf(btn) {
   const key = btn.dataset.rmkey;
   if (!confirm('Remove this book from your shelf?')) return;
   try {
     await j('/api/shelf?key=' + encodeURIComponent(key), { method: 'DELETE' });
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+// 🗑 on a My Shelf group header — removes the whole book (every edition of it)
+async function removeBookFromShelf(btn) {
+  const gname = btn.dataset.rmgroup;
+  const keys = shelf.filter(s => s.group === gname).map(s => s.key);
+  if (!keys.length) return;
+  if (!confirm(`Remove this book (${keys.length} edition${keys.length > 1 ? 's' : ''}) from your shelf?`)) return;
+  try {
+    for (const k of keys) await j('/api/shelf?key=' + encodeURIComponent(k), { method: 'DELETE' });
     refresh();
   } catch (e) { alert(e.message); }
 }
@@ -1242,6 +1547,8 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
   // sync with the My Shelf view for the same book
   const shelfByKey = Object.fromEntries(shelf.map(s => [s.key, s]));
   const savedByUrl = Object.fromEntries(savedTexts.map(t => [t.url, t]));
+  const savedEpubByUrl = Object.fromEntries(savedEpubs.map(t => [t.url, t]));
+  const savedFileByUrl = Object.fromEntries(savedFiles.map(t => [t.url, t]));
   const rows = [];
   for (const f of source) {
     const eff = shelfByKey[f.key] || f;
@@ -1264,24 +1571,49 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
         pdf: p.id, source: p.source, url: p.url || '', fav: f, eff });
     } else { // live result (Gutenberg text/html/epub/pdf, or a torrent magnet)
       const saved = (f.kind === 'text' && f.url) ? savedByUrl[f.url] : null;
+      const savedEpub = (f.kind === 'epub' && f.url) ? savedEpubByUrl[f.url] : null;
+      const savedFile = (['html', 'mobi', 'file'].includes(f.kind) && f.url) ? savedFileByUrl[f.url] : null;
       rows.push({ kind: 'live', name: f.name, meta: (f.kind || 'saved'),
-        url: f.url, magnet: f.magnet, kind: f.kind, saved: saved ? saved.id : '', fav: f, eff });
+        url: f.url, magnet: f.magnet, kind: f.kind, saved: saved ? saved.id : '',
+        savedepub: savedEpub ? savedEpub.id : '', savedfile: savedFile ? savedFile.id : '',
+        fav: f, eff, group: f.group || '' });
     }
   }
-  for (const r of rows) {
+  // group editions of the same book (My Shelf only): rows sharing a non-empty
+  // `group` render as one expandable box; everything else renders flat
+  const groups = new Map(); // group name -> { name, rows: [] }
+  const flat = [];
+  if (opts.group) {
+    for (const r of rows) {
+      if (r.group) {
+        let g = groups.get(r.group);
+        if (!g) { g = { name: r.group, rows: [] }; groups.set(r.group, g); }
+        g.rows.push(r);
+      } else flat.push(r);
+    }
+  } else flat.push(...rows);
+  const renderRow = (r) => {
     const item = document.createElement('div');
     item.dataset.shelfkey = r.fav.key;
     // 💾 save/remove a text locally (live text rows only); saved rows open from disk
     const saveBtn = (r.kind === 'text' && r.url)
       ? `<button type="button" class="savetext${r.saved ? ' on' : ''}" data-saveurl="${esc(r.url)}" data-savename="${esc(r.name)}" data-saveprovider="${esc(r.fav.provider || 'local')}" data-savedid="${esc(r.saved || '')}" data-favkey="${esc(r.fav.key)}" data-favtype="${esc(r.fav.type)}" data-favname="${esc(r.fav.name)}" data-favurl="${esc(r.fav.url || '')}" data-favmagnet="${esc(r.fav.magnet || '')}" data-favkind="${esc(r.fav.kind || '')}" data-favprovider="${esc(r.fav.provider || 'local')}" title="${r.saved ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${r.saved ? '💾' : '⬇'}</button>`
       : '';
+    // 💾 save/remove an EPUB locally (live EPUB rows only); saved rows open from disk
+    const saveEpubBtn = (r.kind === 'epub' && r.url)
+      ? `<button type="button" class="saveepub${r.savedepub ? ' on' : ''}" data-saveurl="${esc(r.url)}" data-savename="${esc(r.name)}" data-saveprovider="${esc(r.fav.provider || 'local')}" data-savedid="${esc(r.savedepub || '')}" data-favkey="${esc(r.fav.key)}" data-favtype="${esc(r.fav.type)}" data-favname="${esc(r.fav.name)}" data-favurl="${esc(r.fav.url || '')}" data-favmagnet="${esc(r.fav.magnet || '')}" data-favkind="${esc(r.fav.kind || '')}" data-favprovider="${esc(r.fav.provider || 'local')}" title="${r.savedepub ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${r.savedepub ? '💾' : '⬇'}</button>`
+      : '';
+    // 💾 save/remove an html/mobi/file locally (live rows only); saved rows open from disk
+    const saveFileBtn = (['html', 'mobi', 'file'].includes(r.kind) && r.url)
+      ? `<button type="button" class="savefile${r.savedfile ? ' on' : ''}" data-saveurl="${esc(r.url)}" data-savename="${esc(r.name)}" data-saveprovider="${esc(r.fav.provider || 'local')}" data-savekind="${esc(r.kind)}" data-savedid="${esc(r.savedfile || '')}" data-favkey="${esc(r.fav.key)}" data-favtype="${esc(r.fav.type)}" data-favname="${esc(r.fav.name)}" data-favurl="${esc(r.fav.url || '')}" data-favmagnet="${esc(r.fav.magnet || '')}" data-favkind="${esc(r.fav.kind || '')}" data-favprovider="${esc(r.fav.provider || 'local')}" title="${r.savedfile ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${r.savedfile ? '💾' : '⬇'}</button>`
+      : '';
     item.className = 'titem' + (showStatus ? ' has-status' : '') + (showTags ? ' has-tags' : '')
       + (showStar && showStatus ? ' has-fav-status' : '') + (showRemove ? ' has-remove' : '')
-      + (saveBtn ? ' has-savetext' : '');
+      + (saveBtn ? ' has-savetext' : '') + (saveEpubBtn ? ' has-saveepub' : '') + (saveFileBtn ? ' has-savefile' : '');
     let openBtn;
     if (r.kind === 'torrent') openBtn = `<button type="button" class="open" data-ih="${r.ih}" data-name="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">${esc(r.name)}</div><div class="meta">${r.meta}</div><div class="bar"><div style="width:${r.bar}%"></div></div></button>`;
     else if (r.kind === 'pdf') openBtn = `<button type="button" class="open" data-pdf="${r.pdf}" data-name="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">&#128196; ${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
-    else openBtn = `<button type="button" class="open" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}" data-saved="${esc(r.saved || '')}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
+    else openBtn = `<button type="button" class="open" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}" data-saved="${esc(r.saved || '')}" data-savedepub="${esc(r.savedepub || '')}" data-savedfile="${esc(r.savedfile || '')}" data-liveprovider="${esc(r.fav.provider || '')}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
     // favorite state is read from the favorites list (source of truth), so the
     // star is correct in both views: always on in Favorites, on/off in My Shelf
     const isFav = favorites.some(f => f.key === r.fav.key);
@@ -1304,7 +1636,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
     const rmBtn = showRemove
       ? `<button type="button" class="rmshelf" data-rmkey="${esc(r.fav.key)}" title="Remove from shelf">🗑</button>`
       : '';
-    item.innerHTML = openBtn + saveBtn + star + statusSel + tagBtn + rmBtn;
+    item.innerHTML = openBtn + saveBtn + saveEpubBtn + saveFileBtn + star + statusSel + tagBtn + rmBtn;
     // where the reader last stopped (p. N for PDFs, % for text)
     const pos = r.eff;
     const posLabel = (pos.page > 1) ? `p. ${pos.page}` : (pos.scroll > 0.005 ? Math.round(pos.scroll * 100) + '%' : '');
@@ -1351,7 +1683,74 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       item.classList.add('has-savedpdf');
     }
     el.appendChild(item);
+    return item;
+  };
+  // a compact edition row inside a My Shelf group box — mirrors the search
+  // view's edition rows: [icon] kind  filename  [⬇/💾] [📖] [★]. The book
+  // title is NOT repeated (it's in the group header); only the filename shows.
+  // Status/tags live on the book (header); shelf/favorite/download are per-edition.
+  const memberKindIcon = { pdf: '&#128196;', text: '&#128221;', html: '&#127760;', epub: '&#128218;', mobi: '&#128241;', file: '&#128230;' };
+  const editionFilename = (r) => {
+    try { return decodeURIComponent(new URL(r.url).pathname.split('/').filter(Boolean).pop()) || r.url; }
+    catch { return r.url; }
+  };
+  const renderMemberRow = (r) => {
+    const row = document.createElement('div');
+    row.className = 'edrow';
+    row.dataset.edurl = r.url || '';
+    row.dataset.edkind = r.kind || 'pdf';
+    row.dataset.edname = r.name || '';
+    row.dataset.shelfkey = r.fav.key;
+    row.title = `Open ${r.kind || 'pdf'} edition`;
+    // download button (⬇/💾) — from the item itself; the kind picks the endpoint
+    let saveBtn = '';
+    const favAttrs = `data-favkey="${esc(r.fav.key)}" data-favtype="${esc(r.fav.type)}" data-favname="${esc(r.fav.name)}" data-favurl="${esc(r.fav.url || '')}" data-favmagnet="${esc(r.fav.magnet || '')}" data-favkind="${esc(r.fav.kind || '')}" data-favprovider="${esc(r.fav.provider || 'local')}" data-favgroup="${esc(r.group || '')}"`;
+    if (r.kind === 'text' && r.url) {
+      saveBtn = `<button type="button" class="edsave${r.saved ? ' on' : ''}" data-edkind="text" data-saveurl="${esc(r.url)}" data-savename="${esc(r.name)}" data-saveprovider="${esc(r.fav.provider || 'local')}" data-savedid="${esc(r.saved || '')}" ${favAttrs} title="${r.saved ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${r.saved ? '💾' : '⬇'}</button>`;
+    } else if (r.kind === 'epub' && r.url) {
+      saveBtn = `<button type="button" class="edsave${r.savedepub ? ' on' : ''}" data-edkind="epub" data-saveurl="${esc(r.url)}" data-savename="${esc(r.name)}" data-saveprovider="${esc(r.fav.provider || 'local')}" data-savedid="${esc(r.savedepub || '')}" ${favAttrs} title="${r.savedepub ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${r.savedepub ? '💾' : '⬇'}</button>`;
+    } else if (['html', 'mobi', 'file'].includes(r.kind) && r.url) {
+      saveBtn = `<button type="button" class="edsave${r.savedfile ? ' on' : ''}" data-edkind="${esc(r.kind)}" data-saveurl="${esc(r.url)}" data-savename="${esc(r.name)}" data-saveprovider="${esc(r.fav.provider || 'local')}" data-savekind="${esc(r.kind)}" data-savedid="${esc(r.savedfile || '')}" ${favAttrs} title="${r.savedfile ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${r.savedfile ? '💾' : '⬇'}</button>`;
+    } else if (r.kind === 'pdf' && r.url) {
+      const dl = directPdfs.find(p => p.url === r.url);
+      saveBtn = `<button type="button" class="edsave${dl ? ' on' : ''}" data-edkind="pdf" data-pdfurl="${esc(r.url)}" data-pdfname="${esc(r.name)}" data-pdfid="${dl ? esc(dl.id) : ''}" title="${dl ? 'Downloaded — click to open' : 'Download for later reading'}">${dl ? '💾' : '⬇'}</button>`;
+    }
+    // shelf + favorite — from the item itself (each edition is its own entry)
+    const isFav = favorites.some(f => f.key === r.fav.key);
+    const isShelf = shelf.some(s => s.key === r.fav.key);
+    const shelfBtn = `<button type="button" class="edshelf${isShelf ? ' on' : ''}" ${favAttrs} title="${isShelf ? 'Remove from shelf' : 'Add to shelf'}">📖</button>`;
+    const favBtn = `<button type="button" class="edfav${isFav ? ' on' : ''}" ${favAttrs} title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">${isFav ? '★' : '☆'}</button>`;
+    row.innerHTML = `<span class="edkind">${memberKindIcon[r.kind] || ''} ${esc(r.kind || 'pdf')}</span><span class="edname">${esc(editionFilename(r))}</span>${saveBtn}${shelfBtn}${favBtn}`;
+    return row;
+  };
+  for (const [gname, g] of groups) {
+    const box = document.createElement('div');
+    box.className = 'titem groupbox';
+    const open = shelfGroupExpanded.has(gname);
+    const n = g.rows.length;
+    // book-level controls come from the first edition (the "book" entry)
+    const first = g.rows[0];
+    const st = first.eff.status || 'toread';
+    const nTags = (first.eff.tags || []).length;
+    const statusSel = showStatus
+      ? `<select class="status" data-favkey="${esc(first.fav.key)}" onchange="setStatus(this)" title="Reading status">
+           <option value="toread"${st === 'toread' ? ' selected' : ''}>To read</option>
+           <option value="reading"${st === 'reading' ? ' selected' : ''}>Reading</option>
+           <option value="complete"${st === 'complete' ? ' selected' : ''}>Complete</option>
+         </select>`
+      : '';
+    const tagBtn = showTags
+      ? `<button type="button" class="tagbtn" data-favkey="${esc(first.fav.key)}" title="Tags">${nTags ? '🏷 ' + nTags : '🏷'}</button>`
+      : '';
+    const rmBtn = showRemove
+      ? `<button type="button" class="rmshelf" data-rmgroup="${esc(gname)}" title="Remove book from shelf">🗑</button>`
+      : '';
+    box.innerHTML = `<div class="grouphdr"><button type="button" class="grouphdr-toggle" data-grouptoggle="${esc(gname)}"><div class="name">${esc(gname)}</div><div class="meta">${open ? '▾' : '▸'} ${n} edition${n > 1 ? 's' : ''}</div></button><div class="ghdr-right">${statusSel}${tagBtn}${rmBtn}</div></div><div class="groupmembers${open ? ' open' : ''}"></div>`;
+    const members = box.querySelector('.groupmembers');
+    for (const r of g.rows) members.appendChild(renderMemberRow(r));
+    el.appendChild(box);
   }
+  for (const r of flat) el.appendChild(renderRow(r));
   document.getElementById('hdrstat').textContent = rows.length
     ? `${rows.length} ${opts.statLabel || 'item(s)'}`
     : (opts.emptyMsg || 'nothing here yet');
@@ -1411,7 +1810,7 @@ function renderReading(torrents, directPdfs, byMagnet, provOf) {
     complete: { stat: 'completed',   empty: 'nothing completed yet',                                   ph: 'Search completed…' },
   }[readingSub];
   renderCollection(torrents, directPdfs, byMagnet, provOf, {
-    source: 'shelf', showStar: true, statusFilter: readingSub, showStatus: true, showTags: true, showRemove: true, tagFilter,
+    source: 'shelf', showStar: true, statusFilter: readingSub, showStatus: true, showTags: true, showRemove: true, tagFilter, group: true,
     statLabel: L.stat, emptyMsg: L.empty, placeholder: L.ph,
   });
 }
@@ -2153,21 +2552,34 @@ document.getElementById('font-family').addEventListener('change', (e) => {
 });
 applyTextFontFamily();
 
-// reading theme (persisted) — dark is the default; light/sepia add a class
+// app theme (persisted) — dark is the default; light/sepia add a class to
+// <body>, which re-themes the whole app chrome via the CSS variable palettes
+let appTheme = localStorage.getItem('appTheme') || 'dark';
+function applyAppTheme() {
+  document.body.classList.remove('theme-light', 'theme-sepia');
+  if (appTheme !== 'dark') document.body.classList.add('theme-' + appTheme);
+}
+applyAppTheme();
+
+// reader theme (persisted) — independent of the app theme; light/sepia add a
+// class to #text-viewer, which overrides the reader-scoped colour variables
 let textTheme = localStorage.getItem('textTheme') || 'dark';
 function applyTextTheme() {
   const viewer = document.getElementById('text-viewer');
   viewer.classList.remove('theme-light', 'theme-sepia');
   if (textTheme !== 'dark') viewer.classList.add('theme-' + textTheme);
-  const sel = document.getElementById('text-theme');
-  if (sel) sel.value = textTheme;
 }
-document.getElementById('text-theme').addEventListener('change', (e) => {
-  textTheme = e.target.value;
-  localStorage.setItem('textTheme', textTheme);
-  applyTextTheme();
-});
 applyTextTheme();
+
+// app UI size (persisted) — scales the app chrome's text and icons via the
+// --app-text-scale / --app-icon-scale variables (independent of the reader)
+let appTextScale = parseFloat(localStorage.getItem('appTextScale')) || 1;
+let appIconScale = parseFloat(localStorage.getItem('appIconScale')) || 1;
+function applyAppSize() {
+  document.documentElement.style.setProperty('--app-text-scale', appTextScale);
+  document.documentElement.style.setProperty('--app-icon-scale', appIconScale);
+}
+applyAppSize();
 
 // line spacing (persisted) — line-height on the <pre>
 const LINE_SPACING = { compact: 1.4, normal: 1.7, relaxed: 2.0 };
@@ -2402,9 +2814,11 @@ async function openEpubResult(url, name, key) {
   }
 }
 
-// open a live plugin search result: download its PDF (deduped by URL) and open it
-async function openLiveResult(url, name, key) {
-  const prov = providers.find(p => p.id === activeProvider && p.live);
+// open a live plugin search result: download its PDF (deduped by URL) and open it.
+// The provider is resolved from the entry's own provider tag (not the active
+// tab) so a shelved PDF edition opens from My Shelf / Favorites too.
+async function openLiveResult(url, name, key, providerId) {
+  const prov = providers.find(p => p.id === (providerId || activeProvider) && p.live);
   if (!prov || !url) return;
   const pid = prov.id.slice(7);
   const status = document.getElementById('status');
@@ -2471,6 +2885,98 @@ async function doPdfAction(id, act, source) {
 
 // clicking a torrent/PDF button in the sidebar (open it), or its ⋯ menu
 document.getElementById('catalog').addEventListener('click', (e) => {
+  // expand/collapse a group of editions of the same book (My Shelf)
+  const grpToggle = e.target.closest('button.grouphdr-toggle[data-grouptoggle]');
+  if (grpToggle) {
+    e.preventDefault();
+    const g = grpToggle.dataset.grouptoggle;
+    if (shelfGroupExpanded.has(g)) shelfGroupExpanded.delete(g); else shelfGroupExpanded.add(g);
+    refresh();
+    return;
+  }
+  // expand/collapse a book's editions list (multi-edition results, e.g. Gutenberg)
+  const edToggle = e.target.closest('button.edtoggle[data-edtoggle]');
+  if (edToggle) {
+    e.preventDefault();
+    const i = parseInt(edToggle.dataset.edtoggle, 10);
+    if (liveExpanded.has(i)) liveExpanded.delete(i); else liveExpanded.add(i);
+    refresh();
+    return;
+  }
+  // 📖/★ on an edition row — each edition is its own shelf/favorite entry
+  const edShelfBtn = e.target.closest('button.edshelf[data-favkey]');
+  if (edShelfBtn) { e.preventDefault(); toggleShelf(edShelfBtn); return; }
+  const edFavBtn = e.target.closest('button.edfav[data-favkey]');
+  if (edFavBtn) { e.preventDefault(); toggleFavorite(edFavBtn); return; }
+  // ⬇/💾 save/remove an EPUB edition locally for offline reading
+  const edSaveEpubBtn = e.target.closest('button.edsaveepub[data-saveurl]');
+  if (edSaveEpubBtn) {
+    e.preventDefault();
+    if (edSaveEpubBtn.dataset.savedid) removeSavedEpub(edSaveEpubBtn);
+    else saveEpub(edSaveEpubBtn);
+    return;
+  }
+  // ⬇/💾 save/remove an html/mobi/file edition locally for offline reading
+  const edSaveFileBtn = e.target.closest('button.edsavefile[data-saveurl]');
+  if (edSaveFileBtn) {
+    e.preventDefault();
+    if (edSaveFileBtn.dataset.savedid) removeSavedFile(edSaveFileBtn);
+    else saveFile(edSaveFileBtn);
+    return;
+  }
+  // ⬇/💾 on a My Shelf group member row — the download is per-edition; the
+  // kind picks which save endpoint (text/epub/file) or the PDF download
+  const edSaveBtn = e.target.closest('button.edsave[data-edkind]');
+  if (edSaveBtn) {
+    e.preventDefault();
+    const k = edSaveBtn.dataset.edkind;
+    if (k === 'pdf') {
+      if (edSaveBtn.dataset.pdfid) openDirectPdfById(edSaveBtn.dataset.pdfid, edSaveBtn.dataset.pdfname || '', null);
+      else downloadLivePdf(edSaveBtn.dataset.pdfurl, edSaveBtn.dataset.pdfname || '');
+    } else if (k === 'epub') {
+      if (edSaveBtn.dataset.savedid) removeSavedEpub(edSaveBtn); else saveEpub(edSaveBtn);
+    } else if (k === 'text') {
+      if (edSaveBtn.dataset.savedid) removeSavedText(edSaveBtn); else saveText(edSaveBtn);
+    } else {
+      if (edSaveBtn.dataset.savedid) removeSavedFile(edSaveBtn); else saveFile(edSaveBtn);
+    }
+    return;
+  }
+  // one specific edition of a multi-edition book (e.g. Gutenberg)
+  const edRow = e.target.closest('.edrow[data-edurl]');
+  if (edRow) {
+    e.preventDefault();
+    const kind = edRow.dataset.edkind;
+    const url = edRow.dataset.edurl;
+    const name = edRow.dataset.edname || '';
+    // My Shelf member rows carry the edition's shelf key so the reader can
+    // save/restore the reading position for that specific edition
+    const key = edRow.dataset.shelfkey || null;
+    if (kind === 'text') {
+      const st = savedTexts.find(t => t.url === url);
+      if (st) openSavedText(st.id, name, key);
+      else openTextResult(url, name, key);
+    }
+    else if (kind === 'html') {
+      // a saved HTML opens from disk (offline); otherwise it's fetched live
+      const sf = savedFiles.find(t => t.url === url);
+      if (sf) openHtmlResult(`/api/files/${sf.id}`, name, key);
+      else openHtmlResult(url, name, key);
+    }
+    else if (kind === 'epub') {
+      // a saved EPUB opens from disk (offline); otherwise it's fetched live
+      const se = savedEpubs.find(t => t.url === url);
+      if (se) openSavedEpub(se.id, name, key);
+      else openEpubResult(url, name, key);
+    }
+    else if (kind === 'pdf') {
+      const dl = directPdfs.find(p => p.url === url);
+      if (dl) openDirectPdfById(dl.id, name, key);
+      else openLiveResult(url, name, key);
+    }
+    else window.open(url, '_blank', 'noopener');
+    return;
+  }
   const liveBtn = e.target.closest('button.open[data-liveurl]');
   if (liveBtn) {
     e.preventDefault();
@@ -2481,10 +2987,18 @@ document.getElementById('catalog').addEventListener('click', (e) => {
       if (liveBtn.dataset.saved) openSavedText(liveBtn.dataset.saved, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
       else openTextResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
     }
-    else if (liveBtn.dataset.livekind === 'html') openHtmlResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
-    else if (liveBtn.dataset.livekind === 'epub') openEpubResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+    else if (liveBtn.dataset.livekind === 'html') {
+      // a saved HTML opens from disk (offline); otherwise it's fetched live
+      if (liveBtn.dataset.savedfile) openHtmlResult(`/api/files/${liveBtn.dataset.savedfile}`, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+      else openHtmlResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+    }
+    else if (liveBtn.dataset.livekind === 'epub') {
+      // a saved EPUB opens from disk (offline); otherwise it's fetched live
+      if (liveBtn.dataset.savedepub) openSavedEpub(liveBtn.dataset.savedepub, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+      else openEpubResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+    }
     else if (liveBtn.dataset.livekind && liveBtn.dataset.livekind !== 'pdf') window.open(liveBtn.dataset.liveurl, '_blank', 'noopener');
-    else openLiveResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null);
+    else openLiveResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null, liveBtn.dataset.liveprovider || '');
     return;
   }
   const cfgBtn = e.target.closest('button[data-config]');
@@ -2528,6 +3042,22 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     else saveText(saveBtn);
     return;
   }
+  // ⬇/💾 save/remove an EPUB locally for offline reading (live EPUB rows)
+  const saveEpubBtn = e.target.closest('button.saveepub[data-saveurl]');
+  if (saveEpubBtn) {
+    e.preventDefault();
+    if (saveEpubBtn.dataset.savedid) removeSavedEpub(saveEpubBtn);
+    else saveEpub(saveEpubBtn);
+    return;
+  }
+  // ⬇/💾 save/remove an html/mobi/file result locally for offline reading
+  const saveFileBtn = e.target.closest('button.savefile[data-saveurl]');
+  if (saveFileBtn) {
+    e.preventDefault();
+    if (saveFileBtn.dataset.savedid) removeSavedFile(saveFileBtn);
+    else saveFile(saveFileBtn);
+    return;
+  }
   // ⬇ download a PDF result for later reading (or open it if already downloaded)
   const savePdfBtn = e.target.closest('button.savepdf[data-pdfurl]');
   if (savePdfBtn) {
@@ -2541,6 +3071,13 @@ document.getElementById('catalog').addEventListener('click', (e) => {
   if (shelfBtn) {
     e.preventDefault();
     toggleShelf(shelfBtn);
+    return;
+  }
+  // 🗑 remove a whole book from the shelf (My Shelf group header)
+  const rmGroupBtn = e.target.closest('button.rmshelf[data-rmgroup]');
+  if (rmGroupBtn) {
+    e.preventDefault();
+    removeBookFromShelf(rmGroupBtn);
     return;
   }
   // 🗑 remove from the shelf (My Shelf rows)
@@ -2696,10 +3233,10 @@ async function openFileManager(ih) {
   pages.style.display = '';
   pages.innerHTML = '';
   const h = document.createElement('h2');
-  h.style.cssText = 'font-size:14px;margin:0 0 4px;';
+  h.style.cssText = 'font-size:calc(14px * var(--app-text-scale));margin:0 0 4px;';
   h.textContent = `Files in ${entry.name || ih}`;
   const sub = document.createElement('div');
-  sub.style.cssText = 'font-size:12px;color:var(--dim);margin:0 0 10px;';
+  sub.style.cssText = 'font-size:calc(12px * var(--app-text-scale));color:var(--dim);margin:0 0 10px;';
   sub.textContent = 'Nothing downloads until you open a PDF or include a file. ' +
     '⊘ excludes a file from the download; 🗑 deletes it from disk (the torrent is kept).';
   pages.appendChild(h);
@@ -2799,6 +3336,198 @@ function renderPluginView(directPdfs, catalog) {
     el.appendChild(item);
   }
 }
+
+// ---- Settings (⚙ in the left rail): reader, display, providers, plugins ----
+// Consolidates every persisted setting the app has. Reader/display prefs live
+// in localStorage; providers/plugins are server-backed. All controls apply
+// immediately (no Save button) and the view re-renders on the 4s poll like
+// the other views, so a re-render just rebuilds at the current state.
+function renderSettingsView() {
+  document.getElementById('tabs').style.display = 'none';
+  document.getElementById('searchbar').style.display = 'none';
+  document.getElementById('count').textContent = '';
+  document.getElementById('hdrstat').textContent = 'settings';
+  const el = document.getElementById('catalog');
+  el.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'settings-head';
+  head.innerHTML = '<h3>Settings</h3>';
+  el.appendChild(head);
+
+  const section = (title) => {
+    const s = document.createElement('div');
+    s.className = 'settings-section';
+    s.innerHTML = `<h4>${title}</h4>`;
+    el.appendChild(s);
+    return s;
+  };
+
+  // ---- Text reader (localStorage) ----
+  const reader = section('Text reader');
+  reader.insertAdjacentHTML('beforeend', `
+    <div class="settings-row"><label>Font size</label><input type="range" id="set-fontsize" min="10" max="32" step="1" value="${textFontSize}"><span class="val" id="set-fontsize-val">${textFontSize}px</span></div>
+    <div class="settings-row"><label>Font</label><select id="set-fontfamily">
+      <option value="serif"${textFontFamily === 'serif' ? ' selected' : ''}>Serif</option>
+      <option value="sans"${textFontFamily === 'sans' ? ' selected' : ''}>Sans</option>
+      <option value="mono"${textFontFamily === 'mono' ? ' selected' : ''}>Monospace</option>
+    </select></div>
+    <div class="settings-row"><label>Reader theme</label><select id="set-theme">
+      <option value="dark"${textTheme === 'dark' ? ' selected' : ''}>Dark</option>
+      <option value="light"${textTheme === 'light' ? ' selected' : ''}>Light</option>
+      <option value="sepia"${textTheme === 'sepia' ? ' selected' : ''}>Sepia</option>
+    </select></div>
+    <div class="settings-row"><label>Line spacing</label><select id="set-spacing">
+      <option value="compact"${textSpacing === 'compact' ? ' selected' : ''}>Compact</option>
+      <option value="normal"${textSpacing === 'normal' ? ' selected' : ''}>Normal</option>
+      <option value="relaxed"${textSpacing === 'relaxed' ? ' selected' : ''}>Relaxed</option>
+    </select></div>
+    <div class="settings-row"><label>Width</label><select id="set-width">
+      <option value="narrow"${textWidth === 'narrow' ? ' selected' : ''}>Narrow</option>
+      <option value="normal"${textWidth === 'normal' ? ' selected' : ''}>Normal</option>
+      <option value="wide"${textWidth === 'wide' ? ' selected' : ''}>Wide</option>
+    </select></div>
+  `);
+
+  // ---- Display (localStorage) ----
+  const disp = section('Display');
+  disp.insertAdjacentHTML('beforeend', `
+    <div class="settings-row"><label>App theme</label><select id="set-app-theme">
+      <option value="dark"${appTheme === 'dark' ? ' selected' : ''}>Dark</option>
+      <option value="light"${appTheme === 'light' ? ' selected' : ''}>Light</option>
+      <option value="sepia"${appTheme === 'sepia' ? ' selected' : ''}>Sepia</option>
+    </select></div>
+    <div class="settings-row"><label>Text size</label><input type="range" id="set-app-text" min="80" max="150" step="5" value="${Math.round(appTextScale * 100)}"><span class="val" id="set-app-text-val">${Math.round(appTextScale * 100)}%</span></div>
+    <div class="settings-row"><label>Icon size</label><input type="range" id="set-app-icon" min="80" max="150" step="5" value="${Math.round(appIconScale * 100)}"><span class="val" id="set-app-icon-val">${Math.round(appIconScale * 100)}%</span></div>
+    <div class="settings-row"><label>Items per page</label><select id="set-perpage">
+      <option value="10"${perPage === 10 ? ' selected' : ''}>10</option>
+      <option value="25"${perPage === 25 ? ' selected' : ''}>25</option>
+      <option value="50"${perPage === 50 ? ' selected' : ''}>50</option>
+      <option value="100"${perPage === 100 ? ' selected' : ''}>100</option>
+      <option value="all"${perPage === 0 ? ' selected' : ''}>All</option>
+    </select></div>
+  `);
+
+  // ---- Providers (server) ----
+  const provs = section('Providers');
+  provs.insertAdjacentHTML('beforeend', '<div class="settings-row"><button id="settings-add-provider">+ Add provider</button></div>');
+  for (const p of providers) {
+    // only extra (providers.json) providers can be toggled/removed; the built-in
+    // "local" and live plugin providers are managed elsewhere
+    const isExtra = p.id !== 'local' && !p.plugin;
+    const item = document.createElement('div');
+    item.className = 'settings-item';
+    const rowBtns = [
+      p.feed ? `<button data-prov-sync="${esc(p.id)}">↻ Sync</button>` : '',
+      isExtra ? `<button data-prov-remove="${esc(p.id)}" class="danger">🗑 Remove</button>` : '',
+    ].join('');
+    item.innerHTML = `
+      <div class="shead">
+        <div class="sname">${p.plugin ? '🔌' : '📡'} ${esc(p.name)}</div>
+        ${isExtra ? `<label class="switch" title="Enabled"><input type="checkbox" data-prov-enabled="${esc(p.id)}"${p.enabled ? ' checked' : ''}><span class="track"></span></label>` : ''}
+      </div>
+      ${p.description ? `<div class="sdesc">${esc(p.description)}</div>` : ''}
+      ${p.feed ? `<div class="sdesc">${esc(p.feed)}</div>` : ''}
+      ${rowBtns ? `<div class="srow">${rowBtns}</div>` : ''}`;
+    provs.appendChild(item);
+  }
+
+  // ---- Plugins (server) ----
+  const plugs = section('Plugins');
+  plugs.insertAdjacentHTML('beforeend', '<div class="settings-row"><button id="settings-add-plugin">+ Add plugin</button></div>');
+  if (!plugins.length) plugs.insertAdjacentHTML('beforeend', '<div class="sdesc">No plugins yet.</div>');
+  for (const pl of plugins) {
+    const item = document.createElement('div');
+    item.className = 'settings-item';
+    item.innerHTML = `
+      <div class="shead">
+        <div class="sname">🔌 ${esc(pl.name)}</div>
+        <label class="switch" title="Active"><input type="checkbox" data-plug-active="${esc(pl.id)}"${pl.active ? ' checked' : ''}><span class="track"></span></label>
+      </div>
+      ${pl.description ? `<div class="sdesc">${esc(pl.description)}</div>` : ''}
+      <div class="srow">
+        ${(pl.config_schema || []).length ? `<button data-plug-config="${esc(pl.id)}">⚙ Settings</button>` : ''}
+        ${pl.has_fetch ? `<button data-plug-run="${esc(pl.id)}">▶ Run</button>` : ''}
+        <button data-plug-clear="${esc(pl.id)}">🧹 Clear</button>
+        <button data-plug-remove="${esc(pl.id)}" class="danger">🗑 Remove</button>
+      </div>`;
+    plugs.appendChild(item);
+  }
+}
+
+// settings view: delegated handlers, attached ONCE (no-op unless view ===
+// 'settings'). Using delegation on #catalog (which persists across re-renders)
+// avoids stacking a new listener on every 4s re-render.
+(function () {
+  const el = document.getElementById('catalog');
+  el.addEventListener('click', (e) => {
+    if (view !== 'settings') return;
+    const t = e.target;
+    if (t.closest('#settings-add-provider')) { addProviderDialog(); return; }
+    if (t.closest('#settings-add-plugin')) { openAddPluginModal(); return; }
+    const provSync = t.closest('button[data-prov-sync]');
+    if (provSync) { syncProvider(provSync.dataset.provSync); return; }
+    const provRemove = t.closest('button[data-prov-remove]');
+    if (provRemove) { const p = providers.find(x => x.id === provRemove.dataset.provRemove); if (p) removeProvider(p); return; }
+    const plugConfig = t.closest('button[data-plug-config]');
+    if (plugConfig) { openConfigModal(plugConfig.dataset.plugConfig); return; }
+    const plugRun = t.closest('button[data-plug-run]');
+    if (plugRun) { openRunPluginModal(plugRun.dataset.plugRun); return; }
+    const plugClear = t.closest('button[data-plug-clear]');
+    if (plugClear) { doPluginAction(plugClear.dataset.plugClear, 'clear'); return; }
+    const plugRemove = t.closest('button[data-plug-remove]');
+    if (plugRemove) { doPluginAction(plugRemove.dataset.plugRemove, 'remove'); return; }
+  });
+  el.addEventListener('change', (e) => {
+    if (view !== 'settings') return;
+    const t = e.target;
+    if (t.id === 'set-fontfamily') { textFontFamily = t.value; localStorage.setItem('textFontFamily', textFontFamily); applyTextFontFamily(); return; }
+    if (t.id === 'set-theme') { textTheme = t.value; localStorage.setItem('textTheme', textTheme); applyTextTheme(); return; }
+    if (t.id === 'set-app-theme') { appTheme = t.value; localStorage.setItem('appTheme', appTheme); applyAppTheme(); return; }
+    if (t.id === 'set-spacing') { textSpacing = t.value; localStorage.setItem('textSpacing', textSpacing); applyTextSpacing(); return; }
+    if (t.id === 'set-width') { textWidth = t.value; localStorage.setItem('textWidth', textWidth); applyTextWidth(); return; }
+    if (t.id === 'set-perpage') { perPage = t.value === 'all' ? 0 : parseInt(t.value, 10); localStorage.setItem('per-page', String(perPage)); page = 1; refresh(); return; }
+    const provEn = t.closest('input[data-prov-enabled]');
+    if (provEn) { setProviderEnabled(provEn.dataset.provEnabled, provEn.checked); return; }
+    const plugAct = t.closest('input[data-plug-active]');
+    if (plugAct) {
+      const pid = plugAct.dataset.plugActive;
+      j(`/api/plugins/${pid}/active`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ active: plugAct.checked }) })
+        .then(r => r.json()).then(() => refresh())
+        .catch(err => { alert(err.message); refresh(); });
+      return;
+    }
+  });
+  // live preview for the range sliders (reader font size + app text/icon size)
+  el.addEventListener('input', (e) => {
+    if (view !== 'settings') return;
+    const t = e.target;
+    if (t.id === 'set-fontsize') {
+      textFontSize = Math.max(10, Math.min(32, Number(t.value)));
+      localStorage.setItem('textFontSize', String(textFontSize));
+      applyTextFontSize();
+      const v = document.getElementById('set-fontsize-val');
+      if (v) v.textContent = textFontSize + 'px';
+      return;
+    }
+    if (t.id === 'set-app-text') {
+      appTextScale = Math.max(0.8, Math.min(1.5, Number(t.value) / 100));
+      localStorage.setItem('appTextScale', String(appTextScale));
+      applyAppSize();
+      const v = document.getElementById('set-app-text-val');
+      if (v) v.textContent = Math.round(appTextScale * 100) + '%';
+      return;
+    }
+    if (t.id === 'set-app-icon') {
+      appIconScale = Math.max(0.8, Math.min(1.5, Number(t.value) / 100));
+      localStorage.setItem('appIconScale', String(appIconScale));
+      applyAppSize();
+      const v = document.getElementById('set-app-icon-val');
+      if (v) v.textContent = Math.round(appIconScale * 100) + '%';
+      return;
+    }
+  });
+})();
 
 async function doPluginAction(pid, act) {
   if (act === 'clear') {
