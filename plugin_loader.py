@@ -30,6 +30,7 @@ import importlib.util
 import inspect
 import json
 import re
+import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -144,11 +145,24 @@ def set_config(pid: str, config: dict) -> None:
     _save_state(state)
 
 
+def _tracked_plugin_files() -> set[str]:
+    """Plugin filenames tracked in git — these are the built-in plugins that
+    ship with the app; anything else in plugins/ is user-added (custom)."""
+    try:
+        out = subprocess.run(["git", "ls-files", "plugins/"],
+                             cwd=str(PLUGIN_DIR.parent), capture_output=True,
+                             text=True, timeout=5)
+        return {line.split("/", 1)[-1] for line in out.stdout.splitlines() if line.strip()}
+    except Exception:
+        return set()
+
+
 def list_plugins() -> list[dict]:
     """Every plugin file in plugins/, with metadata from its source and the
     persisted active/config state."""
     if not PLUGIN_DIR.is_dir():
         return []
+    tracked = _tracked_plugin_files()
     out = []
     for f in sorted(PLUGIN_DIR.glob("*.py")):
         if f.name.startswith("_"):
@@ -162,6 +176,7 @@ def list_plugins() -> list[dict]:
                    "has_search": meta["has_search"],
                    "has_fetch": meta["has_fetch"],
                    "active": st["active"], "config": st["config"],
+                   "builtin": f.name in tracked,
                    "path": str(f)})
     return out
 
@@ -197,6 +212,11 @@ def search_plugin(pid: str, query: str, config: dict) -> list[dict]:
         kind = str(entry.get("kind", "")).strip()
         if kind:
             item["kind"] = kind
+        # a two-stage provider (e.g. Internet Archive) returns items without a
+        # URL yet, tagged with the id the app passes to resolve() to fetch it
+        rid = str(entry.get("resolve_id", "")).strip()
+        if rid:
+            item["resolve_id"] = rid
         meta = str(entry.get("meta", "")).strip()
         if meta:
             item["meta"] = meta
@@ -217,6 +237,24 @@ def search_plugin(pid: str, query: str, config: dict) -> list[dict]:
                 item["editions"] = clean
         items.append(item)
     return items
+
+
+def resolve_plugin(pid: str, ids: list) -> dict:
+    """Run a plugin's resolve(ids) (two-stage providers only) and return its
+    {id: {...} | None} mapping. Raises if the plugin has no resolve()."""
+    path = PLUGIN_DIR / f"{pid}.py"
+    if not path.is_file():
+        raise FileNotFoundError(f"plugin not found: {pid}")
+    mod = _load_module(path)
+    resolve = getattr(mod, "resolve", None)
+    if not callable(resolve):
+        raise RuntimeError(f"plugin {pid} has no resolve() function")
+    raw = resolve(list(ids or []))
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise RuntimeError(f"plugin {pid} resolve() must return a dict")
+    return raw
 
 
 def run_plugin(pid: str, query: str) -> list[dict]:
@@ -286,6 +324,40 @@ def add_plugin(name: str, code: str, needs_query: bool = True) -> dict:
         f'DESCRIPTION = "custom plugin"\n\n'
     )
     path.write_text(header + code, encoding="utf-8")
+    return {"id": pid, "name": name, "path": str(path)}
+
+
+def load_plugin_from_path(path_str: str) -> dict:
+    """Read an existing plugin .py file from an arbitrary path and return its
+    metadata + source so the front end can prefill the Add-plugin form. The
+    file is validated by compiling it (not executed) so a syntax error is
+    caught before the user saves it. The file is NOT copied here — the user
+    still clicks Add to register it into plugins/."""
+    p = Path(path_str).expanduser()
+    if not p.is_file():
+        raise FileNotFoundError(f"no such file: {p}")
+    if p.suffix.lower() != ".py":
+        raise ValueError("not a .py plugin file")
+    src = p.read_text(encoding="utf-8", errors="replace")
+    compile(src, str(p), "exec")  # raises SyntaxError if bad
+    meta = _meta_from_source(p)
+    return {"name": meta["name"], "description": meta["description"],
+            "needs_query": meta["needs_query"], "code": src, "path": str(p)}
+
+
+def update_plugin(pid: str, name: str, code: str, needs_query: bool = True) -> dict:
+    """Overwrite an existing plugin's source (same id, so its active flag and
+    config in plugin_state.json are kept). The code is compile-checked first,
+    like add_plugin."""
+    path = PLUGIN_DIR / f"{pid}.py"
+    if not path.is_file():
+        raise FileNotFoundError(f"plugin not found: {pid}")
+    if not name.strip():
+        raise ValueError("plugin name required")
+    if not code.strip():
+        raise ValueError("plugin code required")
+    compile(code, f"<plugin {name}>", "exec")  # raises SyntaxError if bad
+    path.write_text(code, encoding="utf-8")
     return {"id": pid, "name": name, "path": str(path)}
 
 

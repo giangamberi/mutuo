@@ -576,6 +576,10 @@ class PluginAddRequest(BaseModel):
     needs_query: bool = True
 
 
+class PluginPathRequest(BaseModel):
+    path: str
+
+
 def _plugin_config_defaults(schema) -> dict:
     """Build a config dict from a plugin's CONFIG schema defaults."""
     out = {}
@@ -650,6 +654,24 @@ def search_plugin(pid: str, query: str = "", config: str = "") -> JSONResponse:
     return JSONResponse({"ok": True, "items": items})
 
 
+class PluginResolveRequest(BaseModel):
+    ids: List[str] = []
+
+
+@app.post("/api/plugins/{pid}/resolve")
+def resolve_plugin(pid: str, req: PluginResolveRequest) -> JSONResponse:
+    """Stage 2 of a two-stage provider: resolve a batch of pending result ids
+    (e.g. archive.org identifiers) to their openable URLs. The plugin's
+    resolve() fetches the metadata in parallel and returns {id: {...}|None}."""
+    try:
+        resolved = plugin_loader.resolve_plugin(pid, req.ids)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc))
+    except Exception as exc:
+        raise HTTPException(502, f"plugin resolve failed: {exc}")
+    return JSONResponse({"ok": True, "resolved": resolved})
+
+
 @app.post("/api/plugins/{pid}/open")
 def open_plugin_pdf(pid: str, req: PluginOpenRequest) -> JSONResponse:
     """Download a search-result PDF (by url) and return its direct-PDF id so
@@ -701,10 +723,56 @@ def run_plugin(pid: str, req: PluginRunRequest | None = None) -> JSONResponse:
                          "errors": errors, "provider": provider})
 
 
+@app.get("/api/plugins/{pid}/source")
+def plugin_source(pid: str) -> JSONResponse:
+    """A plugin's current source + metadata, so the front end can prefill the
+    edit modal."""
+    path = plugin_loader.PLUGIN_DIR / f"{pid}.py"
+    if not path.is_file():
+        raise HTTPException(404, f"plugin not found: {pid}")
+    meta = plugin_loader._meta_from_source(path)
+    return JSONResponse({"ok": True, "name": meta["name"],
+                         "needs_query": meta["needs_query"],
+                         "code": path.read_text(encoding="utf-8", errors="replace")})
+
+
+@app.post("/api/plugins/from-path")
+def load_plugin_from_path(req: PluginPathRequest) -> JSONResponse:
+    """Read a plugin .py file from a path and return its metadata + source so
+    the front end can prefill the Add-plugin form (the user still clicks Add
+    to register it)."""
+    try:
+        info = plugin_loader.load_plugin_from_path(req.path)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc))
+    except (ValueError, SyntaxError) as exc:
+        raise HTTPException(400, str(exc))
+    return JSONResponse({"ok": True, **info})
+
+
 @app.post("/api/plugins")
 def add_plugin(req: PluginAddRequest) -> JSONResponse:
     try:
         info = plugin_loader.add_plugin(req.name, req.code, req.needs_query)
+    except (ValueError, SyntaxError) as exc:
+        raise HTTPException(400, str(exc))
+    return JSONResponse({"ok": True, **info})
+
+
+class PluginUpdateRequest(BaseModel):
+    name: str
+    code: str
+    needs_query: bool = True
+
+
+@app.put("/api/plugins/{pid}")
+def update_plugin(pid: str, req: PluginUpdateRequest) -> JSONResponse:
+    """Overwrite a plugin's source. The id (and its active flag + config) is
+    unchanged — only the .py file is rewritten."""
+    try:
+        info = plugin_loader.update_plugin(pid, req.name, req.code, req.needs_query)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc))
     except (ValueError, SyntaxError) as exc:
         raise HTTPException(400, str(exc))
     return JSONResponse({"ok": True, **info})
@@ -974,6 +1042,27 @@ def open_pdf_folder(pid: str) -> JSONResponse:
     except Exception as exc:
         raise HTTPException(500, f"could not open folder: {exc}")
     return JSONResponse({"ok": True, "path": str(folder)})
+
+
+class PdfMetaRequest(BaseModel):
+    title: str = ""
+    author: str = ""
+    subject: str = ""
+    keywords: str = ""
+
+
+@app.put("/api/pdfs/{pid}/meta")
+def update_pdf_meta(pid: str, req: PdfMetaRequest) -> JSONResponse:
+    """Manually edit a PDF's metadata (overrides the auto-extracted values).
+    Only the four text fields are editable; pages/size/mtime stay as-is."""
+    reg = _load_pdfs()
+    m = reg.get(pid)
+    if not m:
+        raise HTTPException(404, "pdf not found")
+    for key in ("title", "author", "subject", "keywords"):
+        m[key] = getattr(req, key).strip()
+    _save_pdfs(reg)
+    return JSONResponse({"ok": True})
 
 
 @app.delete("/api/pdfs/{pid}")

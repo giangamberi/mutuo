@@ -25,13 +25,16 @@ SEARCH_URL = "https://gutendex.com/books"
 UA = {"User-Agent": "pdf-torrent-reader/1.0"}
 
 
-def _get_json(url, attempts=5, timeout=12):
+def _get_json(url, attempts=3, timeout=10):
     """GET a URL and parse JSON, retrying on transient failures.
 
-    Gutendex intermittently hangs or answers 503 for up to a minute or two;
-    several retries with a short backoff ride out those bad windows instead
-    of surfacing a 502 in the UI. A healthy Gutendex answers in ~0.1s, so the
-    per-attempt timeout only costs anything during a bad window.
+    Gutendex intermittently hangs or answers 503 for up to a minute or two.
+    A few retries with a short backoff ride out brief blips, but the worst
+    case is kept bounded (~35s) so a bad window fails fast instead of hanging
+    the UI for a minute and a half — the front end keeps the previous results
+    on screen and the user can just re-run the search. A healthy Gutendex
+    answers in ~0.1s, so the per-attempt timeout only costs anything during a
+    bad window.
     """
     last = None
     for i in range(attempts):

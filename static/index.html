@@ -65,12 +65,22 @@
   aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; }
   /* left icon rail: Shelf / Favorites / Reading */
   #sidebar-row { flex:1; display:flex; min-height:0; }
-  #rail { flex:0 0 46px; width:46px; border-right:1px solid var(--border-strong); display:flex;
-    flex-direction:column; align-items:center; gap:6px; padding:8px 0; background:var(--rail-bg); }
+  /* main-nav rail (📚 ★ 📖 🧩 ⚙) — shared button styles. Its position is set
+     by which parent it's moved into: top = a horizontal bar in the header
+     along the link field (the default), left = a vertical strip in the sidebar */
+  #rail { display:flex; gap:6px; }
   #rail button { width:34px; height:34px; font-size:calc(17px * var(--app-icon-scale)); line-height:1; padding:0;
     background:transparent; color:var(--dim); border:1px solid transparent; border-radius:8px; cursor:pointer; }
   #rail button:hover { background:var(--hover); color:var(--text); }
   #rail button.active { background:var(--acc-soft); border-color:var(--acc); color:var(--text); }
+  /* left position: vertical strip inside the sidebar */
+  #sidebar-row #rail { flex:0 0 46px; width:46px; border-right:1px solid var(--border-strong);
+    flex-direction:column; align-items:center; padding:8px 0; background:var(--rail-bg); }
+  /* top position: horizontal bar in the header, along the link field */
+  header #rail { flex-direction:row; align-items:center; padding:0 6px; }
+  header #rail button { width:auto; padding:0 10px; display:flex; align-items:center; gap:6px; }
+  header #rail button .rail-ic { font-size:calc(17px * var(--app-icon-scale)); line-height:1; }
+  header #rail button .rail-lb { font-size:calc(13px * var(--app-text-scale)); }
   #sidebar-main { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; }
   /* sub-tab rows (Reading/Favorites: To Read/Reading/Complete) */
   .subtabs { display:flex; gap:4px; padding:6px 8px 0; }
@@ -353,7 +363,9 @@
     background:transparent; border:1px solid transparent; border-radius:5px; color:var(--dim); }
   .files .del-file:hover { border-color:var(--danger-fg); color:var(--danger-fg); background:var(--danger-bg); }
   #viewer { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--input-bg); }
-  #status { font-size:calc(12px * var(--app-text-scale)); color:var(--dim); padding:6px 12px; border-bottom:1px solid var(--border-strong); }
+  #status { display:flex; align-items:center; gap:8px; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); padding:6px 12px; border-bottom:1px solid var(--border-strong); }
+  #status #status-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #status #close-book { flex:0 0 auto; padding:2px 9px; font-size:calc(12px * var(--app-text-scale)); }
   #pdf-frame { flex:1; width:100%; border:0; background:var(--input-bg); min-height:0; }
   /* reader-scoped colours: default to the app palette so the reader matches
      the app theme, but #text-viewer.theme-* can override them independently */
@@ -439,15 +451,16 @@
   #catalog .plugin-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border-strong); }
   #catalog .plugin-head h3 { margin:0; font-size:calc(13px * var(--app-text-scale)); }
   #catalog .plugin-head button { font-size:calc(12px * var(--app-text-scale)); padding:4px 10px; color:var(--acc); }
-  #catalog .plugin-item { position:relative; border-bottom:1px solid var(--border-soft); padding:10px 14px; }
-  #catalog .plugin-item .pname { font-size:calc(13px * var(--app-text-scale)); font-weight:600; padding-right:36px; }
-  #catalog .plugin-item .pdesc { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:3px; overflow-wrap:anywhere; }
-  #catalog .plugin-item .prow { display:flex; gap:6px; margin-top:8px; align-items:center; }
-  #catalog .plugin-item .prow button { font-size:calc(12px * var(--app-text-scale)); padding:4px 10px; }
+  #catalog .plugin-item { position:relative; }
   #catalog .plugin-item .loaded { font-size:calc(11px * var(--app-text-scale)); color:var(--acc); margin-left:auto; }
-  #catalog .plugin-item .cog { position:absolute; top:10px; right:10px; padding:3px 7px; font-size:calc(12px * var(--app-text-scale)); line-height:1; background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
+  #catalog .plugin-item .cog { padding:4px 8px; font-size:calc(12px * var(--app-text-scale)); line-height:1; background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
   #catalog .plugin-item .cog:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
+  /* the ⋯ menu anchors to its button (not the top of the item); the button
+     sits on the left of the row, so the menu opens to the right */
+  #catalog .plugin-item .cogwrap { position:relative; display:inline-flex; }
+  #catalog .plugin-item .cogwrap .menu { top:calc(100% + 4px); left:0; right:auto; }
   #catalog .plugin-empty { color:var(--dim); font-size:calc(13px * var(--app-text-scale)); padding:16px 14px; }
+  #catalog .plugin-subhead { padding:10px 14px 4px; font-size:calc(10px * var(--app-text-scale)); color:var(--dim); text-transform:uppercase; letter-spacing:.5px; opacity:.8; }
   /* plugin modals */
   #plugin-run-modal, #plugin-add-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
   #plugin-run-modal.open, #plugin-add-modal.open { display:flex; }
@@ -460,13 +473,19 @@
   #plugin-add-modal .hint { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:6px; line-height:1.5; }
   #plugin-add-modal label.chk { display:flex; align-items:center; gap:7px; font-size:calc(12px * var(--app-text-scale)); color:var(--text); margin:10px 0 0; cursor:pointer; }
   #plugin-add-modal label.chk input { width:auto; }
+  #pdf-meta-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
+  #pdf-meta-modal.open { display:flex; }
+  #pdf-meta-modal .card { width:min(480px,92vw); background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px var(--shadow-strong); }
+  #pdf-meta-modal h2 { font-size:calc(15px * var(--app-text-scale)); margin:0 0 4px; overflow-wrap:anywhere; }
+  #pdf-meta-modal .sub { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin:0 0 10px; }
+  #pdf-meta-modal label { display:block; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); margin:10px 0 4px; }
+  #pdf-meta-modal input { width:100%; min-width:0; }
+  #pdf-meta-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  #pdf-meta-modal .hint { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:10px; line-height:1.5; }
   /* live provider: config controls injected into the search bar */
   #searchbar .live-cfg { max-width:150px; }
   #searchbar .live-cfg.txt { flex:0 1 170px; }
   #searchbar #search-btn { padding:5px 10px; font-size:calc(12px * var(--app-text-scale)); white-space:nowrap; }
-  /* plugin management: active toggle */
-  #catalog .plugin-item .active-tgl { display:flex; align-items:center; gap:5px; font-size:calc(12px * var(--app-text-scale)); color:var(--text); cursor:pointer; }
-  #catalog .plugin-item .active-tgl input { width:auto; }
   /* plugin config modal */
   #plugin-config-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
   #plugin-config-modal.open { display:flex; }
@@ -503,6 +522,14 @@
   #catalog .settings-item .shead { display:flex; align-items:center; gap:8px; }
   #catalog .settings-item .shead .sname { flex:1; min-width:0; }
   #catalog .settings-item .shead .switch { margin-left:auto; }
+  /* settings → plugins: remove + settings + switch grouped on the right */
+  #catalog .settings-item .plug-ctrls { display:flex; align-items:center; gap:6px; margin-left:auto; }
+  #catalog .settings-item .plug-ctrls button { font-size:calc(12px * var(--app-text-scale)); padding:3px 8px; }
+  #catalog .settings-item .plug-ctrls button.danger { color:var(--danger-fg); }
+  #catalog .settings-item .plug-ctrls button.danger:hover { background:var(--danger-bg); border-color:var(--danger-fg); }
+  /* plugin rows reuse .settings-item but need side padding (it's 8px 0) so
+     text and the right-hand controls don't touch the walls */
+  #catalog .plugin-item.settings-item { padding:8px 14px; }
   /* on/off switch (provider enabled) — a styled checkbox */
   .switch { position:relative; display:inline-block; width:34px; height:19px; flex:0 0 auto; cursor:pointer; }
   .switch input { opacity:0; width:0; height:0; }
@@ -576,16 +603,40 @@
 </div>
 <div id="plugin-add-modal">
   <div class="card">
-    <h2>Add plugin</h2>
+    <h2 id="plugin-add-title">Add plugin</h2>
+    <label for="plugin-add-path">Load from a plugin file (paste its path)</label>
+    <div id="plugin-add-pathrow" style="display:flex; gap:8px;">
+      <input id="plugin-add-path" placeholder="C:\\…\\my_plugin.py" autocomplete="off" spellcheck="false">
+      <button type="button" id="plugin-add-load" style="flex:0 0 auto;">Load</button>
+    </div>
     <label for="plugin-add-name">Name</label>
     <input id="plugin-add-name" placeholder="e.g. ArXiv, Z-Library" autocomplete="off">
     <label for="plugin-add-code">Python code (must define fetch(query) or fetch() -> list[dict])</label>
     <textarea id="plugin-add-code" spellcheck="false" placeholder="def fetch(query):&#10;    return []"></textarea>
     <label class="chk"><input type="checkbox" id="plugin-add-needsquery" checked> Requires a query (uncheck to run with no query)</label>
-    <div class="hint">Each item: {"name", "magnet"} (torrent) · {"name", "url"} (PDF to download) · {"name", "path"} (local PDF).</div>
+    <div class="hint">Each item: {"name", "magnet"} (torrent) · {"name", "url"} (PDF to download) · {"name", "path"} (local PDF). Loading a file prefills the name &amp; code — click Add to save it.</div>
     <div class="row">
       <button type="button" id="plugin-add-cancel">Cancel</button>
       <button type="button" id="plugin-add-ok">Add</button>
+    </div>
+  </div>
+</div>
+<div id="pdf-meta-modal">
+  <div class="card">
+    <h2 id="pdf-meta-title">Edit metadata</h2>
+    <p class="sub" id="pdf-meta-sub"></p>
+    <label for="pdf-meta-f-title">Title</label>
+    <input id="pdf-meta-f-title" autocomplete="off" spellcheck="false">
+    <label for="pdf-meta-f-author">Author</label>
+    <input id="pdf-meta-f-author" autocomplete="off" spellcheck="false">
+    <label for="pdf-meta-f-subject">Subject</label>
+    <input id="pdf-meta-f-subject" autocomplete="off" spellcheck="false">
+    <label for="pdf-meta-f-keywords">Keywords</label>
+    <input id="pdf-meta-f-keywords" autocomplete="off" spellcheck="false">
+    <div class="hint">Values are read from the PDF automatically when it's added; edit them here to correct or override. Page count and file size can't be changed.</div>
+    <div class="row">
+      <button type="button" id="pdf-meta-cancel">Cancel</button>
+      <button type="button" id="pdf-meta-save">Save</button>
     </div>
   </div>
 </div>
@@ -638,16 +689,15 @@
 </div>
 <header>
   <h1>Shared Knowledge</h1>
-  <input id="magnet" placeholder="magnet:?xt=urn:btih:... or a PDF link (e.g. arXiv)">
+  <input id="magnet" placeholder="Paste a link to a book (PDF, magnet, …)">
   <button onclick="addMagnet()">Add</button>
-  <button onclick="syncFeed()">Sync feed</button>
+  <div id="rail"></div>
   <div class="grow"></div>
   <span id="hdrstat" style="font-size:calc(12px * var(--app-text-scale));color:var(--dim)"></span>
 </header>
 <main>
   <aside>
     <div id="sidebar-row">
-    <div id="rail"></div>
     <div id="sidebar-main">
     <div id="sidebar-top">
       <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
@@ -685,7 +735,7 @@
   </aside>
   <section id="viewer">
     <div id="loading" style="display:none"></div>
-    <div id="status" style="display:none"></div>
+    <div id="status" style="display:none"><button id="close-book" type="button" title="Close this book" aria-label="Close this book">✕ Close</button><span id="status-name"></span></div>
     <div class="empty" id="empty">Pick a torrent from the list. Nothing downloads until you open a PDF (or include a file) — that’s how you choose what to fetch.</div>
     <iframe id="pdf-frame" style="display:none" title="PDF viewer"></iframe>
     <div id="text-viewer" style="display:none">
@@ -749,19 +799,28 @@ let epubLoc = null; // current EPUB location (updated on every page turn)
 let plugins = []; // [{id, name, description}] — custom behaviours
 let page = 1; // current page of the (paginated) list
 let perPage = parseInt(localStorage.getItem('per-page'), 10) || 25; // items per page (0 = all)
-// live plugin provider: results are fetched on demand (not from the catalog)
-let liveResults = []; // [{name, url|magnet|path, meta?, editions?}] for the active live tab
-let liveLoading = false;
-let liveExpanded = new Set(); // result indices whose editions list is expanded
+// live plugin provider: results are fetched on demand (not from the catalog).
+// Each live provider keeps its own last search (query + results) in liveCache,
+// so switching tabs restores that provider's results instead of going blank.
+let liveCache = {}; // providerId -> { query, items, error, loading, seq }
+let liveExpanded = new Set(); // result indices whose editions list is expanded (active tab)
 let shelfGroupExpanded = new Set(); // group names expanded in My Shelf
 let savedTexts = []; // [{id, name, size, url, provider}] — texts saved locally for offline reading
 let savedEpubs = []; // [{id, name, size, url, provider}] — EPUBs saved locally for offline reading
 let savedFiles = []; // [{id, name, size, url, provider, kind}] — html/mobi/file saved locally
-let liveSeq = 0; // guards against out-of-order search responses
 // metadata filters for local (non-live) providers: PDF fields + torrent state/size
 let localFilters = { author:'', subject:'', keywords:'', minPages:'', maxPages:'', state:'', minSize:'', maxSize:'' };
 
-async function j(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(await r.text()); return r; }
+async function j(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    // FastAPI errors are {"detail": "..."} — surface just the message, not the JSON
+    let msg = await r.text();
+    try { const d = JSON.parse(msg); if (d && d.detail) msg = d.detail; } catch {}
+    throw new Error(msg);
+  }
+  return r;
+}
 
 async function refresh() {
   try {
@@ -769,6 +828,7 @@ async function refresh() {
     const catalog = await j('/api/catalog').then(r => r.json());
     providers = await j('/api/providers').then(r => r.json());
     const directPdfs = await j('/api/pdfs').then(r => r.json());
+    window.__pdfs = directPdfs; // kept for the metadata edit modal
     plugins = await j('/api/plugins').then(r => r.json());
     favorites = await j('/api/favorites').then(r => r.json());
     shelf = await j('/api/shelf').then(r => r.json());
@@ -876,6 +936,9 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
       const item = document.createElement('div');
       item.className = 'titem has-shelf' + (selected === 'pdf:' + p.id ? ' active' : '') + (fromFolder ? ' has-local' : '');
       item.dataset.pdf = p.id;
+      // show the extracted/edited title as the book name; fall back to the
+      // file name when the PDF has no title
+      const displayName = p.title || p.name;
       const pdfMeta = [fromFolder ? 'from folder' : 'direct file', fmtSize(p.size),
         p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · ');
       // a PDF downloaded from a link (top field / live result) carries its url —
@@ -884,8 +947,8 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
       const pdfFavKey = 'pdf:' + p.id;
       const pdfIsFav = favorites.some(f => f.key === pdfFavKey);
       const pdfShelved = shelf.some(s => s.key === pdfFavKey);
-      item.innerHTML = `<button type="button" class="open" data-pdf="${p.id}" data-name="${esc(p.name)}" data-source="${fromFolder ? 'folder' : 'upload'}">
-          <div class="name">&#128196; ${esc(p.name)}</div>
+      item.innerHTML = `<button type="button" class="open" data-pdf="${p.id}" data-name="${esc(displayName)}" data-source="${fromFolder ? 'folder' : 'upload'}">
+          <div class="name">&#128196; ${esc(displayName)}</div>
           <div class="meta">${esc(pdfMeta)}</div>
         </button>
         <button type="button" class="shelfbtn${pdfShelved ? ' on' : ''}" data-favkey="${esc(pdfFavKey)}" data-favtype="pdf" data-favname="${esc(p.name)}" data-favpdf="${p.id}" data-favprovider="${esc(p.provider || 'local')}" title="${pdfShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>
@@ -893,6 +956,7 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
         <button type="button" class="cog" data-pdf="${p.id}" aria-label="pdf actions">⋯</button>
         <div class="menu">
           <button data-pdfact="open" data-pdf="${p.id}">Open</button>
+          <button data-pdfact="meta" data-pdf="${p.id}">✎ Edit metadata…</button>
           <button data-pdfact="remove" data-pdf="${p.id}" data-source="${fromFolder ? 'folder' : 'upload'}" class="danger">${fromFolder ? 'Remove from list…' : 'Remove &amp; delete…'}</button>
         </div>` + (fromFolder
           ? `<button type="button" class="localmark" data-pdf="${p.id}" title="Open folder">📁</button>`
@@ -1011,9 +1075,17 @@ function liveCfgValue(key) {
   return el ? el.value : '';
 }
 
+// the active live provider's cached last search (query + results + state)
+function liveState(provId) {
+  return liveCache[provId] || { query: '', items: [], error: null, loading: false };
+}
+
 function renderLiveProvider(prov, directPdfs) {
   const el = document.getElementById('catalog');
   el.innerHTML = '';
+  const st = liveState(prov.id);
+  const liveResults = st.items;
+  const liveLoading = st.loading;
   const sb = document.getElementById('searchbar');
   sb.style.display = '';
   document.getElementById('search-btn').style.display = '';
@@ -1056,7 +1128,7 @@ function renderLiveProvider(prov, directPdfs) {
     });
     sb.insertBefore(node, count);
   }
-  // render the current results (or a loading / empty state)
+  // render the current results (or a loading / empty / error state)
   if (liveLoading) {
     const d = document.createElement('div');
     d.className = 'plugin-empty';
@@ -1068,10 +1140,20 @@ function renderLiveProvider(prov, directPdfs) {
   if (!liveResults.length) {
     const d = document.createElement('div');
     d.className = 'plugin-empty';
-    d.textContent = 'Type a search term above to list results. Use the sort / language / topic controls to narrow it down.';
+    d.textContent = st.error
+      ? `Search failed: ${st.error}`
+      : 'Type a search term above to list results. Use the sort / language / topic controls to narrow it down.';
     el.appendChild(d);
-    document.getElementById('hdrstat').textContent = `search ${esc(prov.name)}`;
+    document.getElementById('hdrstat').textContent = st.error ? 'search error' : `search ${esc(prov.name)}`;
     return;
+  }
+  // a failed search keeps the previous results on screen (a flaky provider
+  // like Gutendex shouldn't blank a good list); note the failure up top
+  if (st.error) {
+    const d = document.createElement('div');
+    d.className = 'plugin-empty';
+    d.textContent = `Search failed — showing previous results. ${st.error}`;
+    el.appendChild(d);
   }
   const kindIcon = { pdf: '&#128196;', text: '&#128221;', html: '&#127760;', epub: '&#128218;', torrent: '&#128279;' };
   const savedByUrl = Object.fromEntries(savedTexts.map(t => [t.url, t]));
@@ -1109,7 +1191,11 @@ function renderLiveProvider(prov, directPdfs) {
     const saveFileBtn = (['html', 'mobi', 'file'].includes(kind) && it.url)
       ? `<button type="button" class="savefile${savedFile ? ' on' : ''}" data-saveurl="${esc(it.url)}" data-savename="${esc(it.name)}" data-saveprovider="${esc(prov.id)}" data-savekind="${esc(kind)}" data-savedid="${savedFile ? esc(savedFile.id) : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${savedFile ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${savedFile ? '💾' : '⬇'}</button>`
       : '';
-    const metaLine = (it.meta || kind) + (dl ? ' · 💾 downloaded' : '');
+    // a two-stage result whose URL hasn't resolved yet shows "resolving…"
+    const pending = !!(it.resolve_id && !it.url);
+    const metaLine = pending
+      ? (it.meta ? `${it.meta} · ` : '') + 'resolving…'
+      : (it.meta || kind) + (dl ? ' · 💾 downloaded' : '');
     // a book with several editions gets an expandable list of ALL of them in
     // the same box (repeated kinds included, told apart by filename); the
     // main button opens the first (preferred) one
@@ -1154,6 +1240,7 @@ function runLiveSearch() {
   const prov = providers.find(p => p.id === activeProvider && p.live);
   if (!prov) return;
   const pid = prov.id.slice(7);
+  const provId = prov.id;
   const q = (document.getElementById('search').value || '').trim();
   // config comes from the search-bar controls once rendered; on first open
   // (before they exist) fall back to the plugin's saved config
@@ -1161,15 +1248,89 @@ function runLiveSearch() {
   const controls = document.querySelectorAll('#searchbar .live-cfg');
   if (controls.length) controls.forEach(n => cfg[n.dataset.key] = n.value);
   else Object.assign(cfg, prov.config || {});
-  const seq = ++liveSeq;
-  liveLoading = true;
+  // per-provider search token: a newer search for THIS provider supersedes an
+  // older in-flight one, but switching tabs doesn't cancel another provider's
+  const entry = liveCache[provId] || { query: '', items: [], error: null, loading: false };
+  entry.seq = (entry.seq || 0) + 1;
+  const seq = entry.seq;
+  entry.query = q;
+  entry.loading = true;
+  entry.error = null;
+  liveCache[provId] = entry;
   liveExpanded.clear(); // a new result set — old expansion indices are stale
   refresh();
   const params = new URLSearchParams({ query: q, config: JSON.stringify(cfg) });
   j(`/api/plugins/${pid}/search?${params}`)
     .then(r => r.json())
-    .then(data => { if (seq !== liveSeq) return; liveResults = data.items || []; liveLoading = false; refresh(); })
-    .catch(e => { if (seq !== liveSeq) return; liveLoading = false; liveResults = []; document.getElementById('hdrstat').textContent = `search error: ${e.message}`; refresh(); });
+    .then(data => {
+      const cur = liveCache[provId];
+      if (!cur || cur.seq !== seq) return; // superseded by a newer search
+      cur.items = data.items || [];
+      cur.loading = false;
+      refresh();
+      // two-stage providers (e.g. Internet Archive) return items without a URL
+      // yet; resolve their PDFs in parallel and merge the URLs back in
+      resolvePending(cur, provId, seq);
+    })
+    .catch(e => {
+      const cur = liveCache[provId];
+      if (!cur || cur.seq !== seq) return;
+      // keep any previous results on screen — a flaky provider (e.g. Gutendex
+      // in a bad window) shouldn't blank a good list just because one search
+      // failed; the render shows a "search failed" banner above them
+      cur.error = e.message;
+      cur.loading = false;
+      refresh();
+    });
+}
+
+// Stage 2 of a two-stage live search: ask the plugin to resolve the pending
+// items (those with a resolve_id but no url) to their openable URLs. The plugin
+// fetches the metadata in parallel; we merge the results back into the cached
+// list and drop any item that has no openable PDF.
+function resolvePending(cur, provId, seq) {
+  const pending = cur.items.filter(it => it.resolve_id && !it.url);
+  if (!pending.length) return;
+  if (cur.resolvingSeq === seq) return; // this search already has a resolve in flight
+  cur.resolvingSeq = seq;
+  const pid = provId.slice(7);
+  const ids = pending.map(it => it.resolve_id);
+  j(`/api/plugins/${pid}/resolve`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }) })
+    .then(r => r.json())
+    .then(data => {
+      const c = liveCache[provId];
+      if (!c || c.seq !== seq) return; // superseded by a newer search
+      const resolved = data.resolved || {};
+      const next = [];
+      for (const it of c.items) {
+        if (it.resolve_id && !it.url) {
+          const res = resolved[it.resolve_id];
+          if (res && res.url) {
+            it.url = res.url;
+            if (res.size) {
+              const mb = Math.round(res.size / (1024 * 1024));
+              it.meta = it.meta ? `${it.meta} · ${mb} MB` : `${mb} MB`;
+            }
+            delete it.resolve_id;
+            next.push(it);
+          }
+          // no openable PDF for this item — drop it from the list
+        } else {
+          next.push(it);
+        }
+      }
+      c.items = next;
+      c.resolvingSeq = null;
+      refresh();
+    })
+    .catch(() => {
+      const c = liveCache[provId];
+      if (!c || c.seq !== seq) return;
+      c.resolvingSeq = null; // keep the pending items; a re-search will retry
+      refresh();
+    });
 }
 
 // drag the right edge of the sidebar to resize it (persisted, double-click resets).
@@ -1228,24 +1389,25 @@ function runLiveSearch() {
   if (localStorage.getItem(KEY) === '1') setMinimized(true);
 })();
 
-// ---- left rail: Shelf / Favorites / Reading ----
+// ---- main-nav rail: Shelf / Favorites / Reading / Plugins / Settings ----
 function renderRail() {
   const el = document.getElementById('rail');
   el.innerHTML = '';
-  const mk = (icon, label, key) => {
+  const showText = tabPosition === 'top'; // in the header, show icon + name
+  const mk = (icon, name, label, key) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = view === key ? 'active' : '';
-    b.textContent = icon;
     b.title = label;
+    b.innerHTML = `<span class="rail-ic">${icon}</span>${showText ? `<span class="rail-lb">${esc(name)}</span>` : ''}`;
     b.onclick = () => { view = key; refresh(); };
     el.appendChild(b);
   };
-  mk('📚', 'Shelf — browse providers', 'shelf');
-  mk('★', 'Favorites — your starred documents', 'favorites');
-  mk('📖', 'My Shelf — your books: to read, in progress & complete', 'reading');
-  mk('🧩', 'Plugins — manage custom sources', 'plugins');
-  mk('⚙', 'Settings — reader, display, providers & plugins', 'settings');
+  mk('📚', 'Shelf', 'Shelf — browse providers', 'shelf');
+  mk('★', 'Favorites', 'Favorites — your starred documents', 'favorites');
+  mk('📖', 'My Shelf', 'My Shelf — your books: to read, in progress & complete', 'reading');
+  mk('🧩', 'Plugins', 'Plugins — manage custom sources', 'plugins');
+  mk('⚙', 'Settings', 'Settings — reader, display, providers & plugins', 'settings');
 }
 
 // ---- Shelf: the provider tabs ----
@@ -1262,11 +1424,15 @@ function renderShelfTabs() {
     b.textContent = p.name;
     b.title = p.description || p.feed || p.name;
     b.onclick = () => {
-      const wasLive = providers.find(x => x.id === activeProvider && x.live);
       activeProvider = p.id;
-      // opening a live tab fresh: start from an empty result set (the user
-      // types to search); don't fire a slow empty query on open
-      if (p.live && !wasLive) liveResults = [];
+      // switching to a live tab restores its cached last search (query +
+      // results) so the list updates to that provider's content; a live tab
+      // with no search yet shows the empty state. Don't fire a query on open.
+      if (p.live) {
+        const st = liveCache[p.id];
+        document.getElementById('search').value = st ? st.query : '';
+        liveExpanded.clear(); // fresh view of this provider's results
+      }
       refresh();
     };
     wrap.appendChild(b);
@@ -1566,7 +1732,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
     } else if (f.type === 'pdf') {
       const p = directPdfs.find(x => x.id === f.pdf);
       if (!p) continue; // PDF removed
-      rows.push({ kind: 'pdf', name: p.name,
+      rows.push({ kind: 'pdf', name: p.title || p.name,
         meta: [p.source === 'folder' ? 'from folder' : 'direct file', fmtSize(p.size), p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · '),
         pdf: p.id, source: p.source, url: p.url || '', fav: f, eff });
     } else { // live result (Gutenberg text/html/epub/pdf, or a torrent magnet)
@@ -2008,6 +2174,7 @@ async function removeProvider(p) {
   if (!ok) return;
   try {
     await j(`/api/providers/${p.id}`, { method: 'DELETE' });
+    delete liveCache[p.id];
     if (activeProvider === p.id) activeProvider = 'local';
     refresh();
   } catch (e) { alert(e.message); }
@@ -2132,6 +2299,28 @@ function hideEpub() {
   document.getElementById('epub-viewer').style.display = 'none';
 }
 
+// The status bar doubles as the book's title bar: the name goes into
+// #status-name and a ✕ Close button sits on the right. Routing the existing
+// `status.textContent = …` assignments through a setter means every open*()
+// keeps working without touching each call site.
+(function () {
+  const status = document.getElementById('status');
+  const nameEl = document.getElementById('status-name');
+  Object.defineProperty(status, 'textContent', {
+    set(v) { nameEl.textContent = v; },
+    get() { return nameEl.textContent; }
+  });
+  document.getElementById('close-book').addEventListener('click', closeBook);
+})();
+
+// close the current book (PDF / text / HTML / EPUB) and return to the empty state
+function closeBook() {
+  selected = null;
+  markActive();
+  hidePdf();
+  showEmpty('Book closed.');
+}
+
 // hide the PDF viewer (and its status line / file list) so a previously open
 // PDF doesn't linger behind the loading page or a new torrent's file list
 function hidePdf() {
@@ -2244,14 +2433,6 @@ async function addPdfUrl(url) {
     setTimeout(() => refresh(), 3000);
   }
 }
-
-window.syncFeed = async function () {
-  try {
-    const url = activeProvider === 'local' ? '/api/sync' : `/api/providers/${activeProvider}/sync`;
-    const r = await j(url, {method:'POST'}).then(r => r.json());
-    alert(`synced: +${r.added} new torrent(s)`); refresh();
-  } catch (e) { alert(e.message); }
-};
 
 // ---- drag & drop .torrent ----
 const dropOverlay = document.getElementById('drop-overlay');
@@ -2581,6 +2762,27 @@ function applyAppSize() {
 }
 applyAppSize();
 
+// tab position (persisted) — where the main-tab rail sits: 'top' (a horizontal
+// bar above the list, the default) or 'left' (a vertical icon strip). Applied
+// as a data attr on <aside>; the CSS switches the flex direction + borders.
+let tabPosition = localStorage.getItem('tabPosition') || 'top';
+function applyTabPosition() {
+  const rail = document.getElementById('rail');
+  if (!rail) return;
+  if (tabPosition === 'top') {
+    // in the header, right after the Add button (along the link field)
+    const addBtn = document.querySelector('header button[onclick="addMagnet()"]');
+    if (addBtn) addBtn.after(rail);
+    else document.querySelector('header').appendChild(rail);
+  } else {
+    // vertical strip in the sidebar, before the list column
+    const row = document.getElementById('sidebar-row');
+    const main = document.getElementById('sidebar-main');
+    row.insertBefore(rail, main);
+  }
+}
+applyTabPosition();
+
 // line spacing (persisted) — line-height on the <pre>
 const LINE_SPACING = { compact: 1.4, normal: 1.7, relaxed: 2.0 };
 let textSpacing = localStorage.getItem('textSpacing') || 'normal';
@@ -2867,8 +3069,43 @@ async function trackLiveMagnet(magnet, name) {
   }
 }
 
+// edit a direct PDF's metadata (title/author/subject/keywords). The values
+// were auto-extracted from the PDF on registration; this overrides them.
+function openPdfMetaModal(id) {
+  const p = (window.__pdfs || []).find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('pdf-meta-title').textContent = p.name;
+  document.getElementById('pdf-meta-sub').textContent =
+    [fmtSize(p.size), p.pages ? p.pages + ' pages' : null].filter(Boolean).join(' · ');
+  for (const f of ['title', 'author', 'subject', 'keywords'])
+    document.getElementById('pdf-meta-f-' + f).value = p[f] || '';
+  document.getElementById('pdf-meta-modal').dataset.pid = id;
+  document.getElementById('pdf-meta-modal').classList.add('open');
+  document.getElementById('pdf-meta-f-title').focus();
+}
+
+async function savePdfMeta() {
+  const id = document.getElementById('pdf-meta-modal').dataset.pid;
+  const body = {};
+  for (const f of ['title', 'author', 'subject', 'keywords'])
+    body[f] = document.getElementById('pdf-meta-f-' + f).value;
+  try {
+    await j(`/api/pdfs/${id}/meta`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    document.getElementById('pdf-meta-modal').classList.remove('open');
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+(function () {
+  const modal = document.getElementById('pdf-meta-modal');
+  document.getElementById('pdf-meta-cancel').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('pdf-meta-save').addEventListener('click', savePdfMeta);
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+})();
+
 async function doPdfAction(id, act, source) {
   if (act === 'open') { openDirectPdfById(id, ''); return; }
+  if (act === 'meta') { openPdfMetaModal(id); return; }
   if (act === 'remove') {
     const fromFolder = source === 'folder';
     const ok = await askConfirm(fromFolder
@@ -2980,6 +3217,8 @@ document.getElementById('catalog').addEventListener('click', (e) => {
   const liveBtn = e.target.closest('button.open[data-liveurl]');
   if (liveBtn) {
     e.preventDefault();
+    // a two-stage result whose URL hasn't resolved yet has nothing to open
+    if (!liveBtn.dataset.liveurl && !liveBtn.dataset.livemagnet) return;
     if (liveBtn.dataset.livemagnet) trackLiveMagnet(liveBtn.dataset.livemagnet, liveBtn.dataset.livename || '');
     // text, HTML and EPUB open in the in-site reader; other non-PDF editions open in a new tab
     else if (liveBtn.dataset.livekind === 'text') {
@@ -3001,6 +3240,29 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     else openLiveResult(liveBtn.dataset.liveurl, liveBtn.dataset.livename || '', liveBtn.dataset.shelfkey || null, liveBtn.dataset.liveprovider || '');
     return;
   }
+  // edit a plugin's source (reuses the add modal, prefilled)
+  const editBtn = e.target.closest('button[data-plugedit]');
+  if (editBtn) {
+    e.preventDefault();
+    const menu = editBtn.closest('.menu');
+    if (menu) menu.classList.remove('open');
+    openEditPluginModal(editBtn.dataset.plugedit);
+    return;
+  }
+  // open a plugin's provider tab (same as clicking its tab in the shelf:
+  // restore that provider's cached last search)
+  const openBtn = e.target.closest('button[data-plugopen]');
+  if (openBtn) {
+    e.preventDefault();
+    const pid = 'plugin:' + openBtn.dataset.plugopen;
+    activeProvider = pid;
+    view = 'shelf';
+    const st = liveCache[pid];
+    document.getElementById('search').value = st ? st.query : '';
+    liveExpanded.clear();
+    refresh();
+    return;
+  }
   const cfgBtn = e.target.closest('button[data-config]');
   if (cfgBtn) { e.preventDefault(); openConfigModal(cfgBtn.dataset.config); return; }
   const runBtn = e.target.closest('button[data-run]');
@@ -3014,10 +3276,12 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     if (!wasOpen) menu.classList.add('open');
     return;
   }
-  const plugAct = e.target.closest('.menu button[data-plugact]');
+  // plugin actions: Clear/Remove sit inline in the row, Copy path in the ⋯ menu
+  const plugAct = e.target.closest('.plugin-item button[data-plugact]');
   if (plugAct) {
     e.preventDefault();
-    plugAct.parentElement.classList.remove('open');
+    const menu = plugAct.closest('.menu');
+    if (menu) menu.classList.remove('open');
     doPluginAction(plugAct.dataset.plug, plugAct.dataset.plugact);
     return;
   }
@@ -3313,28 +3577,52 @@ function renderPluginView(directPdfs, catalog) {
   for (const p of directPdfs) if ((p.provider || '').startsWith('plugin:')) {
     const k = p.provider.slice(7); loadedCount[k] = (loadedCount[k] || 0) + 1;
   }
-  for (const pl of plugins) {
+  // same compact look as the Settings → Plugins list: name + active switch on
+  // one line, description below, action buttons in a row
+  const plugItem = (pl) => {
     const n = loadedCount[pl.id] || 0;
     const hasConfig = (pl.config_schema || []).length > 0;
     const item = document.createElement('div');
-    item.className = 'plugin-item';
-    item.innerHTML = `<div class="pname">🔌 ${esc(pl.name)}</div>
-      <div class="pdesc">${esc(pl.description || 'no description')}</div>
-      <div class="prow">
-        <label class="active-tgl" title="When active, this plugin appears as a searchable provider tab">
-          <input type="checkbox" data-active="${pl.id}" ${pl.active ? 'checked' : ''}> Active
-        </label>
-        ${hasConfig ? `<button type="button" data-config="${pl.id}">⚙ Settings</button>` : ''}
-        ${pl.has_fetch ? `<button type="button" data-run="${pl.id}">▶ Run</button>` : ''}
-        <button type="button" class="cog" data-plug="${pl.id}" aria-label="plugin actions">⋯</button>
-        ${n ? `<span class="loaded">${n} loaded</span>` : ''}
+    item.className = 'plugin-item settings-item';
+    item.innerHTML = `
+      <div class="shead">
+        <div class="sname">🔌 ${esc(pl.name)}</div>
+        <div class="plug-ctrls">
+          <button type="button" data-plugact="remove" data-plug="${esc(pl.id)}" class="danger" title="Remove plugin">🗑︎</button>
+          ${hasConfig ? `<button type="button" data-config="${esc(pl.id)}" title="Plugin settings">⚙</button>` : ''}
+          <label class="switch" title="When active, this plugin appears as a searchable provider tab"><input type="checkbox" data-active="${esc(pl.id)}"${pl.active ? ' checked' : ''}><span class="track"></span></label>
+        </div>
       </div>
-      <div class="menu">
-        <button data-plugact="clear" data-plug="${pl.id}">🧹 Clear loaded items…</button>
-        <button data-plugact="remove" data-plug="${pl.id}" class="danger">🗑 Remove plugin…</button>
+      ${pl.description ? `<div class="sdesc">${esc(pl.description)}</div>` : ''}
+      <div class="srow">
+        ${pl.active ? `<button type="button" data-plugopen="${esc(pl.id)}" title="Open this plugin's search tab">▶ Open</button>` : ''}
+        ${pl.has_fetch ? `<button type="button" data-run="${esc(pl.id)}">▶ Run</button>` : ''}
+        <span class="cogwrap">
+          <button type="button" class="cog" data-plug="${esc(pl.id)}" aria-label="plugin actions">⋯</button>
+          <div class="menu">
+            <button data-plugedit="${esc(pl.id)}">✎ Edit plugin…</button>
+            <button data-plugact="clear" data-plug="${esc(pl.id)}">🧹 Clear loaded items…</button>
+            <button data-plugact="copy" data-plug="${esc(pl.id)}">📋 Copy path</button>
+          </div>
+        </span>
+        ${n ? `<span class="loaded">${n} loaded</span>` : ''}
       </div>`;
-    el.appendChild(item);
-  }
+    return item;
+  };
+  const subhead = (label) => {
+    const d = document.createElement('div');
+    d.className = 'plugin-subhead';
+    d.textContent = label;
+    el.appendChild(d);
+  };
+  const builtins = plugins.filter(p => p.builtin);
+  const customs = plugins.filter(p => !p.builtin);
+  subhead('Built-in');
+  if (builtins.length) builtins.forEach(pl => el.appendChild(plugItem(pl)));
+  else el.insertAdjacentHTML('beforeend', '<div class="plugin-empty">None.</div>');
+  subhead('Custom');
+  if (customs.length) customs.forEach(pl => el.appendChild(plugItem(pl)));
+  else el.insertAdjacentHTML('beforeend', '<div class="plugin-empty">No custom plugins yet.</div>');
 }
 
 // ---- Settings (⚙ in the left rail): reader, display, providers, plugins ----
@@ -3406,6 +3694,10 @@ function renderSettingsView() {
       <option value="100"${perPage === 100 ? ' selected' : ''}>100</option>
       <option value="all"${perPage === 0 ? ' selected' : ''}>All</option>
     </select></div>
+    <div class="settings-row"><label>Tab position</label><select id="set-tabpos">
+      <option value="top"${tabPosition === 'top' ? ' selected' : ''}>Top</option>
+      <option value="left"${tabPosition === 'left' ? ' selected' : ''}>Left</option>
+    </select></div>
   `);
 
   // ---- Providers (server) ----
@@ -3439,18 +3731,18 @@ function renderSettingsView() {
   for (const pl of plugins) {
     const item = document.createElement('div');
     item.className = 'settings-item';
+    // only the essentials here (full management lives in the Plugins tab):
+    // active switch + settings + remove, all on the right of the header row
     item.innerHTML = `
       <div class="shead">
         <div class="sname">🔌 ${esc(pl.name)}</div>
-        <label class="switch" title="Active"><input type="checkbox" data-plug-active="${esc(pl.id)}"${pl.active ? ' checked' : ''}><span class="track"></span></label>
+        <div class="plug-ctrls">
+          <button data-plug-remove="${esc(pl.id)}" class="danger" title="Remove plugin">🗑︎</button>
+          ${(pl.config_schema || []).length ? `<button data-plug-config="${esc(pl.id)}" title="Plugin settings">⚙</button>` : ''}
+          <label class="switch" title="Active"><input type="checkbox" data-plug-active="${esc(pl.id)}"${pl.active ? ' checked' : ''}><span class="track"></span></label>
+        </div>
       </div>
-      ${pl.description ? `<div class="sdesc">${esc(pl.description)}</div>` : ''}
-      <div class="srow">
-        ${(pl.config_schema || []).length ? `<button data-plug-config="${esc(pl.id)}">⚙ Settings</button>` : ''}
-        ${pl.has_fetch ? `<button data-plug-run="${esc(pl.id)}">▶ Run</button>` : ''}
-        <button data-plug-clear="${esc(pl.id)}">🧹 Clear</button>
-        <button data-plug-remove="${esc(pl.id)}" class="danger">🗑 Remove</button>
-      </div>`;
+      ${pl.description ? `<div class="sdesc">${esc(pl.description)}</div>` : ''}`;
     plugs.appendChild(item);
   }
 }
@@ -3471,10 +3763,6 @@ function renderSettingsView() {
     if (provRemove) { const p = providers.find(x => x.id === provRemove.dataset.provRemove); if (p) removeProvider(p); return; }
     const plugConfig = t.closest('button[data-plug-config]');
     if (plugConfig) { openConfigModal(plugConfig.dataset.plugConfig); return; }
-    const plugRun = t.closest('button[data-plug-run]');
-    if (plugRun) { openRunPluginModal(plugRun.dataset.plugRun); return; }
-    const plugClear = t.closest('button[data-plug-clear]');
-    if (plugClear) { doPluginAction(plugClear.dataset.plugClear, 'clear'); return; }
     const plugRemove = t.closest('button[data-plug-remove]');
     if (plugRemove) { doPluginAction(plugRemove.dataset.plugRemove, 'remove'); return; }
   });
@@ -3487,6 +3775,7 @@ function renderSettingsView() {
     if (t.id === 'set-spacing') { textSpacing = t.value; localStorage.setItem('textSpacing', textSpacing); applyTextSpacing(); return; }
     if (t.id === 'set-width') { textWidth = t.value; localStorage.setItem('textWidth', textWidth); applyTextWidth(); return; }
     if (t.id === 'set-perpage') { perPage = t.value === 'all' ? 0 : parseInt(t.value, 10); localStorage.setItem('per-page', String(perPage)); page = 1; refresh(); return; }
+    if (t.id === 'set-tabpos') { tabPosition = t.value; localStorage.setItem('tabPosition', tabPosition); applyTabPosition(); renderRail(); return; }
     const provEn = t.closest('input[data-prov-enabled]');
     if (provEn) { setProviderEnabled(provEn.dataset.provEnabled, provEn.checked); return; }
     const plugAct = t.closest('input[data-plug-active]');
@@ -3530,6 +3819,11 @@ function renderSettingsView() {
 })();
 
 async function doPluginAction(pid, act) {
+  if (act === 'copy') {
+    const pl = plugins.find(p => p.id === pid);
+    if (pl && pl.path) { copyText(pl.path); toast('plugin path copied'); }
+    return;
+  }
   if (act === 'clear') {
     const ok = await askConfirm('Clear all items this plugin loaded? (torrents are removed from the session, downloaded PDFs are deleted)');
     if (!ok) return;
@@ -3542,6 +3836,7 @@ async function doPluginAction(pid, act) {
     if (!ok) return;
     try {
       await j(`/api/plugins/${pid}`, { method: 'DELETE' });
+      delete liveCache['plugin:' + pid];
       if (activeProvider === 'plugin:' + pid) activeProvider = 'local';
     } catch (e) { alert(e.message); }
     refresh();
@@ -3550,8 +3845,10 @@ async function doPluginAction(pid, act) {
 
 // ---- plugin active toggle + config modal ----
 let configPluginId = null;
+let editingPluginId = null; // set while the add modal is editing an existing plugin
 
-// toggling a plugin active makes it appear (or disappear) as a provider tab
+// toggling a plugin active makes it appear (or disappear) as a provider tab;
+// it does NOT switch to it — use the ▶ Open button for that
 document.getElementById('catalog').addEventListener('change', (e) => {
   const tgl = e.target.closest('input[data-active]');
   if (!tgl) return;
@@ -3560,10 +3857,7 @@ document.getElementById('catalog').addEventListener('change', (e) => {
   j(`/api/plugins/${pid}/active`, { method: 'POST',
     headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ active }) })
     .then(r => r.json())
-    .then(() => {
-      if (active) { activeProvider = 'plugin:' + pid; view = 'shelf'; }
-      refresh();
-    })
+    .then(() => refresh())
     .catch(err => { alert(err.message); refresh(); });
 });
 
@@ -3677,13 +3971,64 @@ const DEFAULT_PLUGIN_CODE =
   '    #   {"name": str, "path": str}     a local PDF to read in place\n' +
   '    return []\n';
 
+function copyText(t) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(t);
+  }
+  const ta = document.createElement('textarea');
+  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  ta.remove();
+  return Promise.resolve();
+}
+
 function openAddPluginModal() {
+  editingPluginId = null;
+  document.getElementById('plugin-add-title').textContent = 'Add plugin';
+  document.getElementById('plugin-add-ok').textContent = 'Add';
+  document.getElementById('plugin-add-pathrow').style.display = '';
+  document.getElementById('plugin-add-path').value = '';
   document.getElementById('plugin-add-name').value = '';
   document.getElementById('plugin-add-code').value = DEFAULT_PLUGIN_CODE;
   document.getElementById('plugin-add-needsquery').checked = true;
   document.getElementById('plugin-add-modal').classList.add('open');
   document.getElementById('plugin-add-name').focus();
 }
+
+// edit an existing plugin: same modal, prefilled with its current source.
+// Saving rewrites the .py file in place — the id, active flag and config are
+// untouched (the update endpoint only rewrites the file).
+async function openEditPluginModal(pid) {
+  const pl = plugins.find(p => p.id === pid);
+  if (!pl) return;
+  try {
+    const r = await j(`/api/plugins/${pid}/source`);
+    const d = await r.json();
+    editingPluginId = pid;
+    document.getElementById('plugin-add-title').textContent = `Edit plugin — ${pl.name}`;
+    document.getElementById('plugin-add-ok').textContent = 'Save';
+    document.getElementById('plugin-add-pathrow').style.display = 'none';
+    document.getElementById('plugin-add-name').value = d.name || pl.name;
+    document.getElementById('plugin-add-code').value = d.code || '';
+    document.getElementById('plugin-add-needsquery').checked = !!d.needs_query;
+    document.getElementById('plugin-add-modal').classList.add('open');
+  } catch (e) { alert(e.message); }
+}
+
+document.getElementById('plugin-add-load').onclick = async () => {
+  const path = document.getElementById('plugin-add-path').value.trim();
+  if (!path) { document.getElementById('plugin-add-path').focus(); return; }
+  try {
+    const r = await j('/api/plugins/from-path', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ path }) });
+    const d = await r.json();
+    document.getElementById('plugin-add-name').value = d.name || '';
+    document.getElementById('plugin-add-code').value = d.code || '';
+    document.getElementById('plugin-add-needsquery').checked = !!d.needs_query;
+    toast('plugin loaded — review & Add');
+  } catch (e) { alert(e.message); }
+};
 
 document.getElementById('plugin-add-cancel').onclick = () =>
   document.getElementById('plugin-add-modal').classList.remove('open');
@@ -3697,9 +4042,16 @@ document.getElementById('plugin-add-ok').onclick = async () => {
   if (!name) { document.getElementById('plugin-add-name').focus(); return; }
   document.getElementById('plugin-add-modal').classList.remove('open');
   try {
-    await j('/api/plugins', { method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ name, code, needs_query: needsQuery }) });
-    toast('plugin added');
+    if (editingPluginId) {
+      await j(`/api/plugins/${editingPluginId}`, { method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name, code, needs_query: needsQuery }) });
+      toast('plugin updated');
+    } else {
+      await j('/api/plugins', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name, code, needs_query: needsQuery }) });
+      toast('plugin added');
+    }
+    editingPluginId = null;
     refresh();
   } catch (e) { alert(e.message); }
 };
