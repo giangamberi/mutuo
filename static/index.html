@@ -61,7 +61,11 @@
   /* minimize the sidebar so the reader can focus on the text. The toggle
      lives in the header (always visible), so a hidden sidebar frees its
      full width — no leftover rail or top band */
-  header #minimize-btn { padding:6px 9px; font-size:calc(13px * var(--app-icon-scale)); line-height:1; }
+  #tabs-row { display:flex; align-items:center; gap:6px; padding:8px 8px 6px; border-bottom:1px solid var(--border-strong); }
+  #tabs-row #tabs { flex:1; padding:0; border-bottom:none; }
+  #tabs-row #minimize-btn { flex:0 0 auto; padding:4px 9px; font-size:calc(13px * var(--app-icon-scale)); line-height:1; background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
+  #tabs-row #minimize-btn:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
+  header #restore-btn { padding:6px 9px; font-size:calc(13px * var(--app-icon-scale)); line-height:1; }
   aside.minimized { display:none; }
   /* left icon rail: Shelf / Favorites / Reading */
   #sidebar-row { flex:1; display:flex; min-height:0; }
@@ -803,7 +807,7 @@
   </div>
 </div>
 <header>
-  <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
+  <button id="restore-btn" type="button" title="Show sidebar" aria-label="Show sidebar" style="display:none">&#8250;</button>
   <h1>Shared Knowledge</h1>
   <input id="magnet" placeholder="Paste a link to a book (PDF, magnet, …)">
   <button onclick="addMagnet()">Add</button>
@@ -815,7 +819,10 @@
   <aside>
     <div id="sidebar-row">
     <div id="sidebar-main">
-    <div id="tabs"></div>
+    <div id="tabs-row">
+      <div id="tabs"></div>
+      <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
+    </div>
     <div id="searchbar">
       <input id="search" type="search" placeholder="Search documents…" autocomplete="off">
       <button id="search-btn" type="button" title="Search" style="display:none">Search</button>
@@ -879,6 +886,12 @@
           <option value="normal">Normal</option>
           <option value="wide">Wide</option>
         </select>
+        <span class="tsep"></span>
+        <select id="text-align" title="Text alignment">
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="justify">Justify</option>
+        </select>
         <span id="text-progress" title="Reading progress"></span>
       </div>
       <pre id="text-content"></pre>
@@ -941,6 +954,7 @@ let settledTorrents = new Map(); // ih -> entry, for settled torrents
 let polling = false; // guard against overlapping ticks
 let dataLoaded = false; // true once the first full refresh succeeds
 let lastListSig = null; // signature of the last rendered Shelf list (skip rebuild if unchanged)
+let lastLiveSig = null; // signature of the last rendered live-provider list (skip rebuild if unchanged)
 
 async function j(url, opts) {
   const r = await fetch(url, opts);
@@ -980,7 +994,7 @@ function renderAll(torrents) {
   // shelf forces a rebuild (otherwise renderShelf's sig-skip — meant for idle
   // ticks — sees an unchanged signature and leaves the previous view's HTML in
   // #catalog).
-  if (view !== 'shelf') lastListSig = null;
+  if (view !== 'shelf') { lastListSig = null; lastLiveSig = null; }
   syncTagPop(); // keep an open tag popover in sync with the re-rendered list
   pollPosition(); // persist the open book's reading position a few times a minute
   if (view === 'favorites') renderFavorites(torrents, directPdfs, byMagnet, provOf);
@@ -1307,10 +1321,25 @@ function liveState(provId) {
 
 function renderLiveProvider(prov, directPdfs) {
   const el = document.getElementById('catalog');
-  el.innerHTML = '';
   const st = liveState(prov.id);
   const liveResults = st.items;
   const liveLoading = st.loading;
+  // Skip the DOM rebuild when nothing that affects the list changed — the 4s
+  // poll tick calls this on every idle tick, and wiping + rebuilding the rows
+  // (and their cover images) each time is what made the live list flicker.
+  // Mirrors the signature check the torrent shelf list uses. Must run BEFORE
+  // the el.innerHTML='' wipe below, or a matching signature would leave the
+  // list blank.
+  const liveSig = JSON.stringify({
+    prov: prov.id, loading: liveLoading, error: st.error, expanded: [...liveExpanded],
+    favs: favorites.map(f => f.key), shelf: shelf.map(s => s.key),
+    savedT: savedTexts.map(t => t.url), savedE: savedEpubs.map(t => t.url), savedF: savedFiles.map(t => t.url),
+    dl: directPdfs.filter(p => p.url).map(p => p.url),
+    items: liveResults.map(it => [it.name, it.url, it.magnet, it.kind, it.meta, !!it.cover, (it.editions || []).length])
+  });
+  if (liveSig === lastLiveSig) return;
+  lastLiveSig = liveSig;
+  el.innerHTML = '';
   const sb = document.getElementById('searchbar');
   sb.style.display = '';
   document.getElementById('search-btn').style.display = '';
@@ -1648,16 +1677,16 @@ function fetchCovers(cur, provId, seq) {
 // the PDF viewer take the full width so the reader can focus on the text.
 (function () {
   const aside = document.querySelector('aside');
-  const btn = document.getElementById('minimize-btn');
+  const btn = document.getElementById('minimize-btn');      // in the provider tabs row
+  const restore = document.getElementById('restore-btn');  // in the header, only when collapsed
   const KEY = 'sidebar-minimized';
   function setMinimized(m) {
     aside.classList.toggle('minimized', m);
-    btn.innerHTML = m ? '&#8250;' : '&#8249;';
-    btn.title = m ? 'Show sidebar' : 'Hide sidebar';
-    btn.setAttribute('aria-label', btn.title);
+    restore.style.display = m ? '' : 'none';
     localStorage.setItem(KEY, m ? '1' : '0');
   }
-  btn.addEventListener('click', () => setMinimized(!aside.classList.contains('minimized')));
+  btn.addEventListener('click', () => setMinimized(true));
+  restore.addEventListener('click', () => setMinimized(false));
   if (localStorage.getItem(KEY) === '1') setMinimized(true);
 })();
 
@@ -1666,7 +1695,7 @@ function fetchCovers(cur, provId, seq) {
 // Settings (persisted as a key list in localStorage under 'railOrder');
 // renderRail renders them in the saved order.
 const RAIL_TABS = [
-  { icon: '📚', name: 'Shelf', label: 'Shelf — browse providers', key: 'shelf' },
+  { icon: '📚', name: 'Library', label: 'Library — browse providers', key: 'shelf' },
   { icon: '★', name: 'Favorites', label: 'Favorites — your starred documents', key: 'favorites' },
   { icon: '📖', name: 'My Shelf', label: 'My Shelf — your books: to read, in progress & complete', key: 'reading' },
   { icon: '🕘', name: 'Recent', label: 'Recent — books you opened lately', key: 'recent' },
@@ -2741,7 +2770,10 @@ function layoutCatalogueActions() {
 function markActive() {
   document.querySelectorAll('#catalog .titem').forEach(n => {
     const key = n.dataset.ih ? n.dataset.ih : (n.dataset.pdf ? 'pdf:' + n.dataset.pdf : null);
-    n.classList.toggle('active', key === selected);
+    // guard against selected === null: rows without data-ih/data-pdf (live
+    // provider results) also resolve key to null, so `key === selected` would
+    // match every one of them and mark the whole list active on close.
+    n.classList.toggle('active', selected !== null && key === selected);
   });
 }
 
@@ -3296,6 +3328,21 @@ document.getElementById('text-width').addEventListener('change', (e) => {
   applyTextWidth();
 });
 applyTextWidth();
+
+// text alignment (persisted) — text-align on the <pre>
+let textAlign = localStorage.getItem('textAlign') || 'left';
+function applyTextAlign() {
+  const pre = document.getElementById('text-content');
+  if (pre) pre.style.textAlign = textAlign;
+  const sel = document.getElementById('text-align');
+  if (sel) sel.value = textAlign;
+}
+document.getElementById('text-align').addEventListener('change', (e) => {
+  textAlign = e.target.value;
+  localStorage.setItem('textAlign', textAlign);
+  applyTextAlign();
+});
+applyTextAlign();
 
 // live reading progress — % through the text, shown at the right of the toolbar
 function updateTextProgress() {
@@ -4180,6 +4227,11 @@ function renderSettingsView() {
       <option value="normal"${textWidth === 'normal' ? ' selected' : ''}>Normal</option>
       <option value="wide"${textWidth === 'wide' ? ' selected' : ''}>Wide</option>
     </select></div>
+    <div class="settings-row"><label>Alignment</label><select id="set-align">
+      <option value="left"${textAlign === 'left' ? ' selected' : ''}>Left</option>
+      <option value="center"${textAlign === 'center' ? ' selected' : ''}>Center</option>
+      <option value="justify"${textAlign === 'justify' ? ' selected' : ''}>Justify</option>
+    </select></div>
   `);
 
   // ---- Display (localStorage) ----
@@ -4322,6 +4374,7 @@ function renderSettingsView() {
     if (t.id === 'set-app-theme') { appTheme = t.value; localStorage.setItem('appTheme', appTheme); applyAppTheme(); return; }
     if (t.id === 'set-spacing') { textSpacing = t.value; localStorage.setItem('textSpacing', textSpacing); applyTextSpacing(); return; }
     if (t.id === 'set-width') { textWidth = t.value; localStorage.setItem('textWidth', textWidth); applyTextWidth(); return; }
+    if (t.id === 'set-align') { textAlign = t.value; localStorage.setItem('textAlign', textAlign); applyTextAlign(); return; }
     if (t.id === 'set-perpage') { perPage = t.value === 'all' ? 0 : parseInt(t.value, 10); localStorage.setItem('per-page', String(perPage)); page = 1; refresh(); return; }
     if (t.id === 'set-tabpos') { tabPosition = t.value; localStorage.setItem('tabPosition', tabPosition); applyTabPosition(); renderRail(); return; }
     if (t.id === 'set-listview-nobook') { listViewNoBook = t.value; localStorage.setItem('list-view-no-book', listViewNoBook); applyListView(); layoutCatalogueActions(); return; }

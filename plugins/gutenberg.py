@@ -31,30 +31,42 @@ SEARCH_URL = "https://gutendex.com/books"
 UA = {"User-Agent": "pdf-torrent-reader/1.0"}
 
 
-def _get_json(url, attempts=2, timeout=40):
-    """GET a URL and parse JSON, retrying on transient failures.
+def _get_json(url, timeout=20):
+    """GET a URL and parse JSON.
 
-    Gutendex (behind Cloudflare) is bimodal: a healthy request answers in
-    ~0.1s, but during a bad window a single request can take 30s+ or come back
-    502/503. The per-attempt timeout must therefore be long enough to actually
-    wait for a slow-but-valid response (a 10s timeout gave up before the 30s+
-    answer arrived, so every attempt failed and the search 502'd). Two attempts
-    with a 40s timeout ride out both the slow response and a 502, while keeping
-    the worst case bounded (~82s) — the front end keeps the previous results on
-    screen and the user can just re-run the search. A healthy Gutendex answers
-    in ~0.1s, so the long timeout only costs anything during a bad window.
+    Gutendex (behind Cloudflare) is fast when healthy (~0.1s) but goes through
+    bad windows that last minutes, during which it holds the connection open
+    with no response. That held-open connection defeats urllib's per-socket
+    timeout — each recv() stays under it, so a single request can otherwise run
+    for minutes (a 120s-timeout request was observed running 229s). The body is
+    therefore read in chunks against a hard total deadline, so the request is
+    bounded to ~`timeout` seconds no matter how the server behaves.
+
+    There is deliberately no retry: during a bad window a retry just fails the
+    same way, so a single bounded attempt that fails fast with a clear message
+    is better than hanging. The front end keeps the previous results on screen,
+    so the user can just re-run the search once Gutendex recovers.
     """
-    last = None
-    for i in range(attempts):
-        try:
-            req = urllib.request.Request(url, headers=UA)
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.load(resp)
-        except Exception as e:
-            last = e
-            if i < attempts - 1:
-                time.sleep(2 * (i + 1))
-    raise last
+    try:
+        req = urllib.request.Request(url, headers=UA)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            deadline = time.time() + timeout
+            chunks = []
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                if time.time() > deadline:
+                    raise TimeoutError("response body exceeded the deadline")
+            return json.loads(b"".join(chunks))
+    except Exception as e:
+        msg = str(e).lower()
+        if isinstance(e, TimeoutError) or "timed out" in msg or "timeout" in msg:
+            raise RuntimeError(
+                "Gutendex is not responding (timed out) — it is likely "
+                "rate-limiting or down; try again in a moment") from e
+        raise
 
 # Settings the UI renders and passes to search(). These map onto Gutendex's
 # own query parameters (sort, languages, topic, copyright, author years).
