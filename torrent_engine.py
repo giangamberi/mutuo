@@ -75,6 +75,7 @@ class TorrentState:
     total_done: int = 0
     file_progress: dict[int, int] = field(default_factory=dict)  # idx -> bytes done
     last_dht: float = 0.0                    # last force_dht_lookup() (magnet bootstrap)
+    last_fp: float = 0.0                     # last file_progress() refresh (throttled)
 
 
 class TorrentEngine:
@@ -278,6 +279,14 @@ class TorrentEngine:
             raise TorrentError(f"no file {file_index}")
         return ts.fs.file_size(file_index)
 
+    def file_name(self, ih_hex: str, file_index: int) -> str:
+        ts = self._torrents[ih_hex]
+        if ts.fs is None:
+            raise TorrentError("metadata not ready")
+        if file_index >= ts.fs.num_files():
+            raise TorrentError(f"no file {file_index}")
+        return ts.fs.file_path(file_index)
+
     def wait_for_range(self, ih_hex: str, file_index: int, start: int, length: int,
                        timeout: float = 300.0) -> None:
         """Block until metadata is ready AND every piece covering
@@ -449,6 +458,7 @@ class TorrentEngine:
                 pass
 
     def _refresh_states(self) -> None:
+        now = time.monotonic()
         for handle in self._session.get_torrents():
             try:
                 status = handle.status()
@@ -491,7 +501,17 @@ class TorrentEngine:
                         self._apply_pending_includes(ih)
                 except Exception:
                     pass
-            if ts.fs is not None:
+            # Per-file progress only changes while the torrent is moving. The
+            # tick runs every 250 ms, but file_progress() is a per-file C++
+            # crossing that scales with file count, so refresh it at ~1 Hz and
+            # only for torrents that can still change (not paused, not
+            # done/seeding, not idle, or rechecking) — settled ones keep their
+            # last values (the UI reads them on demand, 1 s stale is fine).
+            moving = (not ts.is_paused and (status.checking_files
+                        or (not ts.is_seeding and ts.progress < 1.0
+                            and status.total_wanted > 0)))
+            if ts.fs is not None and moving and now - ts.last_fp >= 1.0:
+                ts.last_fp = now
                 try:
                     ts.file_progress = {
                         i: int(d) for i, d in enumerate(handle.file_progress())

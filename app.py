@@ -10,6 +10,8 @@ Architecture notes
 """
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 import re
@@ -17,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 import uuid
@@ -24,6 +27,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import libtorrent as lt
+import anyio
 from contextlib import asynccontextmanager
 from typing import List
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -38,7 +42,7 @@ from torrent_engine import TorrentEngine, TorrentError, _ih_hex
 BASE = Path(__file__).parent
 UPLOAD_DIR = BASE / ".torrents"
 PDF_DIR = BASE / ".pdfs"          # direct .pdf files dropped into the reader
-PDFS_INDEX = BASE / "pdfs.json"   # registry of direct PDFs (id -> name/size/provider)
+PDFS_INDEX = BASE / "pdfs.json"   # registry of direct PDFs (id -> name/size/provider/cover)
 TEXT_DIR = BASE / ".texts"        # plain-text documents saved locally for offline reading
 TEXTS_INDEX = BASE / "texts.json"  # registry of saved texts (id -> name/size/url/provider)
 EPUB_DIR = BASE / ".epubs"        # EPUB documents saved locally for offline reading
@@ -47,6 +51,7 @@ FILES_DIR = BASE / ".files"        # other saved documents (html/mobi/file) for 
 FILES_INDEX = BASE / "files.json"  # registry of saved files (id -> name/size/url/provider/kind)
 FAVORITES_INDEX = BASE / "favorites.json"  # user's favorite documents (global)
 SHELF_INDEX = BASE / "shelf.json"  # user's personal shelf (superset of favorites)
+RECENT_INDEX = BASE / "recent.json"  # recently opened books (most recent first)
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     # startup
@@ -189,8 +194,16 @@ async def upload_torrent(files: List[UploadFile] = File(...),
 
 
 @app.get("/api/torrents")
-def list_torrents() -> JSONResponse:
-    return JSONResponse(engine.status(include_files=True))
+def list_torrents(files: int = 1, skip: str = "") -> JSONResponse:
+    # files=0 omits the per-file list (name/size/done/priority per file) — the
+    # 4s poll uses it, since only the loading page and "Manage files" need it.
+    # skip=ih1,ih2 omits settled torrents the client already caches, so a
+    # finished download is never re-polled.
+    items = engine.status(include_files=bool(files))
+    if skip:
+        skipset = {s.strip() for s in skip.split(",") if s.strip()}
+        items = [t for t in items if t["info_hash"] not in skipset]
+    return JSONResponse(items)
 
 
 @app.get("/api/torrent")
@@ -316,6 +329,57 @@ def stream_pdf(ih: str, f: int, request: Request) -> Response:
     return Response(data, status_code=status_code, media_type="application/pdf", headers=headers)
 
 
+# ---------- local cache of torrent PDFs ----------
+# Opening a torrent PDF streams it from the swarm; the bytes only live in the
+# torrent's download dir. Once the whole file is available we copy it into
+# .pdfs/ and register it as a direct PDF (source "cache"), so it keeps working
+# after the torrent is removed and needs no peers. The copy runs in a
+# background thread — the viewer must not wait on it.
+_cached_torrents: set[str] = set()  # "ih:f" already cached (dedupe re-opens)
+
+
+def _cache_torrent_pdf(ih: str, f: int) -> None:
+    """Copy a fully-downloaded torrent PDF into .pdfs/ and register it.
+    Runs in a background thread; every step is best-effort."""
+    tag = f"{ih}:{f}"
+    # the registry is the source of truth: if a cached copy already exists
+    # (survives restarts, and a deleted one re-caches on the next open) there
+    # is nothing to do. The in-memory set only dedupes concurrent re-opens.
+    if any(m.get("source") == "cache" and m.get("cached_from", {}).get("ih") == ih
+           and m.get("cached_from", {}).get("f") == f for m in _load_pdfs().values()):
+        return
+    if tag in _cached_torrents:
+        return
+    _cached_torrents.add(tag)
+    try:
+        size = engine.file_size(ih, f)
+        # wait for the whole file (bounded — the viewer already has the head)
+        engine.wait_for_range(ih, f, 0, size, timeout=600)
+        data = engine.fetch_range(ih, f, 0, size)
+        if not data.startswith(b"%PDF-"):
+            return  # not a PDF after all; don't cache it
+        name = engine.file_name(ih, f)
+        PDF_DIR.mkdir(exist_ok=True)
+        pid = uuid.uuid4().hex
+        (PDF_DIR / f"{pid}.pdf").write_bytes(data)
+        reg = _load_pdfs()
+        reg[pid] = {"name": name, "size": len(data), "provider": "local",
+                    "added_at": time.time(), "source": "cache",
+                    "cached_from": {"ih": ih, "f": f},
+                    **_pdf_meta(str(PDF_DIR / f"{pid}.pdf"))}
+        _save_pdfs(reg)
+    except Exception:
+        _cached_torrents.discard(tag)  # allow a later re-open to retry
+
+
+@app.post("/api/pdf/cache")
+def cache_pdf(ih: str, f: int) -> JSONResponse:
+    """Ask the server to keep a local copy of a torrent PDF. Fire-and-forget:
+    the copy happens in a background thread, so this returns immediately."""
+    threading.Thread(target=_cache_torrent_pdf, args=(ih, f), daemon=True).start()
+    return JSONResponse({"ok": True})
+
+
 @app.post("/api/sync")
 def sync_feed() -> JSONResponse:
     """Re-pull feed.json and enqueue any new torrents."""
@@ -374,7 +438,7 @@ def _sync_folder_pdfs(folder: str, provider: str) -> int:
         if pid not in reg:
             reg[pid] = {"name": f.name, "size": f.stat().st_size,
                         "provider": provider, "added_at": time.time(),
-                        "source": "folder", "path": str(f)}
+                        "source": "folder", "path": str(f), **_pdf_meta(str(f))}
             added += 1
     # drop stale entries (file renamed/deleted, or provider no longer a folder)
     for pid in [k for k in reg
@@ -441,6 +505,7 @@ def _plugin_providers() -> list[dict]:
         out.append({"id": f"plugin:{pl['id']}", "name": pl["name"],
                     "feed": "", "description": pl.get("description", ""),
                     "enabled": True, "plugin": True, "live": True,
+                    "has_covers": pl.get("has_covers", False),
                     "config_schema": pl.get("config_schema"),
                     "config": pl.get("config", {})})
     return out
@@ -607,7 +672,8 @@ def _download_pdf(url: str, name: str, provider: str) -> dict:
     pid = uuid.uuid4().hex
     (PDF_DIR / f"{pid}.pdf").write_bytes(data)
     reg[pid] = {"name": name, "size": len(data), "provider": provider,
-                "added_at": time.time(), "source": "plugin", "url": url}
+                "added_at": time.time(), "source": "plugin", "url": url,
+                **_pdf_meta(str(PDF_DIR / f"{pid}.pdf"))}
     _save_pdfs(reg)
     return reg[pid]
 
@@ -670,6 +736,26 @@ def resolve_plugin(pid: str, req: PluginResolveRequest) -> JSONResponse:
     except Exception as exc:
         raise HTTPException(502, f"plugin resolve failed: {exc}")
     return JSONResponse({"ok": True, "resolved": resolved})
+
+
+class PluginCoversRequest(BaseModel):
+    items: List[dict] = []
+
+
+@app.post("/api/plugins/{pid}/covers")
+def covers_plugin(pid: str, req: PluginCoversRequest) -> JSONResponse:
+    """Stage 2 of a live search: fetch cover images for the listed results.
+    The plugin's covers(items) runs in parallel (it may hit the network per
+    item) and returns a list of cover URLs aligned by index with `items`.
+    The front end fires this right after the list loads, so covers appear
+    without delaying the list itself."""
+    try:
+        covers = plugin_loader.covers_plugin(pid, req.items)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc))
+    except Exception as exc:
+        raise HTTPException(502, f"plugin covers failed: {exc}")
+    return JSONResponse({"ok": True, "covers": covers})
 
 
 @app.post("/api/plugins/{pid}/open")
@@ -810,7 +896,7 @@ def _register_local_pdf(path: str, name: str, provider: str) -> None:
     pid = f"pluginfile:{provider}:{p.name}"
     reg[pid] = {"name": name or p.name, "size": p.stat().st_size,
                 "provider": provider, "added_at": time.time(),
-                "source": "folder", "path": str(p)}
+                "source": "folder", "path": str(p), **_pdf_meta(str(p))}
     _save_pdfs(reg)
 
 
@@ -860,6 +946,20 @@ def _save_shelf(shelf: list) -> None:
     tmp.replace(SHELF_INDEX)
 
 
+def _load_recent() -> list:
+    try:
+        data = json.loads(RECENT_INDEX.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _save_recent(items: list) -> None:
+    tmp = RECENT_INDEX.with_suffix(".tmp")
+    tmp.write_text(json.dumps(items, indent=2), encoding="utf-8")
+    tmp.replace(RECENT_INDEX)
+
+
 def _load_texts() -> dict:
     try:
         return json.loads(TEXTS_INDEX.read_text(encoding="utf-8"))
@@ -902,7 +1002,9 @@ def _save_files(reg: dict) -> None:
 def _pdf_meta(path: str) -> dict:
     """Extract filterable metadata from a PDF (title/author/subject/keywords/
     page count) plus the file's mtime. Returns {} on any error so a broken or
-    password-protected PDF never breaks the list. Cached by the caller."""
+    password-protected PDF never breaks the list. Called at import time only
+    (upload / download / folder sync) — never on the list path, so a slow
+    extraction can't stall the UI."""
     out = {}
     try:
         from pypdf import PdfReader
@@ -926,20 +1028,71 @@ def _pdf_meta(path: str) -> dict:
     return out
 
 
-def _ensure_pdf_meta(reg: dict) -> bool:
-    """Fill in missing PDF metadata for every registered PDF that has a readable
-    file. Cached in the registry (meta_done flag) so extraction runs once per
-    file, not on every list call. Returns True if anything changed."""
-    changed = False
-    for pid, m in reg.items():
-        if m.get("meta_done"):
-            continue
-        path = m.get("path") or str(PDF_DIR / f"{pid}.pdf")
-        if Path(path).is_file():
-            m.update(_pdf_meta(path))
-        m["meta_done"] = True
-        changed = True
-    return changed
+# ---------- local PDF covers (first page rendered to a data URI) ----------
+# A book's cover is its first page, rendered server-side to a small JPEG and
+# stored as a base64 data URI in the pdfs.json registry entry (one render per
+# PDF — re-requests are served from the registry). pypdfium2 is a
+# self-contained PDFium build, so no system poppler is needed. Rendering is
+# best-effort: a scanned, encrypted, or otherwise odd PDF simply has no cover
+# (the row shows nothing) and never breaks the list.
+# PDFium is not thread-safe: two concurrent renders (even from two separate
+# requests) can segfault the whole process. This lock serializes every render.
+_cover_lock = threading.Lock()
+
+
+def _render_pdf_cover_data(path: str) -> str | None:
+    """Render a PDF's first page to a ~200px-wide JPEG data URI.
+    Returns None when the PDF has no renderable first page."""
+    try:
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(str(path))
+        try:
+            if len(pdf) == 0:
+                return None
+            page = pdf[0]
+            width = page.get_width() or 612.0
+            scale = 200.0 / width  # fixed thumbnail width, any page size
+            img = page.render(scale=scale).to_pil()
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            buf = io.BytesIO()
+            img.save(buf, "JPEG", quality=72)
+            return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+        finally:
+            pdf.close()
+    except Exception:
+        return None
+
+
+class PdfCoversRequest(BaseModel):
+    ids: List[str] = []
+
+
+@app.post("/api/pdfs/covers")
+def pdf_covers(req: PdfCoversRequest) -> JSONResponse:
+    """Render first-page covers for local PDFs that don't have one yet and
+    store them in the registry. Already-covered ids are skipped, so this is
+    cheap to call repeatedly (the front end fires it after every list load).
+    Renders run sequentially: PDFium is not thread-safe, so concurrent renders
+    can crash the process — the list still loads first and covers appear a
+    moment later because this endpoint runs off the main flow."""
+    reg = _load_pdfs()
+    missing = [pid for pid in req.ids
+               if pid in reg and not reg[pid].get("cover")]
+    if missing:
+        for pid in missing:
+            meta = reg[pid]
+            path = Path(meta["path"]) if meta.get("source") == "folder" else PDF_DIR / f"{pid}.pdf"
+            if not path.exists():
+                continue
+            with _cover_lock:
+                data = _render_pdf_cover_data(str(path))
+            if data:
+                reg[pid]["cover"] = data
+        _save_pdfs(reg)
+    return JSONResponse({"ok": True,
+                         "covers": {pid: reg[pid]["cover"] for pid in req.ids
+                                    if pid in reg and reg[pid].get("cover")}})
 
 
 @app.post("/api/pdf/upload")
@@ -963,8 +1116,11 @@ async def upload_pdf(files: List[UploadFile] = File(...),
         pid = uuid.uuid4().hex
         dest = PDF_DIR / f"{pid}.pdf"
         dest.write_bytes(data)
+        # metadata is extracted at import time (off the event loop — this is an
+        # async endpoint and pypdf can take seconds on a big file)
         reg[pid] = {"name": fname, "size": len(data),
-                    "provider": provider, "added_at": time.time()}
+                    "provider": provider, "added_at": time.time(),
+                    **await anyio.to_thread.run_sync(_pdf_meta, str(dest))}
         added.append({"id": pid, "name": fname, "size": len(data)})
     if errors and not added:
         _save_pdfs(reg)
@@ -1001,16 +1157,16 @@ def add_pdf_url(req: AddPdfUrlRequest) -> JSONResponse:
 @app.get("/api/pdfs")
 def list_pdfs() -> JSONResponse:
     reg = _load_pdfs()
-    if _ensure_pdf_meta(reg):
-        _save_pdfs(reg)
     return JSONResponse([
         {"id": pid, "name": m["name"], "size": m["size"],
          "provider": m.get("provider", "local"),
          "source": m.get("source", "upload"),
          "url": m.get("url", ""),
+         "cached_from": m.get("cached_from"),
          "title": m.get("title", ""), "author": m.get("author", ""),
          "subject": m.get("subject", ""), "keywords": m.get("keywords", ""),
-         "pages": m.get("pages", 0), "mtime": m.get("mtime", 0)}
+         "pages": m.get("pages", 0), "mtime": m.get("mtime", 0),
+         "cover": m.get("cover")}
         for pid, m in reg.items()
     ])
 
@@ -1093,6 +1249,7 @@ class FavoriteRequest(BaseModel):
     status: str = "toread"   # toread | reading | complete
     tags: list = []          # custom user tags (free-form strings)
     group: str = ""          # entries sharing a group render as one expandable box
+    cover: str = ""          # cover image (data URI or URL), saved with the entry
 
 
 class FavoriteStatusRequest(BaseModel):
@@ -1110,6 +1267,52 @@ class ShelfPositionRequest(BaseModel):
     page: int = 0        # 1-based PDF page (0 = not a PDF / unknown)
     scroll: float = 0.0  # 0..1 fraction through a plain-text document
     cfi: str = ""        # EPUB CFI (empty = not an EPUB)
+
+
+class RecentRequest(BaseModel):
+    key: str
+    name: str = ""
+    type: str = "live"   # torrent | pdf | live
+    ih: str = ""
+    f: int = 0           # torrent file index (type == torrent)
+    pdf: str = ""        # direct pdf id (type == pdf)
+    url: str = ""
+    magnet: str = ""
+    kind: str = ""
+    provider: str = "local"
+    shelf_key: str = ""  # original shelf key, for position resumption on re-open
+    size: int = 0
+    pages: int = 0
+
+
+@app.get("/api/recent")
+def list_recent() -> JSONResponse:
+    return JSONResponse(_load_recent())
+
+
+@app.post("/api/recent")
+def add_recent(req: RecentRequest) -> JSONResponse:
+    """Record a book open. Re-opening moves the entry to the front; the list
+    is capped so it stays a small, recent-history list rather than a log."""
+    items = [r for r in _load_recent() if r["key"] != req.key]
+    items.insert(0, {"key": req.key, "name": req.name, "type": req.type,
+                     "ih": req.ih, "f": req.f, "pdf": req.pdf, "url": req.url,
+                     "magnet": req.magnet, "kind": req.kind,
+                     "provider": req.provider, "shelf_key": req.shelf_key,
+                     "size": req.size, "pages": req.pages,
+                     "opened_at": time.time()})
+    _save_recent(items[:50])
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/recent")
+def remove_recent(key: str) -> JSONResponse:
+    items = _load_recent()
+    kept = [r for r in items if r["key"] != key]
+    if len(kept) == len(items):
+        raise HTTPException(404, "not in recent list")
+    _save_recent(kept)
+    return JSONResponse({"ok": True})
 
 
 @app.get("/api/favorites")
@@ -1137,7 +1340,7 @@ def add_favorite(req: FavoriteRequest) -> JSONResponse:
            "ih": req.ih, "pdf": req.pdf, "url": req.url,
            "magnet": req.magnet, "kind": req.kind, "provider": req.provider,
            "status": req.status, "tags": req.tags, "group": req.group,
-           "added_at": time.time()}
+           "cover": req.cover, "added_at": time.time()}
     favs.append(fav)
     _save_favorites(favs)
     # a favorite is always on the shelf (favorites ⊆ shelf)
@@ -1162,7 +1365,7 @@ def add_to_shelf(req: FavoriteRequest) -> JSONResponse:
                   "ih": req.ih, "pdf": req.pdf, "url": req.url,
                   "magnet": req.magnet, "kind": req.kind, "provider": req.provider,
                   "status": req.status, "tags": req.tags, "group": req.group,
-                  "added_at": time.time()})
+                  "cover": req.cover, "added_at": time.time()})
     _save_shelf(shelf)
     return JSONResponse({"ok": True, "added": True})
 

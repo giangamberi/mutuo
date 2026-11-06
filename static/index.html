@@ -52,17 +52,17 @@
   #resizer { position:absolute; top:0; right:-5px; width:10px; height:100%; cursor:col-resize; z-index:20; touch-action:none; }
   #resizer::after { content:''; position:absolute; top:0; right:4px; width:2px; height:100%; background:transparent; }
   #resizer:hover::after, #resizer.dragging::after { background:var(--acc); }
-  /* minimize the sidebar so the reader can focus on the text. The top bar
-     (just the minimize button) sits at the top of the list column, to the
-     right of the full-height main-tab rail */
-  #sidebar-top { display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:4px 6px 0; }
-  #sidebar-top #minimize-btn { padding:2px 9px; font-size:calc(12px * var(--app-icon-scale)); line-height:1.4; }
-  aside.minimized { width:34px !important; min-width:34px !important; }
-  /* collapse to just the restore button: hide the rail + the list content,
-     but keep the top bar (which holds the button) visible */
-  aside.minimized #rail { display:none; }
-  aside.minimized #sidebar-main > *:not(#sidebar-top) { display:none; }
-  aside.minimized #sidebar-top { justify-content:center; padding:6px 0 0; }
+  /* No book open: the list takes the whole screen and the viewer shrinks to a
+     narrow strip showing the empty placeholder (the resizer is meaningless
+     while the list is full-width, so it's hidden). */
+  main.no-book aside { flex:1 1 0; width:auto; min-width:0; }
+  main.no-book #resizer { display:none; }
+  main.no-book #viewer { flex:0 0 220px; width:220px; min-width:220px; }
+  /* minimize the sidebar so the reader can focus on the text. The toggle
+     lives in the header (always visible), so a hidden sidebar frees its
+     full width — no leftover rail or top band */
+  header #minimize-btn { padding:6px 9px; font-size:calc(13px * var(--app-icon-scale)); line-height:1; }
+  aside.minimized { display:none; }
   /* left icon rail: Shelf / Favorites / Reading */
   #sidebar-row { flex:1; display:flex; min-height:0; }
   /* main-nav rail (📚 ★ 📖 🧩 ⚙) — shared button styles. Its position is set
@@ -99,6 +99,89 @@
   #tabs .pcog { font-size:calc(11px * var(--app-text-scale)); line-height:1; padding:4px 6px; margin-left:2px; background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
   #tabs .pcog:hover { background:var(--hover); border-color:var(--acc); color:var(--text); }
   #catalog { flex:1; overflow-y:auto; }
+  /* Catalogue view: the list renders as a responsive grid of book cards
+     (cover on top, title + meta below) instead of compact rows. Toggled by a
+     class on #catalog (default); the plain list is the fallback. */
+  #catalog.catalogue {
+    /* ~6 cards per line at full width (230px min); narrower windows drop to
+       5/4/3/2 automatically. */
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr));
+    gap:16px; padding:16px; align-content:start;
+  }
+  #catalog.catalogue .titem {
+    display:flex; flex-direction:column; border:1px solid var(--border);
+    border-radius:8px; background:var(--panel);
+  }
+  #catalog.catalogue .titem:hover { border-color:var(--acc); }
+  #catalog.catalogue .titem.active { border-color:var(--acc); box-shadow:inset 0 0 0 1px var(--acc); }
+  /* no overflow:hidden — the ⋯ action menu is position:absolute and must be
+     able to drop below the card; the button rounds its own hover background
+     to match the card instead. The row's controls live in a bottom bar
+     (.card-actions, see layoutCatalogueActions), so the title gets the full
+     card width — no top-right padding reservation. flex:1 lets the card body
+     fill the box so every card's bottom bar lines up across a grid row. */
+  #catalog.catalogue .titem button.open {
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    text-align:center; padding:20px 16px; border-radius:7px; flex:1;
+  }
+  /* cover: a large centred image on top of the card (list mode keeps the
+     small left thumbnail). No empty slot before it loads. */
+  #catalog.catalogue .titem .cover {
+    width:150px; height:200px; margin:0 auto; border-radius:4px;
+  }
+  #catalog.catalogue .titem button.open.has-cover { flex-direction:column; align-items:center; gap:10px; }
+  #catalog.catalogue .titem .covertxt { flex-direction:column; align-items:center; gap:5px; width:100%; }
+  /* relaxed line-height so wrapped multi-line titles breathe; the meta is a
+     small dim subtitle (it inherits the body's 16px otherwise — bigger than
+     the title, which reads wrong) */
+  #catalog.catalogue .titem .name { font-weight:600; font-size:calc(15px * var(--app-text-scale)); line-height:1.45; overflow-wrap:anywhere; }
+  #catalog.catalogue .titem .meta { font-size:calc(12px * var(--app-text-scale)); line-height:1.4; color:var(--dim); }
+  /* torrent progress bar spans the card width under the meta */
+  #catalog.catalogue .titem .bar { width:100%; }
+  /* the row's controls (★/📖/⋯, status, tags, delete, save, position, …) are
+     moved out of the floating top-right/bottom-right corners and into this
+     bottom bar by layoutCatalogueActions(). They're position:static here so
+     they flow in the row instead of overlapping the cover. */
+  #catalog.catalogue .titem .card-actions {
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    padding:8px 10px; margin-top:auto; border-top:1px solid var(--border-soft);
+  }
+  #catalog.catalogue .titem .card-actions > * { position:static; }
+  /* the status dropdown stretches to fill the bar, pushing the other
+     controls (tags / remove / save / …) to the right end of the card — same
+     as the group-box header row */
+  #catalog.catalogue .titem .card-actions .status { flex:1; width:auto; }
+  /* a book with several editions shows its edition list inline in the card —
+     no expand button. The list is always visible (regardless of the .open
+     state the list-mode toggle tracks) and the "▸ N editions" button is
+     hidden. */
+  #catalog.catalogue .titem .edtoggle { display:none; }
+  #catalog.catalogue .titem .edlist { display:block; padding:0 12px 12px; }
+  /* the reading position (p. N / %) + reset move to the top-right of the card
+     (out of the bottom bar) — the reset at the corner, the hint just left of
+     it (same order as the list-mode bottom-right pair). The title keeps its
+     full width: the chips are small and the title wraps below them. */
+  #catalog.catalogue .titem .resetpos { top:8px; bottom:auto; right:8px; }
+  #catalog.catalogue .titem .poshint { top:8px; bottom:auto; right:34px; }
+  /* My Shelf group boxes: same idea — the edition rows are always shown and
+     the header's expand affordance is removed. The header keeps the book
+     title + its controls (status / tags / remove); only the toggle button
+     (which carries the "▸ N editions" meta) is made non-interactive. */
+  #catalog.catalogue .titem.groupbox .groupmembers { display:block; padding:0 10px 10px; }
+  #catalog.catalogue .titem.groupbox .grouphdr-toggle { pointer-events:none; cursor:default; }
+  /* the "▸ N editions" meta is the expand affordance — with the list always
+     shown it's redundant (and the arrow implies a collapsed state), so hide
+     it; the book title stays. */
+  #catalog.catalogue .titem.groupbox .grouphdr-toggle .meta { display:none; }
+  /* the header's controls (status / tags / remove) drop to a second line
+     under the title — at the bottom of the header, above the edition list —
+     instead of sitting top-right beside the title. */
+  #catalog.catalogue .titem.groupbox .grouphdr { flex-wrap:wrap; }
+  #catalog.catalogue .titem.groupbox .grouphdr .ghdr-right { width:100%; }
+  /* the status dropdown stretches to fill the line, pushing the tag /
+     remove buttons to the right end of the card */
+  #catalog.catalogue .titem.groupbox .grouphdr .ghdr-right .status { flex:1; width:auto; }
+  #catalog.catalogue .titem.groupbox:hover .grouphdr { background:transparent; }
   #searchbar { display:flex; gap:6px; align-items:center; padding:6px 8px; border-bottom:1px solid var(--border-strong); flex-wrap:wrap; }
   #searchbar input { flex:1 1 140px; min-width:120px; padding:5px 8px; font-size:calc(12px * var(--app-text-scale)); }
   #searchbar select { padding:5px 6px; font-size:calc(12px * var(--app-text-scale)); max-width:150px; }
@@ -115,6 +198,18 @@
   aside .titem button.open:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
   /* long filenames wrap instead of overflowing the sidebar */
   aside .titem .name { overflow-wrap:anywhere; }
+  /* first-page cover thumbnail: a small book cover on the left of the row,
+     with the name/meta pushed into a flex column beside it */
+  aside .titem button.open.has-cover { display:flex; align-items:flex-start; gap:10px; }
+  aside .titem .cover {
+    flex:0 0 auto; width:44px; height:60px; object-fit:cover; border-radius:3px;
+    border:1px solid var(--border); background:var(--input-bg);
+    display:none; /* hidden until the image actually loads — no empty slot */
+  }
+  aside .titem .cover.loaded { display:block; }
+  aside .titem .cover.noimg { display:none; }
+  aside .titem .covertxt { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+  aside .titem .covertxt .name, aside .titem .covertxt .meta { display:block; }
   aside .titem .cog {
     position:absolute; top:8px; right:8px; padding:3px 7px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
     background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
@@ -286,6 +381,20 @@
   aside .titem .rmshelf:hover { background:var(--hover); border-color:var(--danger-fg); color:var(--danger-hover-fg); }
   aside .titem.has-remove .tagbtn { right:36px; }
   aside .titem.has-remove .fav { right:76px; }
+  /* Recent rows: ✕ (top-right) removes the entry; 🗑︎ (bottom, left of 💾)
+     deletes the cached copy. The 💾 badge is pointer-events:none, so the 🗑︎
+     at right:42 sits in the same slot without overlap. */
+  aside .titem .rmrecent {
+    position:absolute; top:8px; right:8px; padding:3px 6px; font-size:calc(12px * var(--app-text-scale)); line-height:1;
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
+  }
+  aside .titem .rmrecent:hover { background:var(--hover); border-color:var(--danger-fg); color:var(--danger-hover-fg); }
+  aside .titem .delcache {
+    position:absolute; bottom:8px; right:8px; font-size:calc(11px * var(--app-text-scale)); line-height:1;
+    color:var(--dim); background:var(--input-bg); border:1px solid var(--border-soft2); border-radius:6px;
+    padding:2px 6px; cursor:pointer;
+  }
+  aside .titem .delcache:hover { border-color:var(--danger-fg); color:var(--danger-hover-fg); }
   /* tag button sits below the status select so the title keeps its width */
   aside .titem .tagbtn {
     position:absolute; top:33px; right:8px; padding:3px 6px; font-size:calc(11px * var(--app-text-scale)); line-height:1;
@@ -527,6 +636,12 @@
   #catalog .settings-item .plug-ctrls button { font-size:calc(12px * var(--app-text-scale)); padding:3px 8px; }
   #catalog .settings-item .plug-ctrls button.danger { color:var(--danger-fg); }
   #catalog .settings-item .plug-ctrls button.danger:hover { background:var(--danger-bg); border-color:var(--danger-fg); }
+  #catalog .tab-order { display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+  #catalog .tab-order-item { display:flex; align-items:center; gap:8px; padding:5px 10px; border:1px solid var(--border-soft); border-radius:6px; background:var(--bg-soft, transparent); }
+  #catalog .tab-order-item .tab-order-name { flex:1; font-size:calc(13px * var(--app-text-scale)); }
+  #catalog .tab-order-item .tab-order-btns { display:flex; gap:4px; }
+  #catalog .tab-order-item .tab-order-btns button { font-size:calc(12px * var(--app-text-scale)); padding:2px 8px; }
+  #catalog .tab-order-item .tab-order-btns button:disabled { opacity:.35; cursor:default; }
   /* plugin rows reuse .settings-item but need side padding (it's 8px 0) so
      text and the right-hand controls don't touch the walls */
   #catalog .plugin-item.settings-item { padding:8px 14px; }
@@ -688,6 +803,7 @@
   </div>
 </div>
 <header>
+  <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
   <h1>Shared Knowledge</h1>
   <input id="magnet" placeholder="Paste a link to a book (PDF, magnet, …)">
   <button onclick="addMagnet()">Add</button>
@@ -699,9 +815,6 @@
   <aside>
     <div id="sidebar-row">
     <div id="sidebar-main">
-    <div id="sidebar-top">
-      <button id="minimize-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">&#8249;</button>
-    </div>
     <div id="tabs"></div>
     <div id="searchbar">
       <input id="search" type="search" placeholder="Search documents…" autocomplete="off">
@@ -799,6 +912,12 @@ let epubLoc = null; // current EPUB location (updated on every page turn)
 let plugins = []; // [{id, name, description}] — custom behaviours
 let page = 1; // current page of the (paginated) list
 let perPage = parseInt(localStorage.getItem('per-page'), 10) || 25; // items per page (0 = all)
+// how the list renders: 'catalogue' (grid of cover cards) or 'list' (compact
+// rows). Two independent settings: one for when no book is open (full-width
+// list, default catalogue) and one for when a book is open (narrow sidebar,
+// default list). Persisted; applied as a class on #catalog.
+let listViewNoBook = localStorage.getItem('list-view-no-book') || 'catalogue';
+let listViewBook = localStorage.getItem('list-view-book') || 'list';
 // live plugin provider: results are fetched on demand (not from the catalog).
 // Each live provider keeps its own last search (query + results) in liveCache,
 // so switching tabs restores that provider's results instead of going blank.
@@ -810,6 +929,18 @@ let savedEpubs = []; // [{id, name, size, url, provider}] — EPUBs saved locall
 let savedFiles = []; // [{id, name, size, url, provider, kind}] — html/mobi/file saved locally
 // metadata filters for local (non-live) providers: PDF fields + torrent state/size
 let localFilters = { author:'', subject:'', keywords:'', minPages:'', maxPages:'', state:'', minSize:'', maxSize:'' };
+// Polling state: the 4s tick only re-fetches torrents that can still change.
+// Settled torrents (fully downloaded, idle, or paused) are cached and skipped,
+// so a finished download is never re-polled. The other lists (catalog, PDFs,
+// favorites, …) only change on user actions, so they're fetched on a full
+// refresh, not on every tick.
+let catalogData = []; // /api/catalog (full refresh only)
+let directPdfs = []; // /api/pdfs (full refresh only)
+let recent = []; // /api/recent (full refresh only)
+let settledTorrents = new Map(); // ih -> entry, for settled torrents
+let polling = false; // guard against overlapping ticks
+let dataLoaded = false; // true once the first full refresh succeeds
+let lastListSig = null; // signature of the last rendered Shelf list (skip rebuild if unchanged)
 
 async function j(url, opts) {
   const r = await fetch(url, opts);
@@ -822,12 +953,54 @@ async function j(url, opts) {
   return r;
 }
 
+// A torrent that is fully downloaded, idle (opt-in, nothing wanted), or paused
+// won't change without a user action, so the tick skips it and serves its
+// last-known entry from the cache.
+function isSettled(t) {
+  return t.progress >= 1.0 || t.state === 'idle' || t.is_paused;
+}
+
+function rebuildSettled(torrents) {
+  settledTorrents = new Map();
+  for (const t of torrents) if (isSettled(t)) settledTorrents.set(t.info_hash, t);
+}
+
+// A user action changed this torrent's state (e.g. opening a PDF starts its
+// download, or a file was included/excluded) — drop it from the settled cache
+// so the next tick re-fetches it instead of serving the stale entry.
+function unsettle(ih) { settledTorrents.delete(ih); }
+
+// Shared render dispatch (full refresh and the 4s tick both end here).
+function renderAll(torrents) {
+  const byMagnet = Object.fromEntries(catalogData.map(c => [magnetKey(c.magnet), c]));
+  const provOf = t => (byMagnet[magnetKey(t.magnet)] || {}).provider || 'local';
+  renderRail();
+  applyListView(); // keep the catalogue/list class in sync with the setting
+  // leaving the shelf list for another view: clear the sig so returning to the
+  // shelf forces a rebuild (otherwise renderShelf's sig-skip — meant for idle
+  // ticks — sees an unchanged signature and leaves the previous view's HTML in
+  // #catalog).
+  if (view !== 'shelf') lastListSig = null;
+  syncTagPop(); // keep an open tag popover in sync with the re-rendered list
+  pollPosition(); // persist the open book's reading position a few times a minute
+  if (view === 'favorites') renderFavorites(torrents, directPdfs, byMagnet, provOf);
+  else if (view === 'reading') renderReading(torrents, directPdfs, byMagnet, provOf);
+  else if (view === 'plugins') renderPluginView(directPdfs, catalogData);
+  else if (view === 'settings') renderSettingsView();
+  else if (view === 'recent') renderRecent(torrents, byMagnet);
+  else renderShelf(torrents, directPdfs, catalogData, byMagnet, provOf);
+  layoutCatalogueActions(); // move row controls into the bottom bar in grid mode
+}
+
+// Full refresh: fetch every torrent fresh (rebuilding the settled cache) plus
+// the other lists. Called on user actions and at startup.
 async function refresh() {
   try {
-    const torrents = await j('/api/torrents').then(r => r.json());
-    const catalog = await j('/api/catalog').then(r => r.json());
+    const torrents = await j('/api/torrents?files=0').then(r => r.json());
+    rebuildSettled(torrents);
+    catalogData = await j('/api/catalog').then(r => r.json());
     providers = await j('/api/providers').then(r => r.json());
-    const directPdfs = await j('/api/pdfs').then(r => r.json());
+    directPdfs = await j('/api/pdfs').then(r => r.json());
     window.__pdfs = directPdfs; // kept for the metadata edit modal
     plugins = await j('/api/plugins').then(r => r.json());
     favorites = await j('/api/favorites').then(r => r.json());
@@ -836,17 +1009,48 @@ async function refresh() {
     savedTexts = await j('/api/texts').then(r => r.json());
     savedEpubs = await j('/api/epubs').then(r => r.json());
     savedFiles = await j('/api/files').then(r => r.json());
-    const byMagnet = Object.fromEntries(catalog.map(c => [magnetKey(c.magnet), c]));
-    const provOf = t => (byMagnet[magnetKey(t.magnet)] || {}).provider || 'local';
-    renderRail();
-    syncTagPop(); // keep an open tag popover in sync with the re-rendered list
-    pollPosition(); // persist the open book's reading position a few times a minute
-    if (view === 'favorites') { renderFavorites(torrents, directPdfs, byMagnet, provOf); return; }
-    if (view === 'reading') { renderReading(torrents, directPdfs, byMagnet, provOf); return; }
-    if (view === 'plugins') { renderPluginView(directPdfs, catalog); return; }
-    if (view === 'settings') { renderSettingsView(); return; }
-    renderShelf(torrents, directPdfs, catalog, byMagnet, provOf);
+    recent = await j('/api/recent').then(r => r.json());
+    dataLoaded = true;
+    renderAll(torrents);
+    fetchLocalCovers(); // fire-and-forget: covers appear a moment later
   } catch (e) { /* server still starting */ }
+}
+
+// Local PDFs render their first-page cover server-side (in parallel) and store
+// it in the registry. The list is already on screen by the time this fires, so
+// covers appear a moment later without blocking the results. Already-covered
+// ids are skipped server-side, so this is cheap to call on every refresh.
+function fetchLocalCovers() {
+  const missing = directPdfs.filter(p => !p.cover).map(p => p.id);
+  if (!missing.length) return;
+  j('/api/pdfs/covers', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: missing }) })
+    .then(r => r.json())
+    .then(data => {
+      const covers = data.covers || {};
+      if (Object.keys(covers).length) refresh(); // covers are saved server-side; re-fetch picks them up
+    })
+    .catch(() => { /* covers are best-effort; the list stays as-is */ });
+}
+
+// The 4s tick: re-fetch only the torrents that can still change (settled ones
+// are skipped via the `skip` param) and merge them with the cached settled
+// entries. The other lists only change on user actions, so they're not
+// re-fetched here — a finished download is never re-polled.
+async function pollTick() {
+  if (polling) return;
+  if (!dataLoaded) { refresh(); return; } // server still starting — full refresh
+  polling = true;
+  try {
+    const skip = [...settledTorrents.keys()].join(',');
+    const fresh = await j(`/api/torrents?files=0${skip ? `&skip=${encodeURIComponent(skip)}` : ''}`).then(r => r.json());
+    // a torrent that was still downloading may have finished — cache it now
+    for (const t of fresh) if (isSettled(t)) settledTorrents.set(t.info_hash, t);
+    const torrents = [...fresh, ...settledTorrents.values()];
+    renderAll(torrents);
+  } catch (e) { /* server hiccup — keep last state */ }
+  finally { polling = false; }
 }
 
 // Shelf view: the Providers / Plugins sub-explorers. The Providers sub-view
@@ -866,7 +1070,6 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
   document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
   document.getElementById('search').placeholder = 'Search documents…';
   const el = document.getElementById('catalog');
-  el.innerHTML = '';
     // search + sort: filter the current provider's items by name, then order
     // them by the chosen key (torrents first, then direct PDFs)
     const q = (document.getElementById('search').value || '').trim().toLowerCase();
@@ -899,6 +1102,20 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
     if (page > pages) page = pages;
     const start = (page - 1) * pp;
     const slice = [...tItems, ...pItems].slice(start, start + pp);
+    // Skip the DOM rebuild when nothing that affects the list changed — this
+    // keeps open ⋯ menus, hover states, and text selection intact on idle
+    // ticks. The signature covers every input to the rendered rows.
+    const sig = JSON.stringify({
+      prov: activeProvider, q, sort, page, perPage, total, filters: localFilters, selected,
+      favs: favorites.map(f => f.key),
+      shelf: shelf.map(s => s.key),
+      items: slice.map(x => x.t
+        ? [x.t.info_hash, x.name, x.t.state, Math.round(x.t.progress * 100), x.t.num_peers, x.t.num_seeds, x.t.is_paused, x.t.total_size]
+        : ['pdf', x.p.id, x.name, x.p.size, x.p.title, x.p.author, x.p.pages, !!x.p.cover])
+    });
+    if (sig === lastListSig) return;
+    lastListSig = sig;
+    el.innerHTML = '';
     for (const { t, c } of slice) {
       if (!t) continue; // direct PDF, rendered below
       const pct = Math.round(t.progress * 100);
@@ -947,9 +1164,17 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
       const pdfFavKey = 'pdf:' + p.id;
       const pdfIsFav = favorites.some(f => f.key === pdfFavKey);
       const pdfShelved = shelf.some(s => s.key === pdfFavKey);
-      item.innerHTML = `<button type="button" class="open" data-pdf="${p.id}" data-name="${esc(displayName)}" data-source="${fromFolder ? 'folder' : 'upload'}">
-          <div class="name">&#128196; ${esc(displayName)}</div>
-          <div class="meta">${esc(pdfMeta)}</div>
+      // first-page cover thumbnail (rendered server-side, stored in the
+      // registry); shown only once it's been fetched — no empty slot before
+      const coverHtml = p.cover
+        ? `<img class="cover" src="${esc(p.cover)}" alt="" onload="this.classList.add('loaded')" onerror="this.classList.add('noimg')">`
+        : '';
+      item.innerHTML = `<button type="button" class="open${p.cover ? ' has-cover' : ''}" data-pdf="${p.id}" data-name="${esc(displayName)}" data-source="${fromFolder ? 'folder' : 'upload'}">
+          ${coverHtml}
+          <span class="covertxt">
+            <span class="name">&#128196; ${esc(displayName)}</span>
+            <span class="meta">${esc(pdfMeta)}</span>
+          </span>
         </button>
         <button type="button" class="shelfbtn${pdfShelved ? ' on' : ''}" data-favkey="${esc(pdfFavKey)}" data-favtype="pdf" data-favname="${esc(p.name)}" data-favpdf="${p.id}" data-favprovider="${esc(p.provider || 'local')}" title="${pdfShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>
         <button type="button" class="fav${pdfIsFav ? ' on' : ''}" data-favkey="${esc(pdfFavKey)}" data-favtype="pdf" data-favname="${esc(p.name)}" data-favpdf="${p.id}" data-favprovider="${esc(p.provider || 'local')}" title="${pdfIsFav ? 'Remove from favorites' : 'Add to favorites'}">${pdfIsFav ? '★' : '☆'}</button>
@@ -1220,9 +1445,18 @@ function renderLiveProvider(prov, directPdfs) {
             return `<div class="edrow" data-edurl="${esc(ed.url)}" data-edkind="${esc(ed.kind)}" data-edname="${esc(it.name)}" title="Open ${esc(ed.kind)} edition"><span class="edkind">${kindIcon[ed.kind] || ''} ${esc(ed.kind)}</span><span class="edname">${esc(ed.name || '')}</span>${edSaveEpubBtn}${edSaveFileBtn}<button type="button" class="edshelf${edShelf ? ' on' : ''}" data-favkey="${esc(edKey)}" data-favtype="live" data-favname="${esc(it.name)} (${esc(ed.kind)})" data-favurl="${esc(ed.url)}" data-favmagnet="" data-favkind="${esc(ed.kind)}" data-favprovider="${esc(prov.id)}" data-favgroup="${esc(it.name)}" title="${edShelf ? 'Remove from shelf' : 'Add to shelf'}">📖</button><button type="button" class="edfav${edFav ? ' on' : ''}" data-favkey="${esc(edKey)}" data-favtype="live" data-favname="${esc(it.name)} (${esc(ed.kind)})" data-favurl="${esc(ed.url)}" data-favmagnet="" data-favkind="${esc(ed.kind)}" data-favprovider="${esc(prov.id)}" data-favgroup="${esc(it.name)}" title="${edFav ? 'Remove from favorites' : 'Add to favorites'}">${edFav ? '★' : '☆'}</button></div>`;
           }).join('')}</div>`
       : '';
-    item.innerHTML = `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}" data-saved="${saved ? esc(saved.id) : ''}" data-savedepub="${savedEpub ? esc(savedEpub.id) : ''}" data-savedfile="${savedFile ? esc(savedFile.id) : ''}">
-        <div class="name">${kindIcon[kind] || '&#128196;'} ${esc(it.name)}</div>
-        <div class="meta">${esc(metaLine)}</div>
+    // a cover image (fetched in parallel after the list) sits on the left of
+    // the row; when it hasn't arrived yet the row renders without it and the
+    // next refresh (triggered by fetchCovers) adds it
+    const coverHtml = it.cover
+      ? `<img class="cover" src="${esc(it.cover)}" alt="" onload="this.classList.add('loaded')" onerror="this.classList.add('noimg')">`
+      : '';
+    item.innerHTML = `<button type="button" class="open${it.cover ? ' has-cover' : ''}" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}" data-saved="${saved ? esc(saved.id) : ''}" data-savedepub="${savedEpub ? esc(savedEpub.id) : ''}" data-savedfile="${savedFile ? esc(savedFile.id) : ''}">
+        ${coverHtml}
+        <span class="covertxt">
+          <span class="name">${kindIcon[kind] || '&#128196;'} ${esc(it.name)}</span>
+          <span class="meta">${esc(metaLine)}</span>
+        </span>
       </button>
       ${editionsHtml}
       ${saveBtn}
@@ -1271,6 +1505,9 @@ function runLiveSearch() {
       // two-stage providers (e.g. Internet Archive) return items without a URL
       // yet; resolve their PDFs in parallel and merge the URLs back in
       resolvePending(cur, provId, seq);
+      // covers are a separate, parallel query — fetch them after the list so a
+      // slow cover lookup never delays the results from showing
+      fetchCovers(cur, provId, seq);
     })
     .catch(e => {
       const cur = liveCache[provId];
@@ -1333,6 +1570,41 @@ function resolvePending(cur, provId, seq) {
     });
 }
 
+// Stage 2 of a live search for providers that offer covers: ask the plugin to
+// fetch a cover image for each result (it runs in parallel on the server). The
+// list is already on screen by the time this fires, so covers appear a moment
+// later without blocking the results. Each item gets a `cover` URL ("" = none).
+function fetchCovers(cur, provId, seq) {
+  const prov = providers.find(p => p.id === provId);
+  if (!prov || !prov.has_covers) return; // this provider has no cover source
+  if (!cur.items.length) return;
+  if (cur.coversSeq === seq) return; // already fetched for this search
+  cur.coversSeq = seq;
+  const pid = provId.slice(7);
+  // capture the item objects now: for two-stage providers resolve() may drop
+  // items (no openable PDF) before the covers arrive, which would shift a
+  // positional re-index. The objects persist through that rebuild, so mapping
+  // covers back onto these references stays aligned.
+  const sent = cur.items.slice();
+  j(`/api/plugins/${pid}/covers`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: sent }) })
+    .then(r => r.json())
+    .then(data => {
+      const c = liveCache[provId];
+      if (!c || c.seq !== seq) return; // superseded by a newer search
+      const covers = data.covers || [];
+      sent.forEach((it, i) => { it.cover = covers[i] || ''; });
+      c.coversSeq = null;
+      refresh();
+    })
+    .catch(() => {
+      const c = liveCache[provId];
+      if (!c || c.seq !== seq) return;
+      c.coversSeq = null; // keep the list; a re-search will retry covers
+    });
+}
+
 // drag the right edge of the sidebar to resize it (persisted, double-click resets).
 // Uses Pointer Events + setPointerCapture so the handle keeps receiving every
 // move event even when the cursor moves fast or over other elements — the plain
@@ -1389,7 +1661,30 @@ function resolvePending(cur, provId, seq) {
   if (localStorage.getItem(KEY) === '1') setMinimized(true);
 })();
 
-// ---- main-nav rail: Shelf / Favorites / Reading / Plugins / Settings ----
+// ---- main-nav rail: Shelf / Favorites / Reading / Recent / Plugins / Settings ----
+// The rail tabs, in their default order. The user can reorder them in
+// Settings (persisted as a key list in localStorage under 'railOrder');
+// renderRail renders them in the saved order.
+const RAIL_TABS = [
+  { icon: '📚', name: 'Shelf', label: 'Shelf — browse providers', key: 'shelf' },
+  { icon: '★', name: 'Favorites', label: 'Favorites — your starred documents', key: 'favorites' },
+  { icon: '📖', name: 'My Shelf', label: 'My Shelf — your books: to read, in progress & complete', key: 'reading' },
+  { icon: '🕘', name: 'Recent', label: 'Recent — books you opened lately', key: 'recent' },
+  { icon: '🧩', name: 'Plugins', label: 'Plugins — manage custom sources', key: 'plugins' },
+  { icon: '⚙', name: 'Settings', label: 'Settings — reader, display, providers & plugins', key: 'settings' },
+];
+// Saved rail order, normalized against RAIL_TABS: keeps only known keys (in
+// the saved order) and appends any new tabs at the end, so the list stays
+// valid if tabs are added/removed. Returns the default order when unset.
+function railOrder() {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem('railOrder') || '[]'); } catch { saved = []; }
+  if (!Array.isArray(saved)) saved = [];
+  const known = RAIL_TABS.map(t => t.key);
+  const order = saved.filter(k => known.includes(k));
+  for (const k of known) if (!order.includes(k)) order.push(k);
+  return order;
+}
 function renderRail() {
   const el = document.getElementById('rail');
   el.innerHTML = '';
@@ -1403,11 +1698,10 @@ function renderRail() {
     b.onclick = () => { view = key; refresh(); };
     el.appendChild(b);
   };
-  mk('📚', 'Shelf', 'Shelf — browse providers', 'shelf');
-  mk('★', 'Favorites', 'Favorites — your starred documents', 'favorites');
-  mk('📖', 'My Shelf', 'My Shelf — your books: to read, in progress & complete', 'reading');
-  mk('🧩', 'Plugins', 'Plugins — manage custom sources', 'plugins');
-  mk('⚙', 'Settings', 'Settings — reader, display, providers & plugins', 'settings');
+  for (const key of railOrder()) {
+    const t = RAIL_TABS.find(x => x.key === key);
+    if (t) mk(t.icon, t.name, t.label, t.key);
+  }
 }
 
 // ---- Shelf: the provider tabs ----
@@ -1456,6 +1750,24 @@ function renderShelfTabs() {
   el.appendChild(add);
 }
 
+// resolve a book's cover from the current context (local PDF registry or the
+// live provider's cached results) so it can be saved alongside the shelf /
+// favorite entry. Empty when the book has no cover.
+function resolveCover(d) {
+  if (d.favtype === 'pdf' && d.favpdf) {
+    const p = directPdfs.find(x => x.id === d.favpdf);
+    if (p && p.cover) return p.cover;
+  }
+  if (d.favtype === 'live' && d.favprovider) {
+    const st = liveCache[d.favprovider];
+    if (st && st.items) {
+      const it = st.items.find(x => (d.favurl && x.url === d.favurl) || (d.favmagnet && x.magnet === d.favmagnet));
+      if (it && it.cover) return it.cover;
+    }
+  }
+  return '';
+}
+
 // toggle a document's favorite state (star). The payload is built from the
 // button's data-* attrs so it works for torrents, direct PDFs, and live results.
 async function toggleFavorite(btn) {
@@ -1464,7 +1776,7 @@ async function toggleFavorite(btn) {
   const payload = { key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
     ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
     magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
-    group: d.favgroup || '' };
+    group: d.favgroup || '', cover: resolveCover(d) };
   try {
     if (on) await j('/api/favorites?key=' + encodeURIComponent(d.favkey), { method: 'DELETE' });
     else await j('/api/favorites', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
@@ -1480,7 +1792,7 @@ async function toggleShelf(btn) {
   const payload = { key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
     ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
     magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
-    group: d.favgroup || '' };
+    group: d.favgroup || '', cover: resolveCover(d) };
   try {
     if (on) await j('/api/shelf?key=' + encodeURIComponent(d.favkey), { method: 'DELETE' });
     else await j('/api/shelf', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
@@ -1503,7 +1815,7 @@ async function saveText(btn) {
         body: JSON.stringify({ key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
           ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
           magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
-          group: d.favgroup || '' }) });
+          group: d.favgroup || '', cover: resolveCover(d) }) });
     }
     refresh();
   } catch (e) { alert('could not save: ' + e.message); }
@@ -1574,7 +1886,7 @@ async function saveEpub(btn) {
         body: JSON.stringify({ key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
           ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
           magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
-          group: d.favgroup || '' }) });
+          group: d.favgroup || '', cover: resolveCover(d) }) });
     }
     refresh();
   } catch (e) { alert('could not save: ' + e.message); }
@@ -1603,7 +1915,7 @@ async function saveFile(btn) {
         body: JSON.stringify({ key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
           ih: d.favih || '', pdf: d.favpdf || '', url: d.favurl || '',
           magnet: d.favmagnet || '', kind: d.favkind || '', provider: d.favprovider || 'local',
-          group: d.favgroup || '' }) });
+          group: d.favgroup || '', cover: resolveCover(d) }) });
     }
     refresh();
   } catch (e) { alert('could not save: ' + e.message); }
@@ -1734,7 +2046,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       if (!p) continue; // PDF removed
       rows.push({ kind: 'pdf', name: p.title || p.name,
         meta: [p.source === 'folder' ? 'from folder' : 'direct file', fmtSize(p.size), p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · '),
-        pdf: p.id, source: p.source, url: p.url || '', fav: f, eff });
+        pdf: p.id, source: p.source, url: p.url || '', cover: p.cover || '', fav: f, eff });
     } else { // live result (Gutenberg text/html/epub/pdf, or a torrent magnet)
       const saved = (f.kind === 'text' && f.url) ? savedByUrl[f.url] : null;
       const savedEpub = (f.kind === 'epub' && f.url) ? savedEpubByUrl[f.url] : null;
@@ -1742,7 +2054,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       rows.push({ kind: 'live', name: f.name, meta: (f.kind || 'saved'),
         url: f.url, magnet: f.magnet, kind: f.kind, saved: saved ? saved.id : '',
         savedepub: savedEpub ? savedEpub.id : '', savedfile: savedFile ? savedFile.id : '',
-        fav: f, eff, group: f.group || '' });
+        cover: f.cover || '', fav: f, eff, group: f.group || '' });
     }
   }
   // group editions of the same book (My Shelf only): rows sharing a non-empty
@@ -1777,9 +2089,13 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       + (showStar && showStatus ? ' has-fav-status' : '') + (showRemove ? ' has-remove' : '')
       + (saveBtn ? ' has-savetext' : '') + (saveEpubBtn ? ' has-saveepub' : '') + (saveFileBtn ? ' has-savefile' : '');
     let openBtn;
+    // the cover saved with the shelf entry (if any) — shown as a thumbnail
+    const coverHtml = r.cover
+      ? `<img class="cover" src="${esc(r.cover)}" alt="" onload="this.classList.add('loaded')" onerror="this.classList.add('noimg')">`
+      : '';
     if (r.kind === 'torrent') openBtn = `<button type="button" class="open" data-ih="${r.ih}" data-name="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">${esc(r.name)}</div><div class="meta">${r.meta}</div><div class="bar"><div style="width:${r.bar}%"></div></div></button>`;
-    else if (r.kind === 'pdf') openBtn = `<button type="button" class="open" data-pdf="${r.pdf}" data-name="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}"><div class="name">&#128196; ${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
-    else openBtn = `<button type="button" class="open" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}" data-saved="${esc(r.saved || '')}" data-savedepub="${esc(r.savedepub || '')}" data-savedfile="${esc(r.savedfile || '')}" data-liveprovider="${esc(r.fav.provider || '')}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
+    else if (r.kind === 'pdf') openBtn = `<button type="button" class="open${r.cover ? ' has-cover' : ''}" data-pdf="${r.pdf}" data-name="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}">${coverHtml}<div class="name">&#128196; ${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
+    else openBtn = `<button type="button" class="open${r.cover ? ' has-cover' : ''}" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}" data-shelfkey="${esc(r.fav.key)}" data-saved="${esc(r.saved || '')}" data-savedepub="${esc(r.savedepub || '')}" data-savedfile="${esc(r.savedfile || '')}" data-liveprovider="${esc(r.fav.provider || '')}">${coverHtml}<div class="name">${esc(r.name)}</div><div class="meta">${esc(r.meta)}</div></button>`;
     // favorite state is read from the favorites list (source of truth), so the
     // star is correct in both views: always on in Favorites, on/off in My Shelf
     const isFav = favorites.some(f => f.key === r.fav.key);
@@ -1911,7 +2227,9 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
     const rmBtn = showRemove
       ? `<button type="button" class="rmshelf" data-rmgroup="${esc(gname)}" title="Remove book from shelf">🗑</button>`
       : '';
-    box.innerHTML = `<div class="grouphdr"><button type="button" class="grouphdr-toggle" data-grouptoggle="${esc(gname)}"><div class="name">${esc(gname)}</div><div class="meta">${open ? '▾' : '▸'} ${n} edition${n > 1 ? 's' : ''}</div></button><div class="ghdr-right">${statusSel}${tagBtn}${rmBtn}</div></div><div class="groupmembers${open ? ' open' : ''}"></div>`;
+    const gCover = (g.rows.find(r => r.cover) || {}).cover || '';
+    const gCoverHtml = gCover ? `<img class="cover" src="${esc(gCover)}" alt="" onload="this.classList.add('loaded')" onerror="this.classList.add('noimg')">` : '';
+    box.innerHTML = `<div class="grouphdr">${gCoverHtml}<button type="button" class="grouphdr-toggle" data-grouptoggle="${esc(gname)}"><div class="name">${esc(gname)}</div><div class="meta">${open ? '▾' : '▸'} ${n} edition${n > 1 ? 's' : ''}</div></button><div class="ghdr-right">${statusSel}${tagBtn}${rmBtn}</div></div><div class="groupmembers${open ? ' open' : ''}"></div>`;
     const members = box.querySelector('.groupmembers');
     for (const r of g.rows) members.appendChild(renderMemberRow(r));
     el.appendChild(box);
@@ -1979,6 +2297,69 @@ function renderReading(torrents, directPdfs, byMagnet, provOf) {
     source: 'shelf', showStar: true, statusFilter: readingSub, showStatus: true, showTags: true, showRemove: true, tagFilter, group: true,
     statLabel: L.stat, emptyMsg: L.empty, placeholder: L.ph,
   });
+}
+
+// ---- Recent (🕘): books opened lately, most recent first ----
+// A torrent PDF is "cached" once the background copy has landed in .pdfs/
+// (source "cache", cached_from {ih,f}) — then it shows 💾 and can be deleted.
+function torrentCached(ih, f) {
+  return directPdfs.find(p => p.source === 'cache' && p.cached_from
+    && p.cached_from.ih === ih && p.cached_from.f === f) || null;
+}
+
+function renderRecent(torrents, byMagnet) {
+  const el = document.getElementById('catalog');
+  document.getElementById('tabs').style.display = 'none';
+  document.getElementById('sort').style.display = 'none';
+  document.getElementById('perpage').style.display = 'none';
+  document.querySelector('#searchbar .pg').style.display = 'none';
+  document.getElementById('search-btn').style.display = 'none';
+  document.getElementById('filters-btn').style.display = 'none';
+  document.getElementById('searchbar').style.display = '';
+  document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
+  document.getElementById('search').placeholder = 'Search recent…';
+  const q = (document.getElementById('search').value || '').trim().toLowerCase();
+  el.innerHTML = '';
+  const rows = recent.filter(r => !q || (r.name || '').toLowerCase().includes(q));
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty">${recent.length ? 'no matches' : 'nothing opened yet — books you open appear here'}</div>`;
+    return;
+  }
+  for (const r of rows) {
+    const item = document.createElement('div');
+    item.className = 'titem';
+    let openBtn, meta, cachedPid = null;
+    if (r.type === 'torrent') {
+      const t = torrents.find(x => x.info_hash === r.ih);
+      const c = byMagnet[magnetKey(r.magnet)] || {};
+      const name = r.name || c.name || r.ih;
+      const pct = t ? Math.round(t.progress * 100) : null;
+      meta = ['torrent', t ? `${t.state} · ${pct}%` : 'not in session', fmtSize(r.size || 0)].filter(Boolean).join(' · ');
+      const cached = torrentCached(r.ih, r.f);
+      cachedPid = cached ? cached.id : null;
+      openBtn = `<button type="button" class="open" data-ih="${r.ih}" data-name="${esc(name)}" data-shelfkey="${esc(r.shelf_key || '')}"><div class="name">${esc(name)}</div><div class="meta">${esc(meta)}</div></button>`;
+    } else if (r.type === 'pdf') {
+      const p = directPdfs.find(x => x.id === r.pdf);
+      const name = r.name || (p && (p.title || p.name)) || r.pdf;
+      meta = ['direct file', fmtSize(r.size || (p && p.size) || 0), (r.pages || (p && p.pages)) ? (r.pages || p.pages) + 'p' : null].filter(Boolean).join(' · ');
+      cachedPid = p ? p.id : null; // a direct PDF is always on disk
+      openBtn = `<button type="button" class="open" data-pdf="${r.pdf}" data-name="${esc(name)}" data-shelfkey="${esc(r.shelf_key || '')}"><div class="name">&#128196; ${esc(name)}</div><div class="meta">${esc(meta)}</div></button>`;
+    } else { // live result (text/html/epub/pdf link)
+      meta = r.kind || 'link';
+      openBtn = `<button type="button" class="open" data-liveurl="${esc(r.url || '')}" data-livemagnet="${esc(r.magnet || '')}" data-livekind="${esc(r.kind || 'pdf')}" data-livename="${esc(r.name)}" data-shelfkey="${esc(r.shelf_key || '')}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+    }
+    // 💾 this book has a local copy (cached torrent PDF, or a direct PDF)
+    const cachedMark = cachedPid
+      ? `<span class="savedmark" title="Cached locally — readable without the torrent">💾</span>` : '';
+    // 🗑 delete the local copy (cached torrent PDFs only — direct PDFs are
+    // managed from the Shelf view)
+    const delCacheBtn = (r.type === 'torrent' && cachedPid)
+      ? `<button type="button" class="delcache" data-pdf="${cachedPid}" title="Delete cached copy">🗑︎</button>` : '';
+    // ✕ remove this entry from the recent list (keeps any cached file)
+    const rmBtn = `<button type="button" class="rmrecent" data-rmkey="${esc(r.key)}" title="Remove from recent">✕</button>`;
+    item.innerHTML = openBtn + cachedMark + delCacheBtn + rmBtn;
+    el.appendChild(item);
+  }
 }
 
 // move a shelf book between the reading states (To Read / Reading / Complete).
@@ -2275,6 +2656,87 @@ async function openTorrent(ih, name, key) {
   showLoading(entry);
   waitTimer = setTimeout(() => openTorrent(ih, name, key), 2000);
 }
+
+// Whether a book is open in the viewer. When none is, the list expands to the
+// full screen (main.no-book) and the viewer shrinks to a narrow strip. Driven
+// by the empty placeholder: showEmpty() sets it true, every open*() sets it
+// false. Toggling the class is idempotent, so it's safe to call from all of
+// them.
+function setNoBook(no) {
+  document.querySelector('main').classList.toggle('no-book', !!no);
+}
+
+// Apply the current list view (catalogue grid vs compact list) to #catalog.
+// Reads the no-book state from the DOM (main.no-book) to pick the right
+// setting. Called on every render and when the book open/close state changes.
+function applyListView() {
+  const noBook = document.querySelector('main').classList.contains('no-book');
+  const mode = noBook ? listViewNoBook : listViewBook;
+  document.getElementById('catalog').classList.toggle('catalogue', mode === 'catalogue');
+}
+
+// In the catalogue grid the row's controls (★/📖/⋯, status, tags, delete,
+// save, position hint, …) are moved out of the floating top-right /
+// bottom-right corners and into a bottom bar (.card-actions) so they don't
+// overlap the cover. The bar is built by moving the existing nodes (not
+// cloning), so every data-* attribute and the delegated #catalog handlers
+// keep working. Idempotent and bidirectional: it also moves the controls
+// back out when leaving grid mode, so toggling the setting never leaves a
+// stray bar behind. Group boxes are skipped — their controls already sit in
+// the header's .ghdr-right row.
+function layoutCatalogueActions() {
+  const el = document.getElementById('catalog');
+  const grid = el.classList.contains('catalogue');
+  for (const item of el.querySelectorAll('.titem')) {
+    if (item.classList.contains('groupbox')) continue;
+    const bar = item.querySelector(':scope > .card-actions');
+    if (grid) {
+      if (bar) continue; // already laid out
+      const b = document.createElement('div');
+      b.className = 'card-actions';
+      for (const child of Array.from(item.children)) {
+        if (child === b) continue;
+        if (child.classList.contains('open')) continue; // the card body
+        if (child.classList.contains('menu')) continue; // stays anchored to the card
+        if (child.classList.contains('edlist')) continue; // edition list, not a control
+        if (child.classList.contains('edtoggle')) continue; // hidden in grid mode; stays in place
+        // reading position (p. N / %) + reset — top-right of the card in grid
+        // mode, not in the bottom bar
+        if (child.classList.contains('poshint') || child.classList.contains('resetpos')) continue;
+        b.appendChild(child); // moves the node, keeping its listeners
+      }
+      if (b.children.length) {
+        // cards with an edition list: the bar sits at the bottom of the card
+        // body but ABOVE the list, not below it
+        const ed = Array.from(item.children).find(c => c.classList.contains('edtoggle') || c.classList.contains('edlist'));
+        if (ed) ed.before(b); else item.appendChild(b);
+      }
+    } else if (bar) {
+      for (const child of Array.from(bar.children)) bar.before(child);
+      bar.remove();
+    }
+  }
+}
+
+// The list goes full-width whenever no book is open. Rather than touching
+// every open*/show* call site, watch the book title bar (#status): it's
+// visible exactly when a book is open (every open*() shows it, every
+// hidePdf()/showEmpty() hides it), so its display state is the single source
+// of truth. File lists and the waiting-on-swarm page hide it too, so the list
+// stays full-width while you're picking a file.
+(function () {
+  const status = document.getElementById('status');
+  new MutationObserver(() => {
+    setNoBook(status.style.display === 'none');
+    // the list view depends on whether a book is open — re-apply when it changes
+    applyListView();
+    layoutCatalogueActions();
+  })
+    .observe(status, { attributes: true, attributeFilter: ['style'] });
+  setNoBook(status.style.display === 'none'); // initial state
+  applyListView();
+  layoutCatalogueActions();
+})();
 
 function markActive() {
   document.querySelectorAll('#catalog .titem').forEach(n => {
@@ -2646,8 +3108,24 @@ async function resetProgress(btn) {
   }
 }
 
+// record a book open in the recent list (fire-and-forget; the Recent tab
+// re-fetches on its next render, so a dropped POST just means one fewer entry)
+function recordRecent(entry) {
+  try { fetch('/api/recent', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry) }); } catch (e) {}
+}
+// catalog entry for a torrent info-hash (catalogData is keyed by magnet xt=)
+function catalogByIh(ih) { return catalogData.find(c => magnetKey(c.magnet) === ih) || {}; }
+
 function openPdf(ih, f, name, size, key) {
   openShelfKey = key || null;
+  unsettle(ih); // opening a PDF starts its download — stop treating it as settled
+  const c = catalogByIh(ih);
+  recordRecent({ key: `torrent:${ih}:${f}`, name, type: 'torrent', ih, f,
+    magnet: c.magnet || '', provider: c.provider || 'local',
+    shelf_key: key || '', size, pages: 0 });
+  // keep a local copy so it survives torrent removal (background, best-effort)
+  try { fetch(`/api/pdf/cache?ih=${ih}&f=${f}`, { method: 'POST' }); } catch (e) {}
   hideLoading();
   document.getElementById('pages').style.display = 'none';
   document.getElementById('empty').style.display = 'none';
@@ -2671,6 +3149,10 @@ function openPdf(ih, f, name, size, key) {
 // open a direct (non-torrent) PDF served from /api/pdf/direct
 function openDirectPdf(id, name, size, key) {
   openShelfKey = key || null;
+  const p = directPdfs.find(x => x.id === id) || {};
+  recordRecent({ key: `pdf:${id}`, name, type: 'pdf', pdf: id,
+    url: p.url || '', provider: p.provider || 'local',
+    shelf_key: key || '', size, pages: p.pages || 0 });
   hideLoading();
   document.getElementById('pages').style.display = 'none';
   document.getElementById('empty').style.display = 'none';
@@ -3121,7 +3603,7 @@ async function doPdfAction(id, act, source) {
 }
 
 // clicking a torrent/PDF button in the sidebar (open it), or its ⋯ menu
-document.getElementById('catalog').addEventListener('click', (e) => {
+document.getElementById('catalog').addEventListener('click', async (e) => {
   // expand/collapse a group of editions of the same book (My Shelf)
   const grpToggle = e.target.closest('button.grouphdr-toggle[data-grouptoggle]');
   if (grpToggle) {
@@ -3344,6 +3826,25 @@ document.getElementById('catalog').addEventListener('click', (e) => {
     removeBookFromShelf(rmGroupBtn);
     return;
   }
+  // ✕ remove an entry from the recent list (keeps any cached file)
+  const rmRecentBtn = e.target.closest('button.rmrecent[data-rmkey]');
+  if (rmRecentBtn) {
+    e.preventDefault();
+    try { await j(`/api/recent?key=${encodeURIComponent(rmRecentBtn.dataset.rmkey)}`, { method: 'DELETE' }); }
+    catch (err) { alert(err.message); return; }
+    refresh();
+    return;
+  }
+  // 🗑 delete a cached torrent PDF copy (Recent rows)
+  const delCacheBtn = e.target.closest('button.delcache[data-pdf]');
+  if (delCacheBtn) {
+    e.preventDefault();
+    if (!confirm('Delete the cached copy of this PDF? The torrent itself is not affected.')) return;
+    try { await j(`/api/pdfs/${delCacheBtn.dataset.pdf}`, { method: 'DELETE' }); }
+    catch (err) { alert(err.message); return; }
+    refresh();
+    return;
+  }
   // 🗑 remove from the shelf (My Shelf rows)
   const rmBtn = e.target.closest('button.rmshelf[data-rmkey]');
   if (rmBtn) {
@@ -3370,7 +3871,9 @@ document.getElementById('catalog').addEventListener('click', (e) => {
   const cog = e.target.closest('.cog[data-ih], .cog[data-pdf]');
   if (cog) {
     e.preventDefault();
-    const menu = cog.parentElement.querySelector('.menu');
+    // the cog may sit inside the .card-actions bottom bar (catalogue grid),
+    // so find the menu on the card, not the cog's immediate parent
+    const menu = cog.closest('.titem').querySelector('.menu');
     const wasOpen = menu.classList.contains('open');
     document.querySelectorAll('#catalog .menu.open').forEach(m => m.classList.remove('open'));
     if (!wasOpen) menu.classList.add('open');
@@ -3478,6 +3981,7 @@ async function deleteFileFromDisk(b) {
   if (!confirm(`Delete ${b.dataset.name || 'this file'} from disk? The torrent is kept.`)) return;
   try {
     await j(`/api/torrent/${b.dataset.ih}/file/${Number(b.dataset.idx)}`, { method: 'DELETE' });
+    unsettle(b.dataset.ih); // deleting a file changes the torrent state
     b.remove(); // drop the row; it's gone
     const list = b.parentElement;
     if (list && !list.querySelector('button.file-btn')) list.innerHTML = '<div class="no-pdf">(no files left)</div>';
@@ -3541,6 +4045,7 @@ async function toggleExcluded(b) {
     await j(`/api/torrent/${b.dataset.ih}/file-priority`, { method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ index: Number(b.dataset.idx), priority: excluded ? 0 : 4 }) });
+    unsettle(b.dataset.ih); // include/exclude changes the download state
   } catch (e) {
     b.classList.remove('excluded');
     excl.textContent = '⬇ include';
@@ -3698,7 +4203,35 @@ function renderSettingsView() {
       <option value="top"${tabPosition === 'top' ? ' selected' : ''}>Top</option>
       <option value="left"${tabPosition === 'left' ? ' selected' : ''}>Left</option>
     </select></div>
+    <div class="settings-row"><label>List view (no book open)</label><select id="set-listview-nobook">
+      <option value="catalogue"${listViewNoBook === 'catalogue' ? ' selected' : ''}>Catalogue (cover grid)</option>
+      <option value="list"${listViewNoBook === 'list' ? ' selected' : ''}>List (compact rows)</option>
+    </select></div>
+    <div class="settings-row"><label>List view (book open)</label><select id="set-listview-book">
+      <option value="catalogue"${listViewBook === 'catalogue' ? ' selected' : ''}>Catalogue (cover grid)</option>
+      <option value="list"${listViewBook === 'list' ? ' selected' : ''}>List (compact rows)</option>
+    </select></div>
   `);
+
+  // ---- Tab order (localStorage) ----
+  const tabord = section('Tab order');
+  const order = railOrder();
+  const orderList = document.createElement('div');
+  orderList.className = 'tab-order';
+  for (let i = 0; i < order.length; i++) {
+    const t = RAIL_TABS.find(x => x.key === order[i]);
+    if (!t) continue;
+    const row = document.createElement('div');
+    row.className = 'tab-order-item';
+    row.innerHTML = `<span class="tab-order-name">${t.icon} ${esc(t.name)}</span>
+      <span class="tab-order-btns">
+        <button data-tab-up="${t.key}"${i === 0 ? ' disabled' : ''} title="Move up">↑</button>
+        <button data-tab-down="${t.key}"${i === order.length - 1 ? ' disabled' : ''} title="Move down">↓</button>
+      </span>`;
+    orderList.appendChild(row);
+  }
+  tabord.appendChild(orderList);
+  tabord.insertAdjacentHTML('beforeend', '<div class="settings-row"><button id="set-taborder-reset">Reset to default</button></div>');
 
   // ---- Providers (server) ----
   const provs = section('Providers');
@@ -3757,6 +4290,21 @@ function renderSettingsView() {
     const t = e.target;
     if (t.closest('#settings-add-provider')) { addProviderDialog(); return; }
     if (t.closest('#settings-add-plugin')) { openAddPluginModal(); return; }
+    const tabUp = t.closest('button[data-tab-up]');
+    if (tabUp) {
+      const order = railOrder();
+      const i = order.indexOf(tabUp.dataset.tabUp);
+      if (i > 0) { [order[i - 1], order[i]] = [order[i], order[i - 1]]; localStorage.setItem('railOrder', JSON.stringify(order)); renderRail(); refresh(); }
+      return;
+    }
+    const tabDown = t.closest('button[data-tab-down]');
+    if (tabDown) {
+      const order = railOrder();
+      const i = order.indexOf(tabDown.dataset.tabDown);
+      if (i >= 0 && i < order.length - 1) { [order[i + 1], order[i]] = [order[i], order[i + 1]]; localStorage.setItem('railOrder', JSON.stringify(order)); renderRail(); refresh(); }
+      return;
+    }
+    if (t.closest('#set-taborder-reset')) { localStorage.removeItem('railOrder'); renderRail(); refresh(); return; }
     const provSync = t.closest('button[data-prov-sync]');
     if (provSync) { syncProvider(provSync.dataset.provSync); return; }
     const provRemove = t.closest('button[data-prov-remove]');
@@ -3776,6 +4324,8 @@ function renderSettingsView() {
     if (t.id === 'set-width') { textWidth = t.value; localStorage.setItem('textWidth', textWidth); applyTextWidth(); return; }
     if (t.id === 'set-perpage') { perPage = t.value === 'all' ? 0 : parseInt(t.value, 10); localStorage.setItem('per-page', String(perPage)); page = 1; refresh(); return; }
     if (t.id === 'set-tabpos') { tabPosition = t.value; localStorage.setItem('tabPosition', tabPosition); applyTabPosition(); renderRail(); return; }
+    if (t.id === 'set-listview-nobook') { listViewNoBook = t.value; localStorage.setItem('list-view-no-book', listViewNoBook); applyListView(); layoutCatalogueActions(); return; }
+    if (t.id === 'set-listview-book') { listViewBook = t.value; localStorage.setItem('list-view-book', listViewBook); applyListView(); layoutCatalogueActions(); return; }
     const provEn = t.closest('input[data-prov-enabled]');
     if (provEn) { setProviderEnabled(provEn.dataset.provEnabled, provEn.checked); return; }
     const plugAct = t.closest('input[data-plug-active]');
@@ -4057,7 +4607,7 @@ document.getElementById('plugin-add-ok').onclick = async () => {
 };
 
 refresh();
-setInterval(refresh, 4000);
+setInterval(pollTick, 4000);
 </script>
 </body>
 </html>

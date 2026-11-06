@@ -4,5 +4,8 @@ uvicorn>=0.24
 httpx>=0.24
 python-multipart>=0.0.7
 pypdf>=4.0
+# first-page cover thumbnails (self-contained PDFium build + JPEG encoding)
+pypdfium2>=4.0
+Pillow>=9.0
 # optional, for nicer test PDFs (e2e_test falls back to a hand-rolled one)
 # reportlab

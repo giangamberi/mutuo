@@ -71,7 +71,8 @@ def _meta_from_source(path: Path) -> dict:
     AST (without executing it) and detect whether it defines search()/fetch(),
     so the list view works even for a plugin that would error at import time."""
     meta = {"name": path.stem, "description": "", "needs_query": True,
-            "config_schema": None, "has_search": False, "has_fetch": False}
+            "config_schema": None, "has_search": False, "has_fetch": False,
+            "has_covers": False}
     try:
         src = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -95,6 +96,8 @@ def _meta_from_source(path: Path) -> dict:
                 meta["has_search"] = True
             elif node.name == "fetch":
                 meta["has_fetch"] = True
+            elif node.name == "covers":
+                meta["has_covers"] = True
         elif isinstance(node, ast.Assign) and len(node.targets) == 1:
             t = node.targets[0]
             if not isinstance(t, ast.Name):
@@ -145,16 +148,32 @@ def set_config(pid: str, config: dict) -> None:
     _save_state(state)
 
 
+# Cache of the git-tracked plugin filenames. `git ls-files` is a process spawn
+# (~50-150 ms on Windows) and the set only changes when the git index changes,
+# so compute it once and invalidate on plugin add/remove/update.
+_tracked_cache: set[str] | None = None
+
+
 def _tracked_plugin_files() -> set[str]:
     """Plugin filenames tracked in git — these are the built-in plugins that
-    ship with the app; anything else in plugins/ is user-added (custom)."""
+    ship with the app; anything else in plugins/ is user-added (custom).
+    Cached (see _tracked_cache) so list_plugins() doesn't spawn git each call."""
+    global _tracked_cache
+    if _tracked_cache is not None:
+        return _tracked_cache
     try:
         out = subprocess.run(["git", "ls-files", "plugins/"],
                              cwd=str(PLUGIN_DIR.parent), capture_output=True,
                              text=True, timeout=5)
-        return {line.split("/", 1)[-1] for line in out.stdout.splitlines() if line.strip()}
+        _tracked_cache = {line.split("/", 1)[-1] for line in out.stdout.splitlines() if line.strip()}
     except Exception:
-        return set()
+        return set()  # don't cache a failure — retry on the next call
+    return _tracked_cache
+
+
+def _invalidate_tracked_cache() -> None:
+    global _tracked_cache
+    _tracked_cache = None
 
 
 def list_plugins() -> list[dict]:
@@ -175,6 +194,7 @@ def list_plugins() -> list[dict]:
                    "config_schema": meta["config_schema"],
                    "has_search": meta["has_search"],
                    "has_fetch": meta["has_fetch"],
+                   "has_covers": meta["has_covers"],
                    "active": st["active"], "config": st["config"],
                    "builtin": f.name in tracked,
                    "path": str(f)})
@@ -220,6 +240,11 @@ def search_plugin(pid: str, query: str, config: dict) -> list[dict]:
         meta = str(entry.get("meta", "")).strip()
         if meta:
             item["meta"] = meta
+        # a cover image URL the plugin already knows (e.g. Gutenberg's own
+        # cover field) — shown on the row without a separate covers() call
+        cover = str(entry.get("cover", "")).strip()
+        if cover:
+            item["cover"] = cover
         # a book's other editions (e.g. Gutenberg PDF/text/HTML/EPUB) — the UI
         # lists them as chips in the same result box
         editions = entry.get("editions")
@@ -255,6 +280,38 @@ def resolve_plugin(pid: str, ids: list) -> dict:
     if not isinstance(raw, dict):
         raise RuntimeError(f"plugin {pid} resolve() must return a dict")
     return raw
+
+
+def covers_plugin(pid: str, items: list) -> list:
+    """Run a plugin's covers(items) and return a list of cover URLs ("" for
+    no cover) aligned by index with the input items. This is the second,
+    parallel query of a live search: the list + metadata come from search(),
+    and the covers are fetched separately so a slow cover lookup never blocks
+    the list from showing. Raises if the plugin has no covers()."""
+    path = PLUGIN_DIR / f"{pid}.py"
+    if not path.is_file():
+        raise FileNotFoundError(f"plugin not found: {pid}")
+    mod = _load_module(path)
+    covers = getattr(mod, "covers", None)
+    if not callable(covers):
+        raise RuntimeError(f"plugin {pid} has no covers() function")
+    raw = covers(list(items or []))
+    if raw is None:
+        raw = []
+    if not isinstance(raw, list):
+        raise RuntimeError(f"plugin {pid} covers() must return a list")
+    out = []
+    for entry in raw:
+        if isinstance(entry, dict):
+            u = str(entry.get("cover", "")).strip()
+        else:
+            u = str(entry or "").strip()
+        out.append(u)
+    # align by index with the input so the front end can map covers back
+    n = len(items or [])
+    while len(out) < n:
+        out.append("")
+    return out[:n]
 
 
 def run_plugin(pid: str, query: str) -> list[dict]:
@@ -324,6 +381,7 @@ def add_plugin(name: str, code: str, needs_query: bool = True) -> dict:
         f'DESCRIPTION = "custom plugin"\n\n'
     )
     path.write_text(header + code, encoding="utf-8")
+    _invalidate_tracked_cache()
     return {"id": pid, "name": name, "path": str(path)}
 
 
@@ -358,6 +416,7 @@ def update_plugin(pid: str, name: str, code: str, needs_query: bool = True) -> d
         raise ValueError("plugin code required")
     compile(code, f"<plugin {name}>", "exec")  # raises SyntaxError if bad
     path.write_text(code, encoding="utf-8")
+    _invalidate_tracked_cache()
     return {"id": pid, "name": name, "path": str(path)}
 
 
@@ -365,5 +424,6 @@ def remove_plugin(pid: str) -> bool:
     path = PLUGIN_DIR / f"{pid}.py"
     if path.is_file():
         path.unlink()
+        _invalidate_tracked_cache()
         return True
     return False

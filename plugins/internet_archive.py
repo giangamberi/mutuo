@@ -213,3 +213,19 @@ def resolve(ids: list) -> dict:
         for ident, res in ex.map(_one, ids):
             out[ident] = res
     return out
+
+
+def covers(items: list) -> list:
+    """Return a cover URL for each item, aligned by index ("" = none).
+
+    archive.org serves a thumbnail for every item at
+    https://archive.org/services/img/<identifier>. The identifier is the
+    item's resolve_id (present on every stage-1 result, whether or not its
+    PDF has resolved yet), so this is a pure derivation — no network call —
+    which keeps the cover query fast and parallel like the rest of the flow.
+    """
+    out = []
+    for it in (items or []):
+        ident = (it or {}).get("resolve_id") or ""
+        out.append(f"https://archive.org/services/img/{ident}" if ident else "")
+    return out

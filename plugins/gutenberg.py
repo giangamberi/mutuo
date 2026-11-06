@@ -13,10 +13,16 @@ An item may also carry a "meta" string shown as a subtitle line.
 
 CONFIG exposes settings the UI renders and passes back as the `config` dict.
 """
+import base64
+import io
 import json
+import posixpath
+import re
 import time
 import urllib.parse
 import urllib.request
+import zipfile
+from concurrent.futures import ThreadPoolExecutor
 
 NAME = "Project Gutenberg"
 DESCRIPTION = "Search the Project Gutenberg book archive (via Gutendex) and read the matching books as PDFs."
@@ -25,16 +31,18 @@ SEARCH_URL = "https://gutendex.com/books"
 UA = {"User-Agent": "pdf-torrent-reader/1.0"}
 
 
-def _get_json(url, attempts=3, timeout=10):
+def _get_json(url, attempts=2, timeout=40):
     """GET a URL and parse JSON, retrying on transient failures.
 
-    Gutendex intermittently hangs or answers 503 for up to a minute or two.
-    A few retries with a short backoff ride out brief blips, but the worst
-    case is kept bounded (~35s) so a bad window fails fast instead of hanging
-    the UI for a minute and a half — the front end keeps the previous results
-    on screen and the user can just re-run the search. A healthy Gutendex
-    answers in ~0.1s, so the per-attempt timeout only costs anything during a
-    bad window.
+    Gutendex (behind Cloudflare) is bimodal: a healthy request answers in
+    ~0.1s, but during a bad window a single request can take 30s+ or come back
+    502/503. The per-attempt timeout must therefore be long enough to actually
+    wait for a slow-but-valid response (a 10s timeout gave up before the 30s+
+    answer arrived, so every attempt failed and the search 502'd). Two attempts
+    with a 40s timeout ride out both the slow response and a 502, while keeping
+    the worst case bounded (~82s) — the front end keeps the previous results on
+    screen and the user can just re-run the search. A healthy Gutendex answers
+    in ~0.1s, so the long timeout only costs anything during a bad window.
     """
     last = None
     for i in range(attempts):
@@ -252,3 +260,107 @@ def search(query: str, config: dict) -> list[dict]:
             item["meta"] = meta
         items.append(item)
     return items
+
+
+# The cover is the book's real cover art, embedded in its EPUB (the edition
+# whose URL ends in ".epub3.images") — richer than Gutenberg's auto-generated
+# text cover. Extracting it means downloading the whole EPUB, so oversized
+# EPUBs (and any download failure) fall back to the generated cover.
+EPUB_COVER_MAX_BYTES = 15 * 1024 * 1024
+
+
+def _epub_url(item: dict) -> str:
+    """The book's EPUB edition URL (kind "epub"), from the primary url or the
+    editions list."""
+    if item.get("kind") == "epub":
+        return item.get("url", "")
+    for ed in item.get("editions") or []:
+        if ed.get("kind") == "epub":
+            return ed.get("url", "")
+    return ""
+
+
+def _generated_cover(url: str) -> str:
+    """Gutenberg's auto-generated cover, derived from the book id in any of its
+    URLs (/ebooks/<id>..., /files/<id>/..., /cache/epub/<id>/...)."""
+    m = re.search(r"/(?:ebooks|files|cache/epub)/(\d+)", url)
+    return (f"https://www.gutenberg.org/cache/epub/{m.group(1)}/pg{m.group(1)}.cover.medium.jpg"
+            if m else "")
+
+
+def _opf_cover_href(opf_text: str) -> str:
+    """The cover image's href from an EPUB's OPF. EPUB3 marks it with
+    properties="cover-image"; EPUB2 uses <meta name="cover" content="ID"/>."""
+    for tag in re.findall(r"<item\b[^>]*>", opf_text):
+        if "cover-image" in tag:
+            m = re.search(r'href="([^"]+)"', tag)
+            if m:
+                return m.group(1)
+    mc = re.search(r'<meta\b[^>]*name="cover"[^>]*content="([^"]+)"', opf_text)
+    if mc:
+        cid = mc.group(1)
+        for tag in re.findall(r"<item\b[^>]*>", opf_text):
+            if f'id="{cid}"' in tag:
+                m = re.search(r'href="([^"]+)"', tag)
+                if m:
+                    return m.group(1)
+    return ""
+
+
+def _epub_cover_data_uri(epub_url: str) -> str:
+    """Download an EPUB and return its embedded cover image as a data URI, or
+    "" if the EPUB has no cover or is too large to be worth downloading."""
+    req = urllib.request.Request(epub_url, headers=UA)
+    with urllib.request.urlopen(req, timeout=40) as r:
+        if int(r.headers.get("Content-Length") or 0) > EPUB_COVER_MAX_BYTES:
+            return ""
+        data = r.read(EPUB_COVER_MAX_BYTES + 1)
+    if len(data) > EPUB_COVER_MAX_BYTES:
+        return ""
+    zf = zipfile.ZipFile(io.BytesIO(data))
+    names = zf.namelist()
+    opf = next((n for n in names if n.lower().endswith(".opf")), None)
+    if not opf:
+        return ""
+    href = _opf_cover_href(zf.read(opf).decode("utf-8", "replace"))
+    if not href:
+        return ""
+    opf_dir = opf.rsplit("/", 1)[0] + "/" if "/" in opf else ""
+    cover_path = posixpath.normpath(
+        (opf_dir + href) if not href.startswith("/") else href).lstrip("/")
+    if cover_path not in names:
+        return ""
+    img = zf.read(cover_path)
+    mime = "image/png" if cover_path.lower().endswith(".png") else "image/jpeg"
+    return f"data:{mime};base64,{base64.b64encode(img).decode('ascii')}"
+
+
+def covers(items: list) -> list:
+    """Cover image for each search result, aligned by index with `items`.
+
+    This is the second, parallel query of a live search: the list + metadata
+    come from search(), and the app calls covers() separately right after the
+    list loads so a cover lookup never delays the results.
+
+    Each cover is the book's real cover art, extracted from its EPUB (the
+    edition whose URL ends in ".epub3.images") — richer than Gutenberg's
+    auto-generated text cover. The lookups run in parallel (each downloads an
+    EPUB) and fall back to the generated cover (pg<id>.cover.medium.jpg) when a
+    book has no EPUB, its EPUB is oversized, or the download fails.
+    """
+    def one(it: dict) -> str:
+        it = it or {}
+        epub = _epub_url(it)
+        if epub:
+            try:
+                du = _epub_cover_data_uri(epub)
+                if du:
+                    return du
+            except Exception:
+                pass  # fall through to the generated cover
+        return _generated_cover(epub or it.get("url", ""))
+
+    if not items:
+        return []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        return list(ex.map(one, items))
