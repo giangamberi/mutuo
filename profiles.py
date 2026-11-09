@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import shutil
 import threading
@@ -25,8 +26,12 @@ import time
 from pathlib import Path
 
 BASE = Path(__file__).parent
-PROFILES_FILE = BASE / "profiles.json"
-PROFILES_DIR = BASE / "profiles"
+# All mutable data (profiles/, profiles.json) lives in a data dir. In a dev
+# checkout that's the repo root; the frozen desktop app sets PTR_DATA_DIR to
+# a per-user location (e.g. %APPDATA%) so the install dir stays read-only.
+DATA_DIR = Path(os.environ.get("PTR_DATA_DIR") or BASE)
+PROFILES_FILE = DATA_DIR / "profiles.json"
+PROFILES_DIR = DATA_DIR / "profiles"
 
 # per-profile data: JSON registries + on-disk content directories
 PROFILE_FILES = [
@@ -127,6 +132,50 @@ class ProfileStore:
         return hmac.compare_digest(
             _hash_password(password, bytes.fromhex(p["salt"])), p["hash"]
         )
+
+    def rename(self, name: str, new_name: str) -> None:
+        """Rename a profile (registry entry + its data directory).
+
+        The caller must ensure no server is running for ``name`` first — the
+        data dir can't be moved while the server holds files in it open.
+        """
+        new_name = (new_name or "").strip()
+        if not new_name or new_name in (".", "..") or "/" in new_name or "\\" in new_name:
+            raise ValueError("invalid profile name")
+        with self._lock:
+            if any(p["name"] == new_name for p in self._profiles):
+                raise ValueError("profile already exists")
+            entry = next((p for p in self._profiles if p["name"] == name), None)
+            if not entry:
+                raise ValueError("profile not found")
+            entry["name"] = new_name
+            self._save()
+        d = profile_dir(name)
+        if d.exists():
+            d.rename(profile_dir(new_name))
+
+    def set_password(self, name: str, current: str, new: str) -> None:
+        """Set (or clear, with new="") a profile's password. If the profile
+        already has one, the current password must be supplied and correct."""
+        with self._lock:
+            entry = next((p for p in self._profiles if p["name"] == name), None)
+            if not entry:
+                raise ValueError("profile not found")
+            if entry.get("has_password"):
+                if not hmac.compare_digest(
+                    _hash_password(current or "", bytes.fromhex(entry["salt"])),
+                    entry["hash"]):
+                    raise ValueError("current password is incorrect")
+            if new:
+                salt = secrets.token_bytes(16)
+                entry["has_password"] = True
+                entry["salt"] = salt.hex()
+                entry["hash"] = _hash_password(new, salt)
+            else:
+                entry["has_password"] = False
+                entry.pop("salt", None)
+                entry.pop("hash", None)
+            self._save()
 
     def delete(self, name: str) -> None:
         with self._lock:

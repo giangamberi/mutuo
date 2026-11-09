@@ -38,9 +38,12 @@ from pathlib import Path
 PLUGIN_DIR = Path(__file__).parent / "plugins"
 # Per-profile plugin state (active flag + config). The desktop app sets
 # PTR_PROFILE before starting the server; without it, defaults to "default".
+# In a frozen build the state lives under the data dir (PTR_DATA_DIR), not the
+# read-only bundle.
 import os as _os
 _PROFILE = _os.environ.get("PTR_PROFILE", "default")
-STATE_PATH = Path(__file__).parent / "profiles" / _PROFILE / "plugin_state.json"
+_DATA_DIR = Path(_os.environ.get("PTR_DATA_DIR") or Path(__file__).parent)
+STATE_PATH = _DATA_DIR / "profiles" / _PROFILE / "plugin_state.json"
 
 
 @dataclass

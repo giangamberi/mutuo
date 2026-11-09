@@ -58,6 +58,10 @@
   main.no-book aside { flex:1 1 0; width:auto; min-width:0; }
   main.no-book #resizer { display:none; }
   main.no-book #viewer { flex:0 0 220px; width:220px; min-width:220px; }
+  /* no book open: the list is the whole screen, so the sidebar is always
+     expanded — the hide button isn't even offered (the JS force-restores a
+     minimized sidebar in this state) */
+  main.no-book #minimize-btn { display:none; }
   /* minimize the sidebar so the reader can focus on the text. The toggle
      lives in the header (always visible), so a hidden sidebar frees its
      full width — no leftover rail or top band */
@@ -181,10 +185,15 @@
      under the title — at the bottom of the header, above the edition list —
      instead of sitting top-right beside the title. */
   #catalog.catalogue .titem.groupbox .grouphdr { flex-wrap:wrap; }
-  #catalog.catalogue .titem.groupbox .grouphdr .ghdr-right { width:100%; }
+  #catalog.catalogue .titem.groupbox .grouphdr .ghdr-right { width:100%; display:flex; align-items:center; gap:6px; }
+  #catalog.catalogue .titem.groupbox .grouphdr .ghdr-sub { display:flex; align-items:center; gap:6px; }
   /* the status dropdown stretches to fill the line, pushing the tag /
      remove buttons to the right end of the card */
   #catalog.catalogue .titem.groupbox .grouphdr .ghdr-right .status { flex:1; width:auto; }
+  /* grid mode keeps status + tag + remove on ONE row (the stacked layout is
+     list-mode only) — overrides the aside column rule, which would otherwise
+     apply here too since shelf group boxes render in #catalog */
+  #catalog.catalogue .titem.groupbox .grouphdr .ghdr-right { flex-direction:row; }
   #catalog.catalogue .titem.groupbox:hover .grouphdr { background:transparent; }
   #searchbar { display:flex; gap:6px; align-items:center; padding:6px 8px; border-bottom:1px solid var(--border-strong); flex-wrap:wrap; }
   #searchbar input { flex:1 1 140px; min-width:120px; padding:5px 8px; font-size:calc(12px * var(--app-text-scale)); }
@@ -311,7 +320,9 @@
   aside .titem.groupbox:hover .grouphdr { background:var(--hover); }
   aside .titem.groupbox .grouphdr .name { font-weight:600; }
   aside .titem.groupbox .grouphdr .meta { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); }
-  aside .titem.groupbox .grouphdr .ghdr-right { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+  aside .titem.groupbox .grouphdr .ghdr-right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:0 0 auto; }
+  /* tag + remove drop to a second line under the status dropdown */
+  aside .titem.groupbox .grouphdr .ghdr-sub { display:flex; align-items:center; gap:6px; }
   /* the header's controls sit inline in the flex row, not absolutely positioned */
   aside .titem.groupbox .grouphdr .status { position:static; width:96px; }
   aside .titem.groupbox .grouphdr .tagbtn { position:static; }
@@ -608,6 +619,23 @@
   #plugin-config-modal .cfg-field label { display:block; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); margin-bottom:4px; }
   #plugin-config-modal .cfg-field input, #plugin-config-modal .cfg-field select { width:100%; min-width:0; }
   #plugin-config-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  /* profile edit modal (rename + password) */
+  #profile-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
+  #profile-modal.open { display:flex; }
+  #profile-modal .card { width:min(440px,92vw); background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px var(--shadow-strong); }
+  #profile-modal h2 { font-size:calc(15px * var(--app-text-scale)); margin:0 0 14px; }
+  #profile-modal .cfg-field { margin-bottom:12px; }
+  #profile-modal .cfg-field label { display:block; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); margin-bottom:4px; }
+  #profile-modal .cfg-field input { width:100%; min-width:0; }
+  #profile-modal .hint { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:10px; line-height:1.5; }
+  #profile-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  #profile-modal .err { color:var(--danger-fg); font-size:calc(12px * var(--app-text-scale)); margin-top:10px; min-height:1em; }
+  /* small green success toast (bottom-centre, fades out) */
+  #success-toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:1000;
+    background:#17351f; color:#8fe6ae; border:1px solid #2e6b45; padding:8px 16px; border-radius:8px;
+    font-size:calc(13px * var(--app-text-scale)); box-shadow:0 6px 20px var(--shadow-strong);
+    opacity:0; pointer-events:none; transition:opacity .25s; }
+  #success-toast.show { opacity:1; }
   /* settings view (⚙ in the left rail) */
   #catalog .settings-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border-strong); }
   #catalog .settings-head h3 { margin:0; font-size:calc(13px * var(--app-text-scale)); }
@@ -769,6 +797,24 @@
     </div>
   </div>
 </div>
+<div id="profile-modal">
+  <div class="card">
+    <h2>Profile settings</h2>
+    <div class="cfg-field"><label for="profile-name-input">Profile name</label>
+      <input id="profile-name-input" autocomplete="off" spellcheck="false"></div>
+    <div class="cfg-field"><label for="profile-pass-current">Current password</label>
+      <input id="profile-pass-current" type="password" autocomplete="current-password" placeholder="required to change the password"></div>
+    <div class="cfg-field"><label for="profile-pass-new">New password (leave blank to keep / clear)</label>
+      <input id="profile-pass-new" type="password" autocomplete="new-password"></div>
+    <div class="hint">Renaming restarts the app server briefly. A blank new password removes the password; a blank current password is used when the profile has none.</div>
+    <div class="err" id="profile-modal-err"></div>
+    <div class="row">
+      <button type="button" id="profile-modal-cancel">Cancel</button>
+      <button type="button" id="profile-modal-save">Save</button>
+    </div>
+  </div>
+</div>
+<div id="success-toast"></div>
 <div id="filters-modal">
   <div class="card">
     <h2>Filters</h2>
@@ -1681,14 +1727,24 @@ function fetchCovers(cur, provId, seq) {
   const btn = document.getElementById('minimize-btn');      // in the provider tabs row
   const restore = document.getElementById('restore-btn');  // in the header, only when collapsed
   const KEY = 'sidebar-minimized';
-  function setMinimized(m) {
+  function setMinimized(m, persist = true) {
     aside.classList.toggle('minimized', m);
     restore.style.display = m ? '' : 'none';
-    localStorage.setItem(KEY, m ? '1' : '0');
+    if (persist) localStorage.setItem(KEY, m ? '1' : '0');
   }
   btn.addEventListener('click', () => setMinimized(true));
   restore.addEventListener('click', () => setMinimized(false));
-  if (localStorage.getItem(KEY) === '1') setMinimized(true);
+  // no book open (#status hidden): the sidebar must stay expanded — force it
+  // back open WITHOUT persisting. When a book opens the sidebar is left open
+  // by default (no re-apply of a saved minimized state); the user can still
+  // hide it with the ‹ button while reading. (The app always starts with no
+  // book open, so there's no saved state to restore on load.)
+  const status = document.getElementById('status');
+  const enforceNoBook = () => {
+    if (status.style.display === 'none' && aside.classList.contains('minimized')) setMinimized(false, false);
+  };
+  new MutationObserver(enforceNoBook).observe(status, { attributes: true, attributeFilter: ['style'] });
+  enforceNoBook();
 })();
 
 // ---- main-nav rail: Shelf / Favorites / Reading / Recent / Plugins / Settings ----
@@ -2259,7 +2315,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       : '';
     const gCover = (g.rows.find(r => r.cover) || {}).cover || '';
     const gCoverHtml = gCover ? `<img class="cover" src="${esc(gCover)}" alt="" onload="this.classList.add('loaded')" onerror="this.classList.add('noimg')">` : '';
-    box.innerHTML = `<div class="grouphdr">${gCoverHtml}<button type="button" class="grouphdr-toggle" data-grouptoggle="${esc(gname)}"><div class="name">${esc(gname)}</div><div class="meta">${open ? '▾' : '▸'} ${n} edition${n > 1 ? 's' : ''}</div></button><div class="ghdr-right">${statusSel}${tagBtn}${rmBtn}</div></div><div class="groupmembers${open ? ' open' : ''}"></div>`;
+    box.innerHTML = `<div class="grouphdr">${gCoverHtml}<button type="button" class="grouphdr-toggle" data-grouptoggle="${esc(gname)}"><div class="name">${esc(gname)}</div><div class="meta">${open ? '▾' : '▸'} ${n} edition${n > 1 ? 's' : ''}</div></button><div class="ghdr-right">${statusSel}<div class="ghdr-sub">${tagBtn}${rmBtn}</div></div></div><div class="groupmembers${open ? ' open' : ''}"></div>`;
     const members = box.querySelector('.groupmembers');
     for (const r of g.rows) members.appendChild(renderMemberRow(r));
     el.appendChild(box);
@@ -2699,10 +2755,15 @@ function setNoBook(no) {
 // Apply the current list view (catalogue grid vs compact list) to #catalog.
 // Reads the no-book state from the DOM (main.no-book) to pick the right
 // setting. Called on every render and when the book open/close state changes.
+// Only the book-list views use the grid — the Plugins and Settings views
+// render their own layouts and must stay plain lists (the grid class would
+// squeeze their rows into 230px cards).
 function applyListView() {
+  const gridViews = ['shelf', 'favorites', 'reading', 'recent'];
+  const useGrid = gridViews.includes(view);
   const noBook = document.querySelector('main').classList.contains('no-book');
   const mode = noBook ? listViewNoBook : listViewBook;
-  document.getElementById('catalog').classList.toggle('catalogue', mode === 'catalogue');
+  document.getElementById('catalog').classList.toggle('catalogue', useGrid && mode === 'catalogue');
 }
 
 // In the catalogue grid the row's controls (★/📖/⋯, status, tags, delete,
@@ -3994,6 +4055,22 @@ function toast(msg) {
   setTimeout(() => { if (el.textContent === msg) el.textContent = old; }, 2000);
 }
 
+// small green confirmation toast (bottom-centre), e.g. after saving a profile
+let successToastTimer = null;
+function successToast(msg) {
+  const el = document.getElementById('success-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  if (successToastTimer) clearTimeout(successToastTimer);
+  successToastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+// a profile rename reloads the page (server restart) — show the toast here
+if (sessionStorage.getItem('profileSaved')) {
+  sessionStorage.removeItem('profileSaved');
+  successToast('Profile saved');
+}
+
 // "Retry now" on the loading page
 document.getElementById('loading').addEventListener('click', (e) => {
   if (!e.target.closest('#retry')) return;
@@ -4204,6 +4281,35 @@ function renderSettingsView() {
     return s;
   };
 
+  // ---- Profile (server) ----
+  // Which local profile this server is running (profiles/<name>/). The switch
+  // button only exists in the desktop shell (pywebview); in a plain browser
+  // there's no profile to switch to.
+  const prof = section('Profile');
+  prof.insertAdjacentHTML('beforeend', `
+    <div class="settings-row"><label>Active profile</label><span id="set-profile-name" style="font-size:calc(13px * var(--app-text-scale))">…</span></div>
+    <div class="settings-row"><label>&nbsp;</label>
+      <button id="set-profile-edit" style="display:none">Edit profile…</button>
+      <button id="set-profile-switch" style="display:none">Switch profile…</button>
+    </div>
+  `);
+  j('/api/profile').then(r => r.json()).then(d => {
+    const n = document.getElementById('set-profile-name');
+    if (n) n.textContent = (d.name || 'default') + (d.has_password ? '  🔒' : '');
+  }).catch(() => {});
+  // rename / password management needs the desktop shell (it owns the server
+  // lifecycle); in a plain browser only the name is shown.
+  const showProfileBtns = () => {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.switch_profile) {
+      const sb = document.getElementById('set-profile-switch');
+      const eb = document.getElementById('set-profile-edit');
+      if (sb) sb.style.display = '';
+      if (eb) eb.style.display = '';
+    }
+  };
+  if (window.pywebview && window.pywebview.api) showProfileBtns();
+  else window.addEventListener('pywebviewready', showProfileBtns, { once: true });
+
   // ---- Text reader (localStorage) ----
   const reader = section('Text reader');
   reader.insertAdjacentHTML('beforeend', `
@@ -4346,6 +4452,13 @@ function renderSettingsView() {
     const t = e.target;
     if (t.closest('#settings-add-provider')) { addProviderDialog(); return; }
     if (t.closest('#settings-add-plugin')) { openAddPluginModal(); return; }
+    if (t.closest('#set-profile-switch')) {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.switch_profile) {
+        if (confirm('Switch profile? The current server will stop.')) window.pywebview.api.switch_profile();
+      }
+      return;
+    }
+    if (t.closest('#set-profile-edit')) { openProfileModal(); return; }
     const tabUp = t.closest('button[data-tab-up]');
     if (tabUp) {
       const order = railOrder();
@@ -4424,6 +4537,66 @@ function renderSettingsView() {
     }
   });
 })();
+
+// ---- profile edit modal (rename + password) — desktop shell only ----
+let profileModalName = '';
+let profileModalHasPassword = false;
+async function openProfileModal() {
+  const api = window.pywebview && window.pywebview.api;
+  if (!api || !api.rename_profile) return;
+  let d = {};
+  try { d = await j('/api/profile').then(r => r.json()); } catch {}
+  profileModalName = d.name || '';
+  profileModalHasPassword = !!d.has_password;
+  document.getElementById('profile-name-input').value = profileModalName;
+  document.getElementById('profile-pass-current').value = '';
+  document.getElementById('profile-pass-new').value = '';
+  document.getElementById('profile-pass-current').placeholder =
+    profileModalHasPassword ? 'required to change the password' : 'no password set';
+  document.getElementById('profile-modal-err').textContent = '';
+  document.getElementById('profile-modal').classList.add('open');
+  document.getElementById('profile-name-input').focus();
+}
+function closeProfileModal() {
+  document.getElementById('profile-modal').classList.remove('open');
+}
+document.getElementById('profile-modal-cancel').onclick = closeProfileModal;
+document.getElementById('profile-modal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeProfileModal();
+});
+document.getElementById('profile-modal-save').onclick = async () => {
+  const api = window.pywebview && window.pywebview.api;
+  if (!api || !api.rename_profile) return;
+  const err = document.getElementById('profile-modal-err');
+  err.textContent = '';
+  const newName = document.getElementById('profile-name-input').value.trim();
+  const current = document.getElementById('profile-pass-current').value;
+  const next = document.getElementById('profile-pass-new').value;
+  if (!newName) { err.textContent = 'Profile name can’t be empty.'; return; }
+  const renaming = newName !== profileModalName;
+  const changingPass = next !== '' || (profileModalHasPassword && current !== '');
+  if (!renaming && !changingPass) { closeProfileModal(); return; }
+  const saveBtn = document.getElementById('profile-modal-save');
+  saveBtn.disabled = true;
+  try {
+    if (renaming) {
+      const r = await api.rename_profile(profileModalName, newName);
+      if (!r.ok) { err.textContent = r.error; return; }
+      // the desktop app reloads the app URL after the rename — flag the
+      // success so the green toast can be shown on the reloaded page
+      sessionStorage.setItem('profileSaved', '1');
+      closeProfileModal();
+      return;
+    }
+    const r = await api.set_profile_password(current, next);
+    if (!r.ok) { err.textContent = r.error; return; }
+    closeProfileModal();
+    successToast('Profile saved');
+    refresh(); // update the 🔒 indicator in the Profile section
+  } finally {
+    saveBtn.disabled = false;
+  }
+};
 
 async function doPluginAction(pid, act) {
   if (act === 'copy') {

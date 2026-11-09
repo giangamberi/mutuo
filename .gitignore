@@ -23,3 +23,7 @@ __pycache__/
 .torrents/
 .venv/
 .vscode/
+# build artifacts (PyInstaller + Inno Setup)
+build/
+dist/
+installer/output/

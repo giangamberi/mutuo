@@ -11,6 +11,10 @@ picker, and starts a fresh server for the chosen profile. Closing the window
 stops the server.
 
 Run with:  python desktop.py
+
+Frozen (PyInstaller) build: the same exe is re-spawned as the server via
+``--server <profile>``; all mutable data lives in PTR_DATA_DIR (set below to
+%APPDATA%/SharedKnowledge) so the install dir stays read-only.
 """
 from __future__ import annotations
 
@@ -25,7 +29,36 @@ from pathlib import Path
 
 import webview
 
-import profiles
+FROZEN = getattr(sys, "frozen", False)
+
+
+def _app_dir() -> Path:
+    """Where the app's read-only files (static/, plugins/) live. When frozen,
+    PyInstaller stages them in sys._MEIPASS (the bundle dir), not next to the
+    exe."""
+    if FROZEN:
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    return Path(__file__).parent
+
+
+def _data_dir() -> Path:
+    """Where mutable data (profiles/) lives. The frozen app points this at a
+    per-user location; a dev checkout uses the repo root."""
+    if FROZEN:
+        base = os.environ.get("APPDATA") or str(Path.home())
+        d = Path(base) / "SharedKnowledge"
+    else:
+        d = Path(__file__).parent
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+DATA_DIR = _data_dir()
+# profiles.py / plugin_loader.py read PTR_DATA_DIR at import time, so it must
+# be set BEFORE they're imported.
+os.environ.setdefault("PTR_DATA_DIR", str(DATA_DIR))
+
+import profiles  # noqa: E402  (after PTR_DATA_DIR is set)
 
 
 def _enable_dpi_awareness() -> None:
@@ -49,11 +82,11 @@ def _enable_dpi_awareness() -> None:
 
 _enable_dpi_awareness()
 
-BASE = Path(__file__).parent
+APP_DIR = _app_dir()
 HOST = "127.0.0.1"
 PORT = 8080
 APP_URL = f"http://{HOST}:{PORT}/"
-PROFILES_URL = (BASE / "static" / "profiles.html").as_uri()
+PROFILES_URL = (APP_DIR / "static" / "profiles.html").as_uri()
 READY_TIMEOUT = 30.0  # libtorrent session init + catalog sync can take a few s
 
 
@@ -61,6 +94,7 @@ READY_TIMEOUT = 30.0  # libtorrent session init + catalog sync can take a few s
 
 _server_proc: subprocess.Popen | None = None
 _server_lock = threading.Lock()
+_active_profile: str | None = None  # profile the running server serves
 
 
 def _log_path() -> Path:
@@ -104,7 +138,11 @@ def _wait_ready(port: int, timeout: float = READY_TIMEOUT) -> bool:
 
 
 def start_server(profile_name: str) -> bool:
-    """Spawn the uvicorn server for ``profile_name`` and wait until it's up."""
+    """Spawn the uvicorn server for ``profile_name`` and wait until it's up.
+
+    Frozen: re-spawn this same exe with ``--server <profile>`` (it runs the
+    FastAPI app in-process). Dev: spawn ``python -m uvicorn app:app``.
+    """
     global _server_proc
     with _server_lock:
         _stop_locked()
@@ -112,14 +150,18 @@ def start_server(profile_name: str) -> bool:
         time.sleep(0.3)
         env = dict(os.environ)
         env["PTR_PROFILE"] = profile_name
+        env["PTR_DATA_DIR"] = str(DATA_DIR)
         log = open(_log_path(), "ab")
         kwargs = {}
         if os.name == "nt":
             kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+        if FROZEN:
+            cmd = [sys.executable, "--server", profile_name]
+        else:
+            cmd = [sys.executable, "-m", "uvicorn", "app:app",
+                   "--host", HOST, "--port", str(PORT)]
         _server_proc = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "app:app",
-             "--host", HOST, "--port", str(PORT)],
-            cwd=str(BASE), env=env, stdout=log, stderr=subprocess.STDOUT, **kwargs,
+            cmd, cwd=str(APP_DIR), env=env, stdout=log, stderr=subprocess.STDOUT, **kwargs,
         )
         ok = _wait_ready(PORT)
         if not ok:
@@ -180,23 +222,70 @@ class ProfileAPI:
         threading.Thread(target=_go, daemon=True).start()
 
     def select_profile(self, name: str, password: str = "") -> dict:
+        global _active_profile
         if not profiles.profiles.verify(name, password or ""):
             return {"ok": False, "error": "Wrong password."}
         if not start_server(name):
             return {"ok": False, "error": "Server failed to start — see the log."}
+        _active_profile = name
         self._navigate_later(APP_URL)
         return {"ok": True}
 
     def switch_profile(self) -> dict:
         """Return to the profile picker (stops the current server)."""
+        global _active_profile
         stop_server()
+        _active_profile = None
         self._navigate_later(PROFILES_URL)
+        return {"ok": True}
+
+    def active_profile(self) -> dict:
+        return {"name": _active_profile}
+
+    def rename_profile(self, name: str, new_name: str) -> dict:
+        """Rename the active profile. The server is stopped first (its data
+        dir can't be moved while files are open), then restarted."""
+        global _active_profile
+        if name != _active_profile:
+            return {"ok": False, "error": "Only the active profile can be renamed."}
+        stop_server()
+        try:
+            profiles.profiles.rename(name, new_name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        if not start_server(new_name):
+            return {"ok": False, "error": "Server failed to restart — see the log."}
+        _active_profile = new_name
+        self._navigate_later(APP_URL)  # reload so the UI shows the new name
+        return {"ok": True}
+
+    def set_profile_password(self, current: str, new: str) -> dict:
+        """Change (or clear, new="") the active profile's password."""
+        global _active_profile
+        if not _active_profile:
+            return {"ok": False, "error": "No active profile."}
+        try:
+            profiles.profiles.set_password(_active_profile, current or "", new or "")
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
         return {"ok": True}
 
 
 # ---- window ----------------------------------------------------------------
 
+def run_server(profile_name: str) -> None:
+    """Frozen ``--server`` mode: run the FastAPI app in-process (the GUI
+    process spawns us this way)."""
+    import uvicorn
+    uvicorn.run("app:app", host=HOST, port=PORT, log_level="warning")
+
+
 def main() -> None:
+    # frozen server subprocess: no GUI, just serve and block
+    if FROZEN and len(sys.argv) >= 3 and sys.argv[1] == "--server":
+        run_server(sys.argv[2])
+        return
+
     api = None
     closing = {"flag": False}
 
@@ -215,6 +304,11 @@ def main() -> None:
         min_size=(760, 520),
         background_color="#14161a",
         js_api=api,
+        # pywebview defaults to text_select=False, which injects
+        # "body { user-select: none }" and blocks selecting/copying text in
+        # the reader. Enable it so txt/HTML content can be selected (images
+        # are unaffected — they have no text to select).
+        text_select=True,
     )
     api._window = window
     window.events.closing += on_close

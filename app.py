@@ -127,7 +127,9 @@ async def _no_cache_static(request, call_next):
 
 @app.get("/api/profile")
 def get_profile() -> JSONResponse:
-    return JSONResponse({"ok": True, "name": PROFILE_NAME})
+    p = profiles.profiles.get(PROFILE_NAME) or {}
+    return JSONResponse({"ok": True, "name": PROFILE_NAME,
+                         "has_password": bool(p.get("has_password"))})
 
 
 class AddRequest(BaseModel):
