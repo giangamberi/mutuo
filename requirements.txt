@@ -9,3 +9,5 @@ pypdfium2>=4.0
 Pillow>=9.0
 # optional, for nicer test PDFs (e2e_test falls back to a hand-rolled one)
 # reportlab
+# desktop shell (native window + profile picker); uses the system WebView2
+pywebview>=5.0

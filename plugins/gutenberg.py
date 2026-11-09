@@ -19,6 +19,7 @@ import json
 import posixpath
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -46,6 +47,10 @@ def _get_json(url, timeout=20):
     same way, so a single bounded attempt that fails fast with a clear message
     is better than hanging. The front end keeps the previous results on screen,
     so the user can just re-run the search once Gutendex recovers.
+
+    HTTP errors (503/502/429/…) are the same "Gutendex is unhealthy" situation
+    as a timeout — Cloudflare returns them during bad windows — so they get the
+    same friendly message instead of a raw "HTTP Error 503".
     """
     try:
         req = urllib.request.Request(url, headers=UA)
@@ -60,6 +65,10 @@ def _get_json(url, timeout=20):
                 if time.time() > deadline:
                     raise TimeoutError("response body exceeded the deadline")
             return json.loads(b"".join(chunks))
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(
+            f"Gutendex returned HTTP {e.code} — it is likely rate-limiting or "
+            "down; try again in a moment") from e
     except Exception as e:
         msg = str(e).lower()
         if isinstance(e, TimeoutError) or "timed out" in msg or "timeout" in msg:

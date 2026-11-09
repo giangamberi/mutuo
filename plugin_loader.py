@@ -36,7 +36,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 PLUGIN_DIR = Path(__file__).parent / "plugins"
-STATE_PATH = Path(__file__).parent / "plugin_state.json"
+# Per-profile plugin state (active flag + config). The desktop app sets
+# PTR_PROFILE before starting the server; without it, defaults to "default".
+import os as _os
+_PROFILE = _os.environ.get("PTR_PROFILE", "default")
+STATE_PATH = Path(__file__).parent / "profiles" / _PROFILE / "plugin_state.json"
 
 
 @dataclass
@@ -126,6 +130,7 @@ def load_state() -> dict:
 
 
 def _save_state(state: dict) -> None:
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE_PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
     tmp.replace(STATE_PATH)

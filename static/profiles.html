@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Choose a profile</title>
+<style>
+  :root {
+    --bg:#14161a; --panel:#1e2128; --text:#e6e9ef; --dim:#8a93a5; --acc:#4f8cff;
+    --input-bg:#0f1115; --border:#333a47; --hover:#232a36;
+    --danger-fg:#ff6b6b; --shadow-strong:#000c;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; align-items:center; justify-content:center; }
+  .card { width:420px; max-width:92vw; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:28px 26px; box-shadow:var(--shadow-strong); }
+  h1 { font-size:20px; margin:0 0 4px; font-weight:600; }
+  .sub { color:var(--dim); font-size:13px; margin:0 0 22px; }
+  .profiles { display:flex; flex-direction:column; gap:8px; margin-bottom:6px; }
+  .empty { color:var(--dim); font-size:13px; padding:6px 2px; }
+  .profile { display:flex; align-items:center; gap:10px; padding:12px 14px; background:var(--input-bg); border:1px solid var(--border); border-radius:8px; cursor:pointer; }
+  .profile:hover { border-color:var(--acc); }
+  .profile .name { flex:1; font-size:15px; }
+  .profile .badge { font-size:11px; color:var(--dim); border:1px solid var(--border); border-radius:10px; padding:2px 8px; white-space:nowrap; }
+  .profile .del { background:none; border:none; color:var(--dim); cursor:pointer; font-size:13px; padding:2px 8px; border-radius:5px; }
+  .profile .del:hover { color:var(--danger-fg); }
+  .profile .del.armed { color:var(--danger-fg); font-weight:600; }
+  .unlock { margin-top:14px; padding:14px; background:var(--input-bg); border:1px solid var(--border); border-radius:8px; }
+  .divider { height:1px; background:var(--border); margin:20px 0; }
+  .newlabel { font-size:12px; color:var(--dim); margin:0 0 4px; }
+  label { display:block; font-size:12px; color:var(--dim); margin:10px 0 4px; }
+  input { width:100%; min-width:0; background:var(--input-bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:14px; }
+  button { background:var(--acc); color:#fff; border:none; border-radius:6px; padding:9px 14px; font-size:14px; cursor:pointer; font-weight:600; }
+  button.ghost { background:var(--input-bg); color:var(--text); border:1px solid var(--border); font-weight:400; }
+  .row { display:flex; gap:8px; margin-top:14px; }
+  .row button { flex:1; }
+  .err { color:var(--danger-fg); font-size:12px; margin-top:10px; min-height:1em; }
+  .status { color:var(--dim); font-size:12px; margin-top:12px; text-align:center; min-height:1em; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Shared Knowledge</h1>
+  <p class="sub">Choose a profile to open</p>
+  <div class="profiles" id="profiles"><div class="empty">Loading…</div></div>
+
+  <!-- shown when a password-protected profile is selected -->
+  <div class="unlock" id="unlock" style="display:none">
+    <label for="un-pass">Password for <span id="un-name"></span></label>
+    <input id="un-pass" type="password" autocomplete="current-password">
+    <div class="row">
+      <button id="un-ok">Unlock</button>
+      <button id="un-cancel" class="ghost">Cancel</button>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <p class="newlabel">Create a new profile</p>
+  <label for="np-name">Name</label>
+  <input id="np-name" placeholder="e.g. work, personal" autocomplete="off">
+  <label for="np-pass">Password (optional)</label>
+  <input id="np-pass" type="password" placeholder="leave blank for no password" autocomplete="new-password">
+  <div class="row">
+    <button id="np-create">Create profile</button>
+  </div>
+  <div class="err" id="err"></div>
+  <div class="status" id="status"></div>
+</div>
+<script>
+const api = () => window.pywebview.api;
+let profiles = [];
+let unlockTarget = null;
+let deleteArmed = null; // { name, btn, timer }
+
+function render() {
+  const el = document.getElementById('profiles');
+  el.innerHTML = '';
+  if (!profiles.length) {
+    el.innerHTML = '<div class="empty">No profiles yet — create one below.</div>';
+    return;
+  }
+  for (const p of profiles) {
+    const row = document.createElement('div');
+    row.className = 'profile';
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = p.name;
+    row.appendChild(name);
+    if (p.has_password) {
+      const b = document.createElement('span');
+      b.className = 'badge';
+      b.textContent = '🔒 protected';
+      row.appendChild(b);
+    }
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.title = 'Delete profile';
+    del.textContent = '✕';
+    del.onclick = (e) => { e.stopPropagation(); armDelete(del, p.name); };
+    row.appendChild(del);
+    row.onclick = () => openProfile(p);
+    el.appendChild(row);
+  }
+}
+
+async function refresh() {
+  profiles = await api().list_profiles();
+  render();
+}
+
+// two-step delete: first click arms (turns red "sure?"), second confirms.
+function armDelete(btn, name) {
+  if (deleteArmed && deleteArmed.name === name) {
+    clearTimeout(deleteArmed.timer);
+    deleteArmed = null;
+    deleteProfile(name);
+    return;
+  }
+  if (deleteArmed) { clearTimeout(deleteArmed.timer); disarm(deleteArmed.btn); }
+  btn.textContent = 'sure?';
+  btn.classList.add('armed');
+  const timer = setTimeout(() => { disarm(btn); deleteArmed = null; }, 2500);
+  deleteArmed = { name, btn, timer };
+}
+function disarm(btn) { btn.textContent = '✕'; btn.classList.remove('armed'); }
+
+function openProfile(p) {
+  document.getElementById('err').textContent = '';
+  if (p.has_password) {
+    unlockTarget = p;
+    document.getElementById('un-name').textContent = p.name;
+    document.getElementById('un-pass').value = '';
+    document.getElementById('unlock').style.display = 'block';
+    document.getElementById('un-pass').focus();
+  } else {
+    doSelect(p.name, '');
+  }
+}
+
+async function doSelect(name, password) {
+  const status = document.getElementById('status');
+  status.textContent = 'Opening "' + name + '"…';
+  const r = await api().select_profile(name, password);
+  if (!r.ok) {
+    status.textContent = '';
+    document.getElementById('err').textContent = r.error;
+    document.getElementById('unlock').style.display = 'none';
+    unlockTarget = null;
+  }
+  // on success the desktop app navigates this window to the app URL
+}
+
+async function deleteProfile(name) {
+  const r = await api().delete_profile(name);
+  if (!r.ok) { document.getElementById('err').textContent = r.error; return; }
+  refresh();
+}
+
+document.getElementById('un-ok').onclick = () => {
+  if (unlockTarget) doSelect(unlockTarget.name, document.getElementById('un-pass').value);
+};
+document.getElementById('un-cancel').onclick = () => {
+  unlockTarget = null;
+  document.getElementById('unlock').style.display = 'none';
+};
+document.getElementById('un-pass').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('un-ok').click(); };
+
+document.getElementById('np-create').onclick = async () => {
+  const name = document.getElementById('np-name').value.trim();
+  const password = document.getElementById('np-pass').value;
+  const err = document.getElementById('err');
+  err.textContent = '';
+  if (!name) { err.textContent = 'Enter a name.'; return; }
+  const r = await api().create_profile(name, password);
+  if (!r.ok) { err.textContent = r.error; return; }
+  document.getElementById('np-name').value = '';
+  document.getElementById('np-pass').value = '';
+  refresh();
+};
+
+// pywebview 5.x populates window.pywebview.api synchronously (no initialize()
+// promise) and fires 'pywebviewready'. Use whichever is already available.
+function init() { refresh(); }
+if (window.pywebview && window.pywebview.api) {
+  init();
+} else {
+  window.addEventListener('pywebviewready', init);
+}
+</script>
+</body>
+</html>

@@ -36,27 +36,38 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import plugin_loader
+import profiles
 from catalog import Catalog, ProviderCatalog
 from torrent_engine import TorrentEngine, TorrentError, _ih_hex
 
 BASE = Path(__file__).parent
-UPLOAD_DIR = BASE / ".torrents"
-PDF_DIR = BASE / ".pdfs"          # direct .pdf files dropped into the reader
-PDFS_INDEX = BASE / "pdfs.json"   # registry of direct PDFs (id -> name/size/provider/cover)
-TEXT_DIR = BASE / ".texts"        # plain-text documents saved locally for offline reading
-TEXTS_INDEX = BASE / "texts.json"  # registry of saved texts (id -> name/size/url/provider)
-EPUB_DIR = BASE / ".epubs"        # EPUB documents saved locally for offline reading
-EPUBS_INDEX = BASE / "epubs.json"  # registry of saved EPUBs (id -> name/size/url/provider)
-FILES_DIR = BASE / ".files"        # other saved documents (html/mobi/file) for offline reading
-FILES_INDEX = BASE / "files.json"  # registry of saved files (id -> name/size/url/provider/kind)
-FAVORITES_INDEX = BASE / "favorites.json"  # user's favorite documents (global)
-SHELF_INDEX = BASE / "shelf.json"  # user's personal shelf (superset of favorites)
-RECENT_INDEX = BASE / "recent.json"  # recently opened books (most recent first)
+# All per-profile data lives under profiles/<name>/ (set by the desktop app
+# via the PTR_PROFILE env var). Without it, defaults to "default".
+PROFILE_NAME = os.environ.get("PTR_PROFILE", "default")
+PROFILE_DIR = profiles.profile_dir(PROFILE_NAME)
+PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+# One-time: fold legacy root-level data into the default profile. Must run
+# BEFORE the singletons below load their files, or a first run would read an
+# empty catalog and only then move the data in.
+profiles.migrate_root_data()
+
+UPLOAD_DIR = PROFILE_DIR / ".torrents"
+PDF_DIR = PROFILE_DIR / ".pdfs"          # direct .pdf files dropped into the reader
+PDFS_INDEX = PROFILE_DIR / "pdfs.json"   # registry of direct PDFs (id -> name/size/provider/cover)
+TEXT_DIR = PROFILE_DIR / ".texts"        # plain-text documents saved locally for offline reading
+TEXTS_INDEX = PROFILE_DIR / "texts.json"  # registry of saved texts (id -> name/size/url/provider)
+EPUB_DIR = PROFILE_DIR / ".epubs"        # EPUB documents saved locally for offline reading
+EPUBS_INDEX = PROFILE_DIR / "epubs.json"  # registry of saved EPUBs (id -> name/size/url/provider)
+FILES_DIR = PROFILE_DIR / ".files"        # other saved documents (html/mobi/file) for offline reading
+FILES_INDEX = PROFILE_DIR / "files.json"  # registry of saved files (id -> name/size/url/provider/kind)
+FAVORITES_INDEX = PROFILE_DIR / "favorites.json"  # user's favorite documents
+SHELF_INDEX = PROFILE_DIR / "shelf.json"  # user's personal shelf (superset of favorites)
+RECENT_INDEX = PROFILE_DIR / "recent.json"  # recently opened books (most recent first)
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     # startup
     engine.start()
-    feed = BASE / "feed.json"
+    feed = PROFILE_DIR / "feed.json"
     catalog.sync(str(feed) if feed.exists() else None)
     # each enabled provider owns its own torrent list (a feed); merge them in
     for p in providers.items():
@@ -91,9 +102,9 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(title="pdf-torrent-reader", lifespan=_lifespan)
 
-engine = TorrentEngine(download_dir=str(BASE / "downloads"))
-catalog = Catalog(str(BASE / "catalog.json"))
-providers = ProviderCatalog(str(BASE / "providers.json"))
+engine = TorrentEngine(download_dir=str(PROFILE_DIR / "downloads"))
+catalog = Catalog(str(PROFILE_DIR / "catalog.json"))
+providers = ProviderCatalog(str(PROFILE_DIR / "providers.json"))
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 
 
@@ -109,6 +120,14 @@ async def _no_cache_static(request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
+
+
+# ---- profile info (the desktop app uses this to show the active profile) ----
+
+
+@app.get("/api/profile")
+def get_profile() -> JSONResponse:
+    return JSONResponse({"ok": True, "name": PROFILE_NAME})
 
 
 class AddRequest(BaseModel):
@@ -383,7 +402,7 @@ def cache_pdf(ih: str, f: int) -> JSONResponse:
 @app.post("/api/sync")
 def sync_feed() -> JSONResponse:
     """Re-pull feed.json and enqueue any new torrents."""
-    feed = BASE / "feed.json"
+    feed = PROFILE_DIR / "feed.json"
     added = catalog.sync(str(feed)) if feed.exists() else 0
     _enqueue_new()
     return JSONResponse({"added": added})
