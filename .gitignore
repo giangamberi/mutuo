@@ -3,6 +3,7 @@ profiles/
 profiles.json
 # custom (user-added) plugins — not part of the shipped app
 plugins/internet_archive.py
+plugins/mangadex.py
 downloads/
 catalog.json
 providers.json
