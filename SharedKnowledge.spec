@@ -17,6 +17,9 @@ Mutable data (profiles/) is NOT bundled — at runtime it lives in
 
 Build:  pyinstaller SharedKnowledge.spec --noconfirm
 """
+import subprocess
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
@@ -27,10 +30,30 @@ pypdfium2_datas, pypdfium2_bins, pypdfium2_hidden = collect_all("pypdfium2")
 pypdfium2raw_datas, pypdfium2raw_bins, pypdfium2raw_hidden = collect_all("pypdfium2_raw")
 libtorrent_datas, libtorrent_bins, libtorrent_hidden = collect_all("libtorrent")
 
+
+def _plugin_datas():
+    """Bundle only the built-in (git-tracked) plugins. Personal plugins are
+    user-specific and gitignored ("not part of the shipped app"), so they
+    don't go in the installer. Falls back to all plugins if git is missing.
+    SPECPATH is the spec file's directory (PyInstaller defines it in the
+    spec namespace; __file__ is not available there)."""
+    plugins_dir = Path(SPECPATH) / "plugins"
+    try:
+        out = subprocess.run(["git", "ls-files", "plugins/"],
+                             cwd=str(plugins_dir.parent),
+                             capture_output=True, text=True, timeout=10)
+        tracked = {line.split("/", 1)[-1] for line in out.stdout.splitlines() if line.strip()}
+        if tracked:
+            return [(str(plugins_dir / f), "plugins") for f in sorted(tracked)]
+    except Exception:
+        pass
+    return [(str(p), "plugins") for p in sorted(plugins_dir.glob("*.py"))]
+
+
 datas = (
     webview_datas + pypdfium2_datas + pypdfium2raw_datas + libtorrent_datas +
     # the app's own read-only files, served by the FastAPI app
-    [("static", "static"), ("plugins", "plugins")]
+    [("static", "static")] + _plugin_datas()
 )
 binaries = webview_bins + pypdfium2_bins + pypdfium2raw_bins + libtorrent_bins
 
