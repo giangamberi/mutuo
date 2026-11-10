@@ -80,7 +80,10 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter", "matplotlib", "numpy", "pandas", "scipy", "PIL.tests"],
+    # PIL's AVIF + WebP codec plugins are large native .pyds, but the app only
+    # ever saves PNG/JPEG (both built into PIL's core _imaging), so drop them.
+    excludes=["tkinter", "matplotlib", "numpy", "pandas", "scipy", "PIL.tests",
+              "PIL._avif", "PIL._webp"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
