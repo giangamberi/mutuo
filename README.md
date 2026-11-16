@@ -1,37 +1,47 @@
 # Mutuo
 
-A shared reading library for a team: one app, one download pool. Books arrive
-as torrents, direct PDF links, or from built-in providers (arXiv, Google
-Books, OpenAlex, Project Gutenberg) and plugins; they are read in a native
-desktop window — PDF, plain text, EPUB, or HTML — with per-person profiles,
-a personal shelf, and reading-position memory.
+**A shared reading library for your team.** One app, one download pool:
+paste a link, pick a book, start reading. Mutuo streams PDFs straight from
+BitTorrent — only the pages you actually look at — and reads PDF, plain
+text, EPUB, and web pages in a native desktop window. Your shelf, favorites,
+and reading position are saved per person; the books are shared, so anything
+one person adds is available to everyone.
 
-The name is Latin for "I lend": the catalog is shared, the reading is yours.
+The name is Latin for *"I lend"*: the catalog is shared, the reading is yours.
+
+> **Want to try it?** No account, no database, no setup —
+> [grab the Windows installer](#windows-installer), or run
+> `python desktop.py` and you'll be reading in under a minute.
+
+## Try it in 60 seconds
+
+1. **Install** — `pip install -r requirements.txt` (Python 3.10–3.13)
+2. **Launch** — `python desktop.py`, then pick a profile (or create one)
+3. **Read** — paste any PDF link in the header, or open the **arXiv**,
+   **Google Books**, **OpenAlex**, or **Gutenberg** tab, search, and click
+
+That's the whole setup. Close the window and your place is saved; reopen it
+and you're back where you left off.
+
+## What you can do
+
+- **Paste a link** — any `https://…pdf` URL (or `magnet:` URI) in the header
+  becomes a book, streamed page by page.
+- **Search open knowledge** — built-in tabs for arXiv papers, Google Books,
+  OpenAlex works, and Project Gutenberg, with covers and one-click reading.
+- **Read anything** — PDF (PDF.js), plain text, EPUB (epub.js), or web pages,
+  all in the same window, with font/theme/spacing controls for text.
+- **Build a shelf** — To Read / Reading / Complete, tags, favorites, and
+  reading-position restore (PDF page, text scroll %, EPUB location).
+- **Save for offline** — any text, EPUB, or web page can be saved to disk
+  and read without a connection.
+- **Extend it** — drop a `.py` file in `plugins/` and it becomes a new search
+  tab (or one-shot fetch) — no restart, no build step.
 
 Intended for **content you are authorized to share** (your own PDFs, internal
 company documents, open-access material). Torrents are a transport for files
 you control; this is not a distribution service for third-party copyrighted
 material.
-
-## Features
-
-- **PDFs streamed from BitTorrent** — only the pieces the viewer actually
-  reads are downloaded, so first paint is fast even for large files.
-- **Direct PDF links** — paste any `https://…pdf` URL in the header; it is
-  downloaded, validated, and read like a local file.
-- **Providers & plugins** — named search sources (arXiv, Google Books,
-  OpenAlex, Gutenberg) plus user plugins (`plugins/*.py`) that can add live
-  search tabs, one-shot fetches, and cover images.
-- **Multiple readers** — PDF.js for PDFs, an in-site text reader, epub.js
-  for EPUBs, and an HTML proxy for web pages.
-- **Profiles** — per-person data (shelf, favorites, saved texts, settings)
-  under `profiles/<name>/`; the shared part (catalog, downloads) stays
-  shared.
-- **Shelf & favorites** — a personal bookshelf with To Read / Reading /
-  Complete status, tags, covers, and reading-position restore (PDF page,
-  text scroll %, EPUB CFI).
-- **Windows installer** — one-file Inno Setup installer for a no-Python
-  install (see below).
 
 ## How it works
 
@@ -179,3 +189,15 @@ python e2e_test.py
   can be slow; adding known peers/trackers to the magnet helps.
 - **Disk.** Verified files accumulate under `downloads/`. Delete old
   info-hash dirs to reclaim space.
+
+## Make it yours
+
+- **Add a provider** for your team's shared files — a feed URL or a local
+  `feed.json`, and it gets its own tab.
+- **Write a plugin** — ~30 lines of Python (`search(query, config)`) and
+  you have a live search tab with covers and settings.
+- **Share the installer** — one `.exe`, no Python needed on the target
+  machine; each person just picks their profile.
+
+Built with FastAPI, libtorrent, and a single-file front end. No database, no
+build step, no framework — just Python and a window.
