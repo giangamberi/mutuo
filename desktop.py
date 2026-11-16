@@ -18,13 +18,16 @@ Frozen (PyInstaller) build: the same exe is re-spawned as the server via
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import urllib.request
+import webbrowser
 from pathlib import Path
 
 import webview
@@ -276,6 +279,53 @@ class ProfileAPI:
         return {"ok": True}
 
 
+# ---- update check ----------------------------------------------------------
+# Compare the running version (version.py) against the latest GitHub release
+# tag and offer to download it. Runs once per launch on a background thread
+# and never blocks or crashes the app — a network failure just means no
+# prompt. The frozen app has no git, so this uses the GitHub API, not git.
+
+RELEASE_API = "https://api.github.com/repos/giangamberi/mutuo/releases/latest"
+RELEASE_URL = "https://github.com/giangamberi/mutuo/releases/latest"
+
+
+def _version_tuple(v: str) -> tuple:
+    out = []
+    for part in v.split("."):
+        m = re.match(r"\d+", part)
+        out.append(int(m.group()) if m else 0)
+    return tuple(out)
+
+
+def check_for_updates() -> None:
+    """Background thread: prompt for an update if a newer release is out."""
+    try:
+        import version
+        current = version.__version__
+        req = urllib.request.Request(
+            RELEASE_API,
+            headers={"User-Agent": "mutuo/1.0",
+                     "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        latest = (data.get("tag_name") or "").lstrip("v")
+        if not latest or _version_tuple(latest) <= _version_tuple(current):
+            return
+        if os.name != "nt":
+            return
+        import ctypes
+        MB_YESNO = 0x00000004
+        ans = ctypes.windll.user32.MessageBoxW(
+            0,
+            f"A new version of Mutuo is available: {latest} "
+            f"(you have {current}).\n\nClick Yes to open the download page.",
+            "Mutuo — update available", MB_YESNO)
+        if ans == 1:  # IDYES
+            webbrowser.open(RELEASE_URL)
+    except Exception:
+        pass  # offline / API down / not Windows — never disturb the user
+
+
 # ---- window ----------------------------------------------------------------
 
 def run_server(profile_name: str) -> None:
@@ -317,6 +367,9 @@ def main() -> None:
     )
     api._window = window
     window.events.closing += on_close
+
+    # offer an update if a newer release is out (background, non-blocking)
+    threading.Thread(target=check_for_updates, daemon=True).start()
 
     webview.start()
     # webview.start() returns when the window is closed

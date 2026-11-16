@@ -29,7 +29,19 @@ if (-not (Test-Path (Join-Path $bundle "Mutuo.exe"))) {
     throw "bundle exe missing: $bundle"
 }
 
-# --- 2. Inno Setup ----------------------------------------------------------
+# --- 2. Sync version into the installer script ------------------------------
+# version.py is the single source of truth; keep the .iss in lockstep so the
+# installer filename + AppVersion always match the running app.
+Write-Host "==> Syncing version" -ForegroundColor Cyan
+$ver = & $py -c "import version; print(version.__version__)" 2>&1
+if ($LASTEXITCODE -ne 0 -or -not $ver) { throw "could not read version from version.py" }
+$ver = "$ver".Trim()
+$iss = Join-Path $root "installer\Mutuo.iss"
+(Get-Content $iss -Raw) -replace '(?m)^#define MyAppVersion ".*"$', "#define MyAppVersion `"$ver`"" |
+    Set-Content $iss -NoNewline
+Write-Host "    version $ver -> $iss"
+
+# --- 3. Inno Setup ----------------------------------------------------------
 Write-Host "==> Inno Setup build" -ForegroundColor Cyan
 $iscc = @(
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
