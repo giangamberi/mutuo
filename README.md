@@ -89,7 +89,7 @@ gets you the latest code.
 
 ### Option A — Windows installer (easiest)
 
-1. Download **`Mutuo-Setup-1.0.0.exe`** from the
+1. Download **`Mutuo-Setup-0.7.0.exe`** from the
    [releases](https://github.com/giangamberi/mutuo/releases) page.
 2. Run it — it installs to `Program Files\Mutuo` and creates Start Menu +
    desktop shortcuts.

@@ -8,7 +8,7 @@
 ; it lives in %APPDATA%\Mutuo, so updates never touch it.
 
 #define MyAppName "Mutuo"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "0.7.0"
 #define MyAppPublisher "Mutuo"
 #define MyAppExeName "Mutuo.exe"
 
