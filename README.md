@@ -98,6 +98,28 @@ gets you the latest code.
 No Python, no command line. Your data lives in `%APPDATA%\Mutuo`, so
 updates never touch it.
 
+### Option C — Linux / macOS (portable bundle)
+
+Download the bundle for your platform from the
+[releases](https://github.com/giangamberi/mutuo/releases) page, unpack it,
+and run the `Mutuo` binary:
+
+```bash
+# Linux
+tar xzf Mutuo-0.7.0-linux-x86_64.tar.gz
+./Mutuo/Mutuo
+
+# macOS
+unzip Mutuo-0.7.0-macos-arm64.zip
+open dist/Mutuo/Mutuo.app
+```
+
+- **Linux** needs the WebKit2GTK runtime for the window: `sudo apt install
+  gir1.2-webkit2-4.1` (Debian/Ubuntu) or `sudo dnf install WebKit2GTK4`
+  (Fedora).
+- **macOS** uses the system WebView — no extra deps. The app is unsigned,
+  so the first launch needs a right-click → Open.
+
 ### Option B — From source
 
 You need **Python 3.10–3.13** (3.14 has no `libtorrent` Windows wheel) and,
@@ -182,6 +204,8 @@ installer. **Full guide with a complete example: [`plugins/README.md`](plugins/R
 
 ### Building the installer yourself
 
+**Windows:**
+
 ```powershell
 .\build_installer.ps1
 ```
@@ -192,6 +216,11 @@ installer. **Full guide with a complete example: [`plugins/README.md`](plugins/R
 
 Prereqs: PyInstaller in the venv (`pip install pyinstaller`) and Inno Setup
 6 (`winget install JRSoftware.InnoSetup`).
+
+**Linux / macOS:** `./build_bundle.sh` — must run on the target platform
+(PyInstaller can't cross-compile). The GitHub Actions workflow
+(`.github/workflows/release.yml`) builds all three platforms and attaches
+them to the release when you push a `v*` tag.
 
 ## Test
 

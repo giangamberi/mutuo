@@ -1,0 +1,98 @@
+name: Release
+
+# Builds all three platforms and, on a v* tag push, attaches them to the
+# GitHub release. Manual runs (workflow_dispatch) just produce artifacts.
+# PyInstaller cannot cross-compile, so each platform builds on its own runner.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install -r requirements.txt pyinstaller
+      - name: Build bundle + installer
+        shell: pwsh
+        run: .\build_installer.ps1
+      - name: Portable zip
+        shell: pwsh
+        run: |
+          $ver = python -c "import version; print(version.__version__)"
+          Compress-Archive -Path dist\Mutuo\* -DestinationPath "dist\Mutuo-$ver-win64.zip" -CompressionLevel Optimal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mutuo-windows
+          path: |
+            installer/output/Mutuo-Setup-*.exe
+            dist/Mutuo-*-win64.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build + package
+        run: ./build_bundle.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mutuo-linux
+          path: dist/Mutuo-*.tar.gz
+
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - { runs-on: macos-13, arch: x86_64 }
+          - { runs-on: macos-latest, arch: arm64 }
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build + package
+        run: ./build_bundle.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mutuo-macos-${{ matrix.arch }}
+          path: dist/Mutuo-*.zip
+
+  release:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/Mutuo-Setup-*.exe
+            artifacts/**/Mutuo-*-win64.zip
+            artifacts/**/Mutuo-*-linux-*.tar.gz
+            artifacts/**/Mutuo-*-macos-*.zip
+          body: |
+            Download the bundle for your platform. Your data lives in a
+            per-user folder, so updates never touch it.
+
+            - **Windows** — `Mutuo-Setup-*.exe` (installer) or `*-win64.zip`
+              (portable).
+            - **Linux** — `tar xzf Mutuo-*-linux-*.tar.gz` and run
+              `./Mutuo/Mutuo`. Needs the WebKit2GTK runtime (see README).
+            - **macOS** — unzip `Mutuo-*-macos-*.zip` and move `Mutuo.app`
+              to Applications. First launch: right-click → Open (the app is
+              unsigned).

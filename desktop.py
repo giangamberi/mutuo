@@ -46,15 +46,23 @@ def _app_dir() -> Path:
 
 def _data_dir() -> Path:
     """Where mutable data (profiles/) lives. The frozen app points this at a
-    per-user location; a dev checkout uses the repo root."""
+    per-user, platform-appropriate location; a dev checkout uses the repo
+    root."""
     if FROZEN:
-        base = os.environ.get("APPDATA") or str(Path.home())
-        d = Path(base) / "Mutuo"
-        # one-time migration from the pre-rename data dir, so existing
-        # profiles carry over instead of starting empty
-        old = Path(base) / "SharedKnowledge"
-        if old.is_dir() and not d.exists():
-            old.rename(d)
+        if os.name == "nt":
+            base = Path(os.environ.get("APPDATA") or Path.home())
+            d = base / "Mutuo"
+            # one-time migration from the pre-rename data dir, so existing
+            # profiles carry over instead of starting empty
+            old = base / "SharedKnowledge"
+            if old.is_dir() and not d.exists():
+                old.rename(d)
+        elif sys.platform == "darwin":
+            d = Path.home() / "Library" / "Application Support" / "Mutuo"
+        else:
+            base = Path(os.environ.get("XDG_DATA_HOME")
+                        or (Path.home() / ".local" / "share"))
+            d = base / "Mutuo"
     else:
         d = Path(__file__).parent
     d.mkdir(parents=True, exist_ok=True)
@@ -111,6 +119,22 @@ def _log_path() -> Path:
 
 def _kill_port(port: int) -> None:
     """Best-effort: kill whatever is listening on ``port`` (a stale server)."""
+    if os.name != "nt":
+        # lsof is the portable way to find a port's owner on POSIX; if it's
+        # missing we just skip (a stale server then fails to bind and the
+        # new one reports it).
+        try:
+            out = subprocess.check_output(
+                ["lsof", "-ti", f"tcp:{port}"], text=True, errors="ignore")
+        except (OSError, subprocess.CalledProcessError):
+            return
+        for pid in out.split():
+            if pid.isdigit() and int(pid) != os.getpid():
+                try:
+                    os.kill(int(pid), 15)
+                except OSError:
+                    pass
+        return
     try:
         out = subprocess.check_output(
             ["netstat", "-ano", "-p", "tcp"], text=True, errors="ignore"
