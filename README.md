@@ -1,16 +1,18 @@
 # Mutuo
 
-> **Your team's shared bookshelf.** Paste a link, pick a book, start reading —
+> **Your personal bookshelf.** Paste a link, pick a book, start reading —
 > PDFs, papers, and web pages streamed straight from BitTorrent, all in one
 > native window.
 
-The name is Latin for *"I lend"*: the catalog is shared, the reading is yours.
-One app, one download pool — anything a person adds is available to everyone,
-while your shelf, favorites, and reading position stay personal.
+The name is Latin for *"I lend"* — the app lends you the book, page by page,
+straight from the torrent. One app, one download pool, entirely yours: your
+shelf, favorites, and reading position are all local to your machine.
 
 > **Want to try it?** No account, no database, no setup.
 > [Grab the Windows installer](#windows-installer) — or run
 > `python desktop.py` and you'll be reading in under a minute.
+
+[See the CHANGELOG](CHANGELOG.md) for the full release history.
 
 ## 🚀 Try it in 60 seconds
 
@@ -44,10 +46,57 @@ and you're back where you left off.
 - 🔌 **Extend it** — drop a `.py` file in `plugins/` and it becomes a new
   search tab (or one-shot fetch) — no restart, no build step.
 
-Intended for **content you are authorized to share** (your own PDFs, internal
-company documents, open-access material). Torrents are a transport for files
-you control; this is not a distribution service for third-party copyrighted
+Intended for **content you are authorized to access** — your own PDFs, your
+notes, and open-access material. Torrents are just a transport for files you
+control; this is not a distribution service for third-party copyrighted
 material.
+
+## Profiles
+
+A **profile** is a named, self-contained set of your data — your catalog,
+downloads, shelves, reading positions, favorites, and plugin settings. Use
+one per context (e.g. `work`, `personal`) and switch between them without
+touching your other shelf.
+
+- **Create** one on the profile picker at launch (a name, plus an optional
+  password).
+- **Switch** anytime from the **Switch profile** button in the header — the
+  current server stops and a fresh one starts for the chosen profile.
+- **Rename** a profile or change its password from **Settings → Edit
+  profile…**.
+- **Delete** one from the profile picker (the 🗑 next to its name).
+
+Profiles live on this machine only. A profile's optional password is hashed
+with PBKDF2-HMAC-SHA256 (per-profile salt) and gates selecting it — a
+convenience lock, not a security boundary.
+
+## Where your data lives
+
+Everything mutable is stored in a per-user data folder, separate from the
+app files, so updates never touch your library:
+
+| Platform    | Data folder |
+|-------------|-------------|
+| Windows     | `%APPDATA%\Mutuo` |
+| macOS       | `~/Library/Application Support/Mutuo` |
+| Linux       | `~/.local/share/Mutuo` |
+| From source | the repo root |
+
+Inside it, each profile is its own folder (`profiles/<name>/`) holding the
+JSON registries (`catalog.json`, `shelf.json`, `favorites.json`, …) and the
+downloaded content (`downloads/`, `.pdfs/`, `.texts/`, …). The shared,
+read-only app files (`static/`, `plugins/`) stay in the install folder.
+
+**Back up or move** your library by copying the data folder (or a single
+`profiles/<name>/` folder). **Reset** a profile by deleting its folder.
+
+## Privacy
+
+Mutuo is a local app. There is **no account, no telemetry, and no
+analytics** — nothing about what you read is recorded or sent anywhere. The
+only network traffic is the torrent traffic itself and the API calls your
+plugins make to their sources. The server binds to `127.0.0.1` and trusts
+the local user.
 
 ## How it works
 
@@ -98,7 +147,7 @@ gets you the latest code.
 No Python, no command line. Your data lives in `%APPDATA%\Mutuo`, so
 updates never touch it.
 
-### Option C — Linux / macOS (portable bundle)
+### Option B — Linux / macOS (portable bundle)
 
 Download the bundle for your platform from the
 [releases](https://github.com/giangamberi/mutuo/releases) page, unpack it,
@@ -120,7 +169,7 @@ open dist/Mutuo/Mutuo.app
 - **macOS** uses the system WebView — no extra deps. The app is unsigned,
   so the first launch needs a right-click → Open.
 
-### Option B — From source
+### Option C — From source
 
 You need **Python 3.10–3.13** (3.14 has no `libtorrent` Windows wheel) and,
 for the desktop window, the **WebView2 runtime** (preinstalled on Windows
@@ -166,7 +215,7 @@ The path may also be a URL; `POST /api/sync` fetches and merges it.
 
 The sidebar has one tab per **provider** — a named torrent list. The
 **Local** tab is the built-in catalog (`catalog.json` + `feed.json`).
-Click **+ provider** to add another (e.g. "Archive.org", "Company shares");
+Click **+ provider** to add another (e.g. "Archive.org", "My papers");
 each provider points at its own feed (a URL or local file in `feed.json`
 format) and gets its own tab.
 
@@ -255,17 +304,21 @@ python e2e_test.py
 
 ## Make it yours
 
-- **Add a provider** for your team's shared files — a feed URL or a local
+- **Add a provider** for your own collections — a feed URL or a local
   `feed.json`, and it gets its own tab.
 - **Write a plugin** — ~30 lines of Python (`search(query, config)`) and
   you have a live search tab with covers and settings.
-- **Share the installer** — one `.exe`, no Python needed on the target
-  machine; each person just picks their profile.
+- **Take it with you** — the portable bundle is a single folder; copy it to
+  another machine and your reading setup goes with it.
 
 Built with FastAPI, libtorrent, and a single-file front end. No database, no
 build step, no framework — just Python and a window.
 
+## License
+
+[MIT No Attribution](LICENSE) — use it, change it, and share it freely.
+
 ---
 
 **Ready to read?** Run `python desktop.py` — or grab the
-[Windows installer](#windows-installer) and share it with your team. 📖
+[Windows installer](#windows-installer) and start your shelf. 📖
