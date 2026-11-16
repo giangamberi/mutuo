@@ -159,11 +159,26 @@ format) and gets its own tab.
 
 ### Plugins
 
-A plugin is a `.py` file in `plugins/` defining `search(query, config)`
-(live search tab) and/or `fetch(query)` (one-shot run). Results are PDFs,
-torrents, or local files; a plugin can also supply cover images. Built-in
-plugins: `gutenberg.py`, `arxiv.py`, `google_books.py`, `openalex.py`.
-Personal plugins are gitignored and excluded from the installer.
+A plugin is a single `.py` file in `plugins/` — no restart, no build step.
+It can define:
+
+- **`search(query, config)`** — a *live* search. The plugin gets its own
+  searchable tab in the sidebar; results appear as you type.
+- **`fetch(query)`** — a *one-shot* run (the ▶ Run button) for sources that
+  aren't a live search.
+- **`covers(items)`** — optional cover images for the result list.
+- **`resolve(ids)`** — optional second stage for two-step sources (list
+  first, then fetch the actual PDFs).
+
+Each result is a dict: `{"name", "url"}` (a PDF to open), `{"name",
+"magnet"}` (a torrent to track), or `{"name", "path"}` (a local file), with
+an optional `"kind"` (`pdf`/`html`/`text`/`epub`) and `"meta"` subtitle.
+A `CONFIG` list exposes settings (sort, language, …) that the UI renders
+and passes back to `search()`.
+
+Built-in plugins: `gutenberg.py`, `arxiv.py`, `google_books.py`,
+`openalex.py`. Personal plugins are gitignored and excluded from the
+installer. **Full guide with a complete example: [`plugins/README.md`](plugins/README.md).**
 
 ### Building the installer yourself
 
