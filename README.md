@@ -14,10 +14,16 @@ while your shelf, favorites, and reading position stay personal.
 
 ## 🚀 Try it in 60 seconds
 
-1. **Install** — `pip install -r requirements.txt` (Python 3.10–3.13)
-2. **Launch** — `python desktop.py`, then pick a profile (or create one)
-3. **Read** — paste any PDF link in the header, or open the **arXiv**,
-   **Google Books**, **OpenAlex**, or **Gutenberg** tab, search, and click
+**Easiest:** download the
+[Windows installer](https://github.com/giangamberi/mutuo/releases), run it,
+launch Mutuo, pick a profile, and read.
+
+**From source:**
+
+1. `pip install -r requirements.txt` (Python 3.10–3.13)
+2. `python desktop.py`, then pick a profile (or create one)
+3. Paste any PDF link in the header, or open the **arXiv**, **Google Books**,
+   **OpenAlex**, or **Gutenberg** tab, search, and click
 
 That's the whole setup. Close the window and your place is saved; reopen it
 and you're back where you left off.
@@ -76,28 +82,42 @@ Browser (PDF.js)                      FastAPI (app.py)                 libtorren
   My Shelf / Plugins / Settings), a provider tab bar + file browser, and
   the readers. No build step, no framework.
 
-## Install
+## 📦 Installation
+
+Pick whichever fits — the installer is the easiest; building from source
+gets you the latest code.
+
+### Option A — Windows installer (easiest)
+
+1. Download **`Mutuo-Setup-1.0.0.exe`** from the
+   [releases](https://github.com/giangamberi/mutuo/releases) page.
+2. Run it — it installs to `Program Files\Mutuo` and creates Start Menu +
+   desktop shortcuts.
+3. Launch **Mutuo**, pick (or create) a profile, and start reading.
+
+No Python, no command line. Your data lives in `%APPDATA%\Mutuo`, so
+updates never touch it.
+
+### Option B — From source
+
+You need **Python 3.10–3.13** (3.14 has no `libtorrent` Windows wheel) and,
+for the desktop window, the **WebView2 runtime** (preinstalled on Windows
+10/11).
 
 ```bash
+git clone https://github.com/giangamberi/mutuo.git
+cd mutuo
+python -m venv .venv
+.venv\Scripts\activate          # Windows (PowerShell)
+# source .venv/bin/activate     # macOS / Linux
 pip install -r requirements.txt
-```
-
-Needs Python 3.10–3.13 (`libtorrent` has no 3.14 Windows wheel). The desktop
-shell uses the system WebView2 runtime, which is preinstalled on Windows
-10/11.
-
-## Run
-
-**Desktop app (recommended):**
-
-```bash
 python desktop.py
 ```
 
-Pick (or create) a profile; the window opens the app for that profile.
-Closing the window stops the server.
+Pick (or create) a profile; the window opens the app. Closing the window
+stops the server.
 
-**Plain web server (no window):**
+**Prefer a plain browser tab?** Skip the window and run the server directly:
 
 ```bash
 python -m uvicorn app:app --host 127.0.0.1 --port 8080
@@ -145,7 +165,7 @@ torrents, or local files; a plugin can also supply cover images. Built-in
 plugins: `gutenberg.py`, `arxiv.py`, `google_books.py`, `openalex.py`.
 Personal plugins are gitignored and excluded from the installer.
 
-## Windows installer
+### Building the installer yourself
 
 ```powershell
 .\build_installer.ps1
@@ -155,9 +175,8 @@ Personal plugins are gitignored and excluded from the installer.
    plugins are bundled.
 2. Inno Setup packages it into `installer\output\Mutuo-Setup-<ver>.exe`.
 
-Prereqs: PyInstaller in the venv, Inno Setup 6
-(`winget install JRSoftware.InnoSetup`). User data lives in
-`%APPDATA%\Mutuo`, so updates never touch it.
+Prereqs: PyInstaller in the venv (`pip install pyinstaller`) and Inno Setup
+6 (`winget install JRSoftware.InnoSetup`).
 
 ## Test
 
