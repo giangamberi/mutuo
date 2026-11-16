@@ -1,19 +1,18 @@
 # Mutuo
 
-**A shared reading library for your team.** One app, one download pool:
-paste a link, pick a book, start reading. Mutuo streams PDFs straight from
-BitTorrent — only the pages you actually look at — and reads PDF, plain
-text, EPUB, and web pages in a native desktop window. Your shelf, favorites,
-and reading position are saved per person; the books are shared, so anything
-one person adds is available to everyone.
+> **Your team's shared bookshelf.** Paste a link, pick a book, start reading —
+> PDFs, papers, and web pages streamed straight from BitTorrent, all in one
+> native window.
 
 The name is Latin for *"I lend"*: the catalog is shared, the reading is yours.
+One app, one download pool — anything a person adds is available to everyone,
+while your shelf, favorites, and reading position stay personal.
 
-> **Want to try it?** No account, no database, no setup —
-> [grab the Windows installer](#windows-installer), or run
+> **Want to try it?** No account, no database, no setup.
+> [Grab the Windows installer](#windows-installer) — or run
 > `python desktop.py` and you'll be reading in under a minute.
 
-## Try it in 60 seconds
+## 🚀 Try it in 60 seconds
 
 1. **Install** — `pip install -r requirements.txt` (Python 3.10–3.13)
 2. **Launch** — `python desktop.py`, then pick a profile (or create one)
@@ -23,20 +22,21 @@ The name is Latin for *"I lend"*: the catalog is shared, the reading is yours.
 That's the whole setup. Close the window and your place is saved; reopen it
 and you're back where you left off.
 
-## What you can do
+## ✨ What you can do
 
-- **Paste a link** — any `https://…pdf` URL (or `magnet:` URI) in the header
-  becomes a book, streamed page by page.
-- **Search open knowledge** — built-in tabs for arXiv papers, Google Books,
-  OpenAlex works, and Project Gutenberg, with covers and one-click reading.
-- **Read anything** — PDF (PDF.js), plain text, EPUB (epub.js), or web pages,
-  all in the same window, with font/theme/spacing controls for text.
-- **Build a shelf** — To Read / Reading / Complete, tags, favorites, and
+- 🔗 **Paste a link** — any `https://…pdf` URL (or `magnet:` URI) in the
+  header becomes a book, streamed page by page.
+- 🔎 **Search open knowledge** — built-in tabs for arXiv papers, Google
+  Books, OpenAlex works, and Project Gutenberg, with covers and one-click
+  reading.
+- 📖 **Read anything** — PDF (PDF.js), plain text, EPUB (epub.js), or web
+  pages, all in the same window, with font/theme/spacing controls for text.
+- 📚 **Build a shelf** — To Read / Reading / Complete, tags, favorites, and
   reading-position restore (PDF page, text scroll %, EPUB location).
-- **Save for offline** — any text, EPUB, or web page can be saved to disk
+- 💾 **Save for offline** — any text, EPUB, or web page can be saved to disk
   and read without a connection.
-- **Extend it** — drop a `.py` file in `plugins/` and it becomes a new search
-  tab (or one-shot fetch) — no restart, no build step.
+- 🔌 **Extend it** — drop a `.py` file in `plugins/` and it becomes a new
+  search tab (or one-shot fetch) — no restart, no build step.
 
 Intended for **content you are authorized to share** (your own PDFs, internal
 company documents, open-access material). Torrents are a transport for files
@@ -201,3 +201,8 @@ python e2e_test.py
 
 Built with FastAPI, libtorrent, and a single-file front end. No database, no
 build step, no framework — just Python and a window.
+
+---
+
+**Ready to read?** Run `python desktop.py` — or grab the
+[Windows installer](#windows-installer) and share it with your team. 📖
