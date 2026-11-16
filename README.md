@@ -302,6 +302,15 @@ python e2e_test.py
 - **Disk.** Verified files accumulate under `downloads/`. Delete old
   info-hash dirs to reclaim space.
 
+## Legal
+
+Mutuo is a **neutral torrent client and reader**. It does not host, index,
+search for, or distribute any content — it only reads files you point it at.
+You are solely responsible for what you download and for having the legal
+right to access it (e.g. your own documents, public-domain works,
+Creative-Commons material). Use it in accordance with the laws that apply to
+you.
+
 ## Make it yours
 
 - **Add a provider** for your own collections — a feed URL or a local

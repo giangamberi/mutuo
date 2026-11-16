@@ -1,27 +1,30 @@
-# PDF Torrent Reader — Copilot Instructions
+# Mutuo — Copilot Instructions
 
-You are working on a small web app that reads PDFs streamed directly from a
-BitTorrent download. No database. It is currently single-user and bound to
-localhost; a login / multi-user layer is **planned but not yet implemented** —
-see "Planned: login & multi-user" below before touching anything auth-related.
+You are working on **Mutuo**, a single-user desktop app that reads PDFs
+streamed directly from a BitTorrent download. No database. It is wrapped in a
+`pywebview` window with local **profiles** and binds to `127.0.0.1`. A login /
+multi-user layer is **planned but not yet implemented** — see "Planned: login
+& multi-user" below before touching anything auth-related.
 
 ## Architecture (read first)
 
 | File | Role |
 |------|------|
-| `app.py` | FastAPI entry point. REST API + static front end + PDF Range streaming. |
+| `app.py` | FastAPI entry point. REST API + static front end + PDF Range streaming. All mutable data is scoped to the active profile. |
+| `desktop.py` | pywebview shell. Profile picker, spawns the server scoped to a profile, startup update check. |
+| `profiles.py` | Local profiles: registry (`profiles.json`) + per-profile data dirs. Optional PBKDF2 password per profile. |
 | `torrent_engine.py` | Background thread wrapping a `libtorrent.session`. In-memory download state. |
-| `catalog.py` | JSON-file-backed torrent catalog (`catalog.json`). Source of truth for *what* to track. |
-| `feed.json` | Input list of magnet URIs to sync into the catalog. |
+| `catalog.py` | JSON-file-backed torrent catalog (`catalog.json`) + providers (`providers.json`). Source of truth for *what* to track. |
+| `feed.json` | Input list of magnet URIs to sync into the catalog (per profile). |
 | `catalog.json` | Persisted catalog. Created/updated at runtime — do not hand-edit. |
-| `static/index.html` | Single-page front end (torrent list, file list, PDF.js viewer, drag-and-drop, plugins tab). |
-| `static/pdfjs-dist/build/` | Bundled PDF.js 3.x (minified). Served locally, no CDN dependency. |
+| `static/index.html` | Single-page front end (rail, provider tabs, file list, PDF.js/text/EPUB/HTML readers, drag-and-drop, plugins tab). |
+| `static/profiles.html` | The profile picker shown at launch. |
+| `static/pdfjs-dist/` | Bundled PDF.js 3.x (minified). Served locally, no CDN dependency. |
 | `plugin_loader.py` | Discovers/runs plugins (`.py` files in `plugins/`). Loaded on demand, never at startup. |
 | `plugins/` | User plugins. Each is a `.py` file defining `search(query, config)` and/or `fetch(query)`. |
 | `plugin_state.json` | Per-plugin active flag + config. Runtime state — do not hand-edit. |
-| `e2e_test.py` | Self-contained test. Part A = deterministic HTTP range checks. Part B = cross-process DHT download (best-effort, may skip). |
-| `make_test_torrent.py` | Creates a `.torrent` file for a given PDF so you can seed locally. |
-| `seeder_linux.py` / `seeder_macos.py` | Standalone seeders for testing (Linux / macOS). |
+| `version.py` | Single source of truth for the app version (`__version__`). |
+| `e2e_test.py` | Self-contained test. A + C = deterministic HTTP range checks. B = cross-session DHT download (best-effort, may skip). |
 | `.torrents/` | Runtime directory. Stores copies of dropped `.torrent` files (auto-created). |
 
 ## Key invariants
@@ -37,9 +40,12 @@ see "Planned: login & multi-user" below before touching anything auth-related.
 - **PDFs are served via HTTP Range requests.** The `GET /api/pdf?ih=<info_hash>&f=<file_index>`
   endpoint handles `Range` headers manually (PDF.js depends on this). Do not
   replace it with `FileResponse` unless you verify PDF.js still works.
-- **Bind to `127.0.0.1` only.** The app is single-user today. Multi-user
-  support is planned (see "Planned: login & multi-user") but not built — do
-  not start implementing it unless explicitly asked.
+- **Bind to `127.0.0.1` only.** The app is single-user. Multi-user support is
+  planned (see "Planned: login & multi-user") but not built — do not start
+  implementing it unless explicitly asked.
+- **Profiles scope all mutable data.** `app.py` and `profiles.py` read
+  `PTR_PROFILE` / `PTR_DATA_DIR` at import time. New per-user state belongs
+  under `profiles/<name>/`, not the repo root.
 
 ## Plugins (custom behaviours)
 
@@ -59,11 +65,12 @@ Each returned item is one of:
 - `{"name", "magnet"}` — a torrent to track (added to the catalog + session)
 - `{"name", "path"}` — a local PDF to read in place
 
-An item may also carry a `"meta"` string shown as a subtitle line. A plugin may
-define `CONFIG = [ {"key","label","type","default","options"}, ... ]` to expose
-settings (e.g. sort order, language, topic) that the UI renders and passes to
-`search()` as the `config` dict. `type` is `"select"` (with `options`) or
-`"text"`.
+An item may also carry a `"meta"` string shown as a subtitle line, a `"kind"`
+(`pdf`/`html`/`text`/`epub`), or a `"resolve_id"` for two-stage sources. A
+plugin may define `CONFIG = [ {"key","label","type","default","options"}, ... ]`
+to expose settings (e.g. sort order, language, topic) that the UI renders and
+passes to `search()` as the `config` dict. `type` is `"select"` (with
+`options`) or `"text"`.
 
 How it fits the existing layers:
 - **Active toggle:** the `🔌 Plugins` tab has an **Active** checkbox per plugin
@@ -109,34 +116,36 @@ How it fits the existing layers:
 2. If it changes the catalog schema, update `catalog.py` (`add()`/`items()`/
    `sync()`) and the API endpoints that read it.
 3. If it changes the engine, make sure the `TorrentState` dataclass is updated
-   and `torrents()` snapshot includes the new field.
+   and the `status()` snapshot includes the new field.
 4. If it touches the front end, edit `static/index.html` directly. The
    `refresh()` function is the single polling loop and the place where catalog
    entries are joined to engine state — add new DOM updates there.
-5. Run `python3 e2e_test.py` (Part A at minimum) before committing.
+5. Run `python e2e_test.py` (Test A at minimum) before committing.
 
 ## Testing
 
 ```bash
 # Deterministic HTTP range + catalog tests (no network needed):
-python3 e2e_test.py
-
-# Full e2e including real DHT download (needs DHT access, may skip):
-python3 e2e_test.py
+python e2e_test.py
 ```
 
-Both run in a single process. Test A pre-places the synthetic PDF where the
-engine expects it (so it *verifies* rather than downloads) and drives the app
-via FastAPI's `TestClient`, checking 206/200/416 and the catalog endpoints.
-Test B does a real magnet download across two in-process libtorrent sessions
-(a seeder + a client engine) on localhost; it's best-effort and prints
-`SKIPPED (no peers ...)` if DHT is blocked — that is not a failure. On success
-it prints `ALL E2E TESTS PASSED`.
+All tests run in a single process. Test A pre-places the synthetic PDF where
+the engine expects it (so it *verifies* rather than downloads) and drives the
+app via FastAPI's `TestClient`, checking 206/200/416 and the catalog
+endpoints. Test C proves a present range is served immediately while a missing
+range blocks and times out. Test B does a real magnet download across two
+in-process libtorrent sessions (a seeder + a client engine) on localhost;
+it's best-effort and prints `SKIPPED (no peers ...)` if DHT is blocked — that
+is not a failure. On success it prints `ALL E2E TESTS PASSED`.
 
 ## Running
 
 ```bash
-python3 -m uvicorn app:app --host 127.0.0.1 --port 8080
+# Desktop shell (profile picker + native window):
+python desktop.py
+
+# Or the server directly (plain browser tab):
+python -m uvicorn app:app --host 127.0.0.1 --port 8080
 # → http://127.0.0.1:8080
 ```
 
@@ -181,35 +190,47 @@ Do not implement it unless explicitly asked.
   it is planned (see above) but deferred.
 - Do not switch the front end to a build tool or framework.
 - Do not change the bind address from `127.0.0.1`.
-- Do not commit `catalog.json`, `plugin_state.json`, or contents of `.torrents/`
-  — they are runtime state. `catalog.json` and `plugin_state.json` are
-  gitignored; `.torrents/` is not in `.gitignore` but is empty at rest (only
-  populated after a file drop). `feed.json` IS tracked — it's a template (empty
-  list). If you add magnets to it for local testing, revert before committing.
+- Do not commit `catalog.json`, `plugin_state.json`, `profiles/`, or contents
+  of `.torrents/` — they are runtime state. `catalog.json`, `plugin_state.json`,
+  and `profiles/` are gitignored; `.torrents/` is not in `.gitignore` but is
+  empty at rest (only populated after a file drop). `feed.json` IS tracked —
+  it's a template (empty list). If you add magnets to it for local testing,
+  revert before committing.
 
 ## File structure
 
 ```
-pdf-torrent-reader/
+mutuo/
 ├── .github/
 │   ├── copilot-instructions.md   ← you are here
-│   └── project-context.md
+│   ├── project-context.md
+│   └── workflows/release.yml     # multi-platform build + release
 ├── .torrents/                    # runtime (not gitignored, empty at rest)
 ├── static/
-│   └── index.html                # front end (single file, no build)
+│   ├── index.html                # front end (single file, no build)
+│   ├── profiles.html             # profile picker
+│   └── pdfjs-dist/               # bundled PDF.js 3.x
 ├── app.py                        # FastAPI + REST API + PDF streaming
+├── desktop.py                    # pywebview shell + profile picker + update check
+├── profiles.py                   # local profiles (registry + per-profile data)
 ├── torrent_engine.py             # libtorrent session in a thread
-├── catalog.py                    # JSON catalog (persistence)
+├── catalog.py                    # JSON catalog + providers (persistence)
 ├── plugin_loader.py              # plugin discovery + runner
 ├── plugins/                      # user plugins (search(query, config) / fetch(query))
-│   └── gutenberg.py              # example: live search of Project Gutenberg
+│   ├── README.md                 # plugin authoring guide
+│   ├── gutenberg.py              # live search of Project Gutenberg
+│   ├── arxiv.py
+│   ├── google_books.py
+│   └── openalex.py
 ├── plugin_state.json             # runtime: per-plugin active flag + config
-├── feed.json                     # input magnet list
+├── feed.json                     # input magnet list (template)
 ├── catalog.json                  # runtime catalog (gitignored)
-├── make_test_torrent.py          # test torrent generator
-├── seeder_linux.py               # test seeder (Linux)
-├── seeder_macos.py               # test seeder (macOS)
+├── version.py                    # __version__ (single source of truth)
 ├── e2e_test.py                   # self-contained test
+├── Mutuo.spec                    # PyInstaller spec (onedir)
+├── build_installer.ps1           # Windows installer build
+├── build_bundle.sh               # Linux/macOS bundle build
+├── installer/Mutuo.iss           # Inno Setup script
 ├── requirements.txt
 └── README.md
 ```
