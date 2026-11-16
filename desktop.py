@@ -14,7 +14,7 @@ Run with:  python desktop.py
 
 Frozen (PyInstaller) build: the same exe is re-spawned as the server via
 ``--server <profile>``; all mutable data lives in PTR_DATA_DIR (set below to
-%APPDATA%/SharedKnowledge) so the install dir stays read-only.
+%APPDATA%/Mutuo) so the install dir stays read-only.
 """
 from __future__ import annotations
 
@@ -46,7 +46,12 @@ def _data_dir() -> Path:
     per-user location; a dev checkout uses the repo root."""
     if FROZEN:
         base = os.environ.get("APPDATA") or str(Path.home())
-        d = Path(base) / "SharedKnowledge"
+        d = Path(base) / "Mutuo"
+        # one-time migration from the pre-rename data dir, so existing
+        # profiles carry over instead of starting empty
+        old = Path(base) / "SharedKnowledge"
+        if old.is_dir() and not d.exists():
+            old.rename(d)
     else:
         d = Path(__file__).parent
     d.mkdir(parents=True, exist_ok=True)
@@ -297,7 +302,7 @@ def main() -> None:
 
     api = ProfileAPI(window=None)  # window set below once it exists
     window = webview.create_window(
-        "Shared Knowledge",
+        "Mutuo",
         PROFILES_URL,
         width=1100,
         height=760,

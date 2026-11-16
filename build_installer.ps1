@@ -1,7 +1,7 @@
-# Builds the Shared Knowledge Windows installer.
+# Builds the Mutuo Windows installer.
 #
-#   1. PyInstaller  -> dist\SharedKnowledge\  (onedir bundle)
-#   2. Inno Setup   -> installer\output\SharedKnowledge-Setup-<ver>.exe
+#   1. PyInstaller  -> dist\Mutuo\  (onedir bundle)
+#   2. Inno Setup   -> installer\output\Mutuo-Setup-<ver>.exe
 #
 # Usage:  .\build_installer.ps1
 #
@@ -22,10 +22,10 @@ $ErrorActionPreference = "Continue"
 
 # --- 1. PyInstaller ---------------------------------------------------------
 Write-Host "==> PyInstaller build" -ForegroundColor Cyan
-& $py -m PyInstaller SharedKnowledge.spec --noconfirm --clean 2>&1 | Out-Host
+& $py -m PyInstaller Mutuo.spec --noconfirm --clean 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
-$bundle = Join-Path $root "dist\SharedKnowledge"
-if (-not (Test-Path (Join-Path $bundle "SharedKnowledge.exe"))) {
+$bundle = Join-Path $root "dist\Mutuo"
+if (-not (Test-Path (Join-Path $bundle "Mutuo.exe"))) {
     throw "bundle exe missing: $bundle"
 }
 
@@ -38,10 +38,10 @@ $iscc = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw "ISCC.exe not found - install Inno Setup 6 first" }
 
-& $iscc (Join-Path $root "installer\SharedKnowledge.iss") 2>&1 | Out-Host
+& $iscc (Join-Path $root "installer\Mutuo.iss") 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
-$setup = Get-ChildItem (Join-Path $root "installer\output") -Filter "SharedKnowledge-Setup-*.exe" |
+$setup = Get-ChildItem (Join-Path $root "installer\output") -Filter "Mutuo-Setup-*.exe" |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 Write-Host ""
 Write-Host "Installer ready: $($setup.FullName)" -ForegroundColor Green

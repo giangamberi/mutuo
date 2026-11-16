@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for the Shared Knowledge desktop app.
+"""PyInstaller spec for the Mutuo desktop app.
 
-Builds a onedir bundle (dist/SharedKnowledge/SharedKnowledge.exe) that
+Builds a onedir bundle (dist/Mutuo/Mutuo.exe) that
 contains:
   - the GUI (desktop.py) and the FastAPI server (app.py) — the same exe is
     re-spawned with ``--server <profile>`` to run the server,
@@ -13,9 +13,9 @@ onedir (not onefile) on purpose: the server subprocess re-spawns the exe, and
 onefile would re-extract the whole bundle to temp on every launch.
 
 Mutable data (profiles/) is NOT bundled — at runtime it lives in
-%APPDATA%/SharedKnowledge (see desktop.py _data_dir()).
+%APPDATA%/Mutuo (see desktop.py _data_dir()).
 
-Build:  pyinstaller SharedKnowledge.spec --noconfirm
+Build:  pyinstaller Mutuo.spec --noconfirm
 """
 import subprocess
 from pathlib import Path
@@ -96,7 +96,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="SharedKnowledge",
+    name="Mutuo",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -116,5 +116,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="SharedKnowledge",
+    name="Mutuo",
 )
