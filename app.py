@@ -35,6 +35,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import opds
 import plugin_loader
 import profiles
 from catalog import Catalog, ProviderCatalog
@@ -626,6 +627,115 @@ def browse_folder() -> JSONResponse:
     finally:
         root.destroy()
     return JSONResponse({"path": path})
+
+
+# ---------- OPDS catalogs ----------
+# An OPDS feed (Atom 1.0 or OPDS 2.0 JSON) is browsed live: the feed is
+# fetched and parsed on demand (opds.py), and opening a book reuses the
+# existing per-format save/open flows (pdf/epub/text/file). Catalogs are
+# persisted per profile in opds_catalogs.json.
+
+OPDS_CATALOGS = PROFILE_DIR / "opds_catalogs.json"
+
+
+def _load_opds_catalogs() -> dict:
+    try:
+        return json.loads(OPDS_CATALOGS.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_opds_catalogs(reg: dict) -> None:
+    tmp = OPDS_CATALOGS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(reg, indent=2), encoding="utf-8")
+    tmp.replace(OPDS_CATALOGS)
+
+
+class OpdsCatalogRequest(BaseModel):
+    name: str
+    url: str
+
+
+@app.get("/api/opds/catalogs")
+def list_opds_catalogs() -> JSONResponse:
+    return JSONResponse([
+        {"id": cid, "name": m["name"], "url": m["url"]}
+        for cid, m in _load_opds_catalogs().items()
+    ])
+
+
+@app.post("/api/opds/catalogs")
+def add_opds_catalog(req: OpdsCatalogRequest) -> JSONResponse:
+    """Add a catalog after verifying its root feed actually parses."""
+    name = req.name.strip() or "Catalog"
+    url = req.url.strip()
+    try:
+        feed = opds.fetch_feed(url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    reg = _load_opds_catalogs()
+    cid = uuid.uuid4().hex
+    reg[cid] = {"name": name, "url": url, "added_at": time.time()}
+    _save_opds_catalogs(reg)
+    return JSONResponse({"ok": True, "id": cid, "title": feed["title"]})
+
+
+@app.delete("/api/opds/catalogs/{cid}")
+def delete_opds_catalog(cid: str) -> JSONResponse:
+    reg = _load_opds_catalogs()
+    if cid not in reg:
+        raise HTTPException(404, "catalog not found")
+    del reg[cid]
+    _save_opds_catalogs(reg)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/opds/browse")
+def opds_browse(url: str) -> JSONResponse:
+    """Fetch + parse one feed page. Entries keep their acquisition link so
+    the UI can open/save them; navigation links (rel != alternate) are
+    returned as `nav` for the breadcrumb trail."""
+    try:
+        feed = opds.fetch_feed(url)
+    except ValueError as exc:
+        raise HTTPException(502, str(exc))
+    return JSONResponse({"title": feed["title"], "url": url,
+                         "next": feed.get("next", ""), "entries": feed["entries"]})
+
+
+class OpdsSaveRequest(BaseModel):
+    url: str
+    name: str = ""
+    kind: str = "pdf"
+
+
+@app.post("/api/opds/save")
+def opds_save(req: OpdsSaveRequest) -> JSONResponse:
+    """Save a feed entry's file with the matching per-format flow and return
+    the id the UI opens it with. Deduped by URL, like the other saves."""
+    url = req.url.strip()
+    name = req.name.strip() or url.rsplit("/", 1)[-1].split("?")[0] or "document"
+    provider = "opds"
+    try:
+        if req.kind == "pdf":
+            entry = _download_pdf(url, name, provider)
+            return JSONResponse({"ok": True, "kind": "pdf", "id":
+                                 next(k for k, m in _load_pdfs().items()
+                                      if m.get("url") == url)})
+        if req.kind == "epub":
+            r = save_epub(SaveEpubRequest(url=url, name=name, provider=provider))
+        elif req.kind == "text":
+            r = save_text(SaveTextRequest(url=url, name=name, provider=provider))
+        else:
+            r = save_file(SaveFileRequest(url=url, name=name, provider=provider,
+                                          kind=req.kind))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"could not fetch {req.kind}: {exc}")
+    # the per-format save endpoints return a JSONResponse; pull the id out
+    return JSONResponse({"ok": True, "kind": req.kind, "id":
+                         json.loads(r.body)["id"]})
 
 
 # ---------- plugins ----------

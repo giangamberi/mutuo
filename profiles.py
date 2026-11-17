@@ -37,7 +37,7 @@ PROFILES_DIR = DATA_DIR / "profiles"
 PROFILE_FILES = [
     "catalog.json", "providers.json", "pdfs.json", "texts.json", "epubs.json",
     "files.json", "favorites.json", "shelf.json", "recent.json",
-    "plugin_state.json", "feed.json",
+    "plugin_state.json", "opds_catalogs.json", "feed.json",
 ]
 PROFILE_DIRS = [".torrents", ".pdfs", ".texts", ".epubs", ".files", "downloads"]
 

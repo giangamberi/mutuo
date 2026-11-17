@@ -585,6 +585,36 @@
   #catalog .plugin-item .cogwrap .menu { top:calc(100% + 4px); left:0; right:auto; }
   #catalog .plugin-empty { color:var(--dim); font-size:calc(13px * var(--app-text-scale)); padding:16px 14px; }
   #catalog .plugin-subhead { padding:10px 14px 4px; font-size:calc(10px * var(--app-text-scale)); color:var(--dim); text-transform:uppercase; letter-spacing:.5px; opacity:.8; }
+  /* Catalogs (OPDS) view */
+  #catalog .opds-crumb { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 14px; border-bottom:1px solid var(--border-strong); font-size:calc(12px * var(--app-text-scale)); }
+  #catalog .opds-crumb button { background:none; border:none; color:var(--acc); cursor:pointer; font-size:inherit; padding:2px 4px; border-radius:4px; }
+  #catalog .opds-crumb button:hover { background:var(--hover); }
+  #catalog .opds-crumb .sep { color:var(--dim); }
+  #catalog .opds-crumb .cur { color:var(--text); font-weight:600; }
+  #catalog .opds-item { display:flex; gap:10px; padding:8px 14px; border-bottom:1px solid var(--border-faint); cursor:pointer; align-items:flex-start; }
+  #catalog .opds-item:hover { background:var(--hover); }
+  #catalog .opds-item .cov { width:34px; height:48px; object-fit:cover; border-radius:3px; background:var(--input-bg); flex:0 0 auto; }
+  #catalog .opds-item .cov.ph { display:flex; align-items:center; justify-content:center; font-size:16px; color:var(--dim); }
+  #catalog .opds-item .body { flex:1; min-width:0; }
+  #catalog .opds-item .t { font-size:calc(13px * var(--app-text-scale)); overflow-wrap:anywhere; }
+  #catalog .opds-item .m { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  #catalog .opds-item .kind { font-size:calc(10px * var(--app-text-scale)); color:var(--dim); border:1px solid var(--border); border-radius:8px; padding:1px 7px; margin-left:6px; vertical-align:1px; }
+  #catalog .opds-item .acts { display:flex; gap:4px; flex:0 0 auto; }
+  #catalog .opds-item .acts button { background:var(--input-bg); border:1px solid var(--border); color:var(--dim); border-radius:6px; cursor:pointer; font-size:calc(12px * var(--app-text-scale)); padding:3px 7px; }
+  #catalog .opds-item .acts button:hover { border-color:var(--acc); color:var(--text); }
+  #catalog .opds-item.nav .t { color:var(--acc); }
+  #catalog .opds-more { display:block; width:100%; margin:8px 14px; padding:7px; background:var(--input-bg); border:1px solid var(--border); color:var(--acc); border-radius:8px; cursor:pointer; font-size:calc(12px * var(--app-text-scale)); }
+  #catalog .opds-more:hover { border-color:var(--acc); }
+  #catalog .opds-status { color:var(--dim); font-size:calc(12px * var(--app-text-scale)); padding:14px; }
+  #opds-add-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
+  #opds-add-modal.open { display:flex; }
+  #opds-add-modal .card { width:min(460px,92vw); background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px var(--shadow-strong); }
+  #opds-add-modal h2 { font-size:calc(15px * var(--app-text-scale)); margin:0 0 4px; }
+  #opds-add-modal .sub { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin:0 0 10px; line-height:1.5; }
+  #opds-add-modal label { display:block; font-size:calc(12px * var(--app-text-scale)); color:var(--dim); margin:10px 0 4px; }
+  #opds-add-modal input { width:100%; min-width:0; }
+  #opds-add-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  #opds-add-modal .err { color:var(--danger-fg); font-size:calc(12px * var(--app-text-scale)); min-height:1em; margin-top:8px; }
   /* plugin modals */
   #plugin-run-modal, #plugin-add-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
   #plugin-run-modal.open, #plugin-add-modal.open { display:flex; }
@@ -797,6 +827,21 @@
     </div>
   </div>
 </div>
+<div id="opds-add-modal">
+  <div class="card">
+    <h2>Add OPDS catalog</h2>
+    <p class="sub">An OPDS feed URL — the root of a book catalog (e.g. Standard Ebooks, Project Gutenberg, a library catalog). It's checked before saving.</p>
+    <label for="opds-add-name">Name</label>
+    <input id="opds-add-name" placeholder="e.g. Standard Ebooks" autocomplete="off" spellcheck="false">
+    <label for="opds-add-url">Feed URL</label>
+    <input id="opds-add-url" placeholder="https://…/opds" autocomplete="off" spellcheck="false">
+    <div class="err" id="opds-add-err"></div>
+    <div class="row">
+      <button type="button" id="opds-add-cancel">Cancel</button>
+      <button type="button" id="opds-add-save">Add</button>
+    </div>
+  </div>
+</div>
 <div id="profile-modal">
   <div class="card">
     <h2>Profile settings</h2>
@@ -987,6 +1032,8 @@ let shelfGroupExpanded = new Set(); // group names expanded in My Shelf
 let savedTexts = []; // [{id, name, size, url, provider}] — texts saved locally for offline reading
 let savedEpubs = []; // [{id, name, size, url, provider}] — EPUBs saved locally for offline reading
 let savedFiles = []; // [{id, name, size, url, provider, kind}] — html/mobi/file saved locally
+let opdsCatalogs = []; // [{id, name, url}] — saved OPDS catalogs
+let opdsBrowse = null; // {url, title, entries, next} — the feed page currently shown
 // metadata filters for local (non-live) providers: PDF fields + torrent state/size
 let localFilters = { author:'', subject:'', keywords:'', minPages:'', maxPages:'', state:'', minSize:'', maxSize:'' };
 // Polling state: the 4s tick only re-fetches torrents that can still change.
@@ -1046,6 +1093,7 @@ function renderAll(torrents) {
   pollPosition(); // persist the open book's reading position a few times a minute
   if (view === 'favorites') renderFavorites(torrents, directPdfs, byMagnet, provOf);
   else if (view === 'reading') renderReading(torrents, directPdfs, byMagnet, provOf);
+  else if (view === 'catalogs') renderCatalogsView();
   else if (view === 'plugins') renderPluginView(directPdfs, catalogData);
   else if (view === 'settings') renderSettingsView();
   else if (view === 'recent') renderRecent(torrents, byMagnet);
@@ -1070,6 +1118,7 @@ async function refresh() {
     savedTexts = await j('/api/texts').then(r => r.json());
     savedEpubs = await j('/api/epubs').then(r => r.json());
     savedFiles = await j('/api/files').then(r => r.json());
+    opdsCatalogs = await j('/api/opds/catalogs').then(r => r.json());
     recent = await j('/api/recent').then(r => r.json());
     dataLoaded = true;
     renderAll(torrents);
@@ -1756,6 +1805,7 @@ const RAIL_TABS = [
   { icon: '★', name: 'Favorites', label: 'Favorites — your starred documents', key: 'favorites' },
   { icon: '📖', name: 'My Shelf', label: 'My Shelf — your books: to read, in progress & complete', key: 'reading' },
   { icon: '🕘', name: 'Recent', label: 'Recent — books you opened lately', key: 'recent' },
+  { icon: '📡', name: 'Catalogs', label: 'Catalogs — browse OPDS book catalogs', key: 'catalogs' },
   { icon: '🧩', name: 'Plugins', label: 'Plugins — manage custom sources', key: 'plugins' },
   { icon: '⚙', name: 'Settings', label: 'Settings — reader, display, providers & plugins', key: 'settings' },
 ];
@@ -4180,6 +4230,201 @@ async function toggleExcluded(b) {
 
 // ---- plugins (custom behaviours that load books/PDFs) ----
 let runPluginId = null;
+
+// ---- Catalogs (OPDS): browse book catalogs, open or save their books ----
+// A catalog is a saved OPDS feed root. Browsing fetches one feed page at a
+// time (opdsBrowse holds the current page); entries are either navigation
+// links into sub-feeds or acquisition links to a file (epub/pdf/text/…).
+// Opening a book reuses the existing per-format readers; saving uses the
+// same per-format save flows (deduped by URL).
+const OPDS_KIND_ICON = { epub: '📕', pdf: '📄', text: '📝', html: '🌐', file: '📦' };
+
+function renderCatalogsView() {
+  document.getElementById('tabs').style.display = 'none';
+  document.getElementById('searchbar').style.display = 'none';
+  document.getElementById('hdrstat').textContent = opdsCatalogs.length ? `${opdsCatalogs.length} catalog(s)` : 'no catalogs';
+  const el = document.getElementById('catalog');
+  el.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'plugin-head';
+  head.innerHTML = `<h3>📡 Catalogs</h3><button type="button" id="opds-add-btn">+ catalog</button>`;
+  el.appendChild(head);
+  head.querySelector('#opds-add-btn').onclick = openOpdsAddModal;
+  if (!opdsCatalogs.length) {
+    const e = document.createElement('div');
+    e.className = 'plugin-empty';
+    e.textContent = 'No catalogs yet. Add an OPDS feed (e.g. Standard Ebooks: https://standardebooks.org/opds) to browse and read its books.';
+    el.appendChild(e);
+    return;
+  }
+  for (const c of opdsCatalogs) {
+    const item = document.createElement('div');
+    item.className = 'opds-item';
+    item.innerHTML = `<div class="cov ph">📡</div>
+      <div class="body"><div class="t">${esc(c.name)}</div><div class="m">${esc(c.url)}</div></div>
+      <div class="acts">
+        <button type="button" data-opdsdel="${esc(c.id)}" title="Remove catalog">🗑︎</button>
+      </div>`;
+    item.querySelector('[data-opdsdel]').onclick = (e) => { e.stopPropagation(); removeOpdsCatalog(c.id); };
+    item.onclick = () => browseOpds(c.url, c.name);
+    el.appendChild(item);
+  }
+  if (opdsBrowse) renderOpdsPage(el);
+}
+
+// show one fetched feed page: breadcrumb trail + entries + next-page button
+function renderOpdsPage(el) {
+  const b = opdsBrowse;
+  const crumb = document.createElement('div');
+  crumb.className = 'opds-crumb';
+  const root = opdsCatalogs.find(c => b.rootUrl === c.url);
+  const crumbBtn = (label, url) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.onclick = () => browseOpds(url, label);
+    return btn;
+  };
+  const sep = () => { const s = document.createElement('span'); s.className = 'sep'; s.textContent = '›'; return s; };
+  if (root) { crumb.appendChild(crumbBtn(root.name, root.url)); }
+  for (const step of (b.trail || [])) { crumb.appendChild(sep()); crumb.appendChild(crumbBtn(step.title, step.url)); }
+  if (b.trail && b.trail.length) crumb.appendChild(sep());
+  const cur = document.createElement('span');
+  cur.className = 'cur';
+  cur.textContent = b.title || '…';
+  crumb.appendChild(cur);
+  el.appendChild(crumb);
+
+  if (!b.entries.length) {
+    const e = document.createElement('div');
+    e.className = 'opds-status';
+    e.textContent = 'This feed has no entries.';
+    el.appendChild(e);
+  }
+  for (const it of b.entries) {
+    const row = document.createElement('div');
+    row.className = 'opds-item' + (it.nav ? ' nav' : '');
+    const cover = it.cover
+      ? `<img class="cov" src="${esc(it.cover)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;cov ph&quot;>📖</div>'">`
+      : `<div class="cov ph">${it.nav ? '📂' : (OPDS_KIND_ICON[it.kind] || '📖')}</div>`;
+    const meta = it.nav ? 'section'
+      : [it.author, it.summary].filter(Boolean).join(' — ').slice(0, 160);
+    row.innerHTML = `${cover}
+      <div class="body">
+        <div class="t">${esc(it.title)}${it.nav ? '' : `<span class="kind">${esc(it.kind)}</span>`}</div>
+        ${meta ? `<div class="m">${esc(meta)}</div>` : ''}
+      </div>
+      ${it.nav ? '' : `<div class="acts">
+        <button type="button" data-opdssave="${esc(it.url)}" data-opdsname="${esc(it.title)}" data-opdskind="${esc(it.kind)}" title="Save for offline reading">⬇</button>
+      </div>`}`;
+    if (it.nav) {
+      row.onclick = () => browseOpds(it.url, it.title, b);
+    } else {
+      row.onclick = () => openOpdsEntry(it);
+      row.querySelector('[data-opdssave]').onclick = (e) => { e.stopPropagation(); saveOpdsEntry(it); };
+    }
+    el.appendChild(row);
+  }
+  if (b.next) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'opds-more';
+    more.textContent = 'More…';
+    more.onclick = () => browseOpds(b.next, 'More', b);
+    el.appendChild(more);
+  }
+}
+
+// fetch one feed page and show it. `trail` is the breadcrumb path so far.
+async function browseOpds(url, title, from) {
+  const el = document.getElementById('catalog');
+  const status = document.createElement('div');
+  status.className = 'opds-status';
+  status.textContent = `loading ${title || 'feed'}…`;
+  el.appendChild(status);
+  try {
+    const d = await j(`/api/opds/browse?url=${encodeURIComponent(url)}`).then(r => r.json());
+    const rootUrl = (from && from.rootUrl) || (opdsCatalogs.find(c => c.url === url) || {}).url || url;
+    const trail = (from ? from.trail : []) || [];
+    if (from && from.title) trail.push({ title: from.title, url: from.url });
+    opdsBrowse = { url, title: d.title || title, entries: d.entries, next: d.next,
+                   rootUrl, trail };
+    renderCatalogsView();
+  } catch (e) {
+    status.textContent = `error: ${e.message}`;
+  }
+}
+
+// open a feed entry in the matching reader (saved first, deduped by URL)
+async function openOpdsEntry(it) {
+  const status = document.getElementById('hdrstat');
+  status.textContent = `opening ${it.title}…`;
+  try {
+    const r = await j('/api/opds/save', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: it.url, name: it.title, kind: it.kind }) }).then(r => r.json());
+    const key = 'opds:' + it.url;
+    if (r.kind === 'pdf') openDirectPdfById(r.id, it.title, key);
+    else if (r.kind === 'epub') openSavedEpub(r.id, it.title, key);
+    else if (r.kind === 'text') openSavedText(r.id, it.title, key);
+    else openHtmlResult(`/api/files/${r.id}`, it.title, key);
+  } catch (e) {
+    status.textContent = `error: ${e.message}`;
+  }
+}
+
+// save a feed entry for offline reading without opening it
+async function saveOpdsEntry(it) {
+  try {
+    await j('/api/opds/save', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: it.url, name: it.title, kind: it.kind }) });
+    toast(`saved ${it.title} for offline reading`);
+  } catch (e) {
+    toast(`save failed: ${e.message}`);
+  }
+}
+
+async function removeOpdsCatalog(cid) {
+  try {
+    await j(`/api/opds/catalogs/${cid}`, { method: 'DELETE' });
+    if (opdsBrowse && opdsBrowse.rootUrl === (opdsCatalogs.find(c => c.id === cid) || {}).url) opdsBrowse = null;
+    refresh();
+  } catch (e) { alert(e.message); }
+}
+
+function openOpdsAddModal() {
+  document.getElementById('opds-add-name').value = '';
+  document.getElementById('opds-add-url').value = '';
+  document.getElementById('opds-add-err').textContent = '';
+  document.getElementById('opds-add-modal').classList.add('open');
+  document.getElementById('opds-add-url').focus();
+}
+
+async function submitOpdsAdd() {
+  const name = document.getElementById('opds-add-name').value.trim();
+  const url = document.getElementById('opds-add-url').value.trim();
+  const err = document.getElementById('opds-add-err');
+  err.textContent = '';
+  if (!url) { err.textContent = 'a feed URL is required'; return; }
+  try {
+    await j('/api/opds/catalogs', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url }) });
+    document.getElementById('opds-add-modal').classList.remove('open');
+    refresh();
+  } catch (e) {
+    err.textContent = e.message;
+  }
+}
+
+(function () {
+  const modal = document.getElementById('opds-add-modal');
+  document.getElementById('opds-add-cancel').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('opds-add-save').addEventListener('click', submitOpdsAdd);
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+  document.getElementById('opds-add-url').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitOpdsAdd(); });
+})();
 
 function renderPluginView(directPdfs, catalog) {
   document.getElementById('tabs').style.display = 'none';
