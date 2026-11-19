@@ -26,9 +26,15 @@ OPDS = "{http://opds-spec.org/2010/catalog}"
 
 
 def _text(el, tag: str) -> str:
-    """First child's text, '' if absent."""
+    """First child's text, '' if absent. Falls back to itertext() for
+    XHTML-wrapped titles (e.g. <title type="text/xhtml"><div>..</div></title>)."""
     c = el.find(tag)
-    return (c.text or "").strip() if c is not None and c.text else ""
+    if c is None:
+        return ""
+    t = (c.text or "").strip()
+    if not t:
+        t = "".join(c.itertext()).strip()
+    return t
 
 
 def _resolve(base: str, url: str) -> str:
@@ -40,19 +46,34 @@ NAV_RELS = {"section", "http://opds-spec.org/section"}
 ACQ_RELS = {"http://opds-spec.org/acquisition", "acquisition"}
 
 
+def _is_feed_type(media_type: str) -> bool:
+    return media_type.endswith(("atom+xml", "json"))
+
+
+def _is_image_type(media_type: str) -> bool:
+    # covers/thumbnails are not readable files — never an acquisition
+    return media_type.startswith("image/")
+
+
 def _classify(links):
     """Split an entry's links into (navigation, acquisition).
 
     Navigation entries point at a sub-feed (rel="section"); acquisition
     entries point at the file itself. Non-standard feeds often put the file
     link on rel="alternate" with a document media type, so fall back to the
-    first link whose type is a document (not a feed)."""
+    first link whose type is a document (not a feed). Some feeds (e.g.
+    ManyBooks) mark navigation entries with rel="alternate" + a feed media
+    type instead of rel="section", so a feed-typed link is navigation too."""
     nav = next((l for l in links if l["rel"] in NAV_RELS), None)
+    if nav is None:
+        nav = next((l for l in links
+                    if l["type"] and _is_feed_type(l["type"])), None)
     acq = next((l for l in links if l["rel"] in ACQ_RELS), None)
     if not acq:
         acq = next((l for l in links
                     if l is not nav and l["type"]
-                    and not l["type"].endswith(("atom+xml", "json"))), None)
+                    and not _is_feed_type(l["type"])
+                    and not _is_image_type(l["type"])), None)
     return nav, acq
 
 
@@ -89,19 +110,31 @@ def _parse_atom(root, base: str) -> dict:
                 "href": _resolve(base, href),
             })
         nav, acq = _classify(links)
+        # cover: an <opds:image> element, else a thumbnail link (ManyBooks)
+        cover = ""
+        img = e.find(OPDS + "image")
+        if img is not None:
+            cover = _resolve(base, img.get("href", ""))
+        else:
+            thumb = next((l for l in links
+                          if l["rel"] == "http://opds-spec.org/thumbnail"
+                          or l["type"].startswith("image/")), None)
+            if thumb:
+                cover = thumb["href"]
         if nav and not acq:
-            # a navigation entry: a link into a sub-feed
-            entries.append({"title": _text(e, ATOM + "title") or nav.get("title") or "Section",
-                            "url": nav["href"], "nav": True})
+            # a navigation entry: a link into a sub-feed (may carry a cover,
+            # e.g. ManyBooks lists each book as a link to its detail page)
+            entries.append({
+                "title": _text(e, ATOM + "title") or nav.get("title") or "Section",
+                "author": _text(e, ATOM + "author/" + ATOM + "name"),
+                "summary": _text(e, ATOM + "summary") or _text(e, ATOM + "content"),
+                "url": nav["href"], "nav": True, "cover": cover,
+            })
             continue
         if not acq:
             continue
         author = _text(e, ATOM + "author/" + ATOM + "name")
         summary = _text(e, ATOM + "summary")
-        cover = ""
-        img = e.find(OPDS + "image")
-        if img is not None:
-            cover = _resolve(base, img.get("href", ""))
         entries.append({
             "title": _text(e, ATOM + "title") or acq.get("title") or "Untitled",
             "author": author,
@@ -161,17 +194,26 @@ def parse_feed(data: bytes, base_url: str) -> dict:
         doc = json.loads(data)
         parsed = _parse_json(doc, base_url)
         nxt = ""
+        search = ""
         for l in doc.get("metadata", {}).get("links", []):
             if l.get("rel") == "next" and l.get("url"):
-                nxt = _resolve(base_url, l["url"])
+                nxt = _resolve(base_url, l.get("url"))
+            elif l.get("rel") == "search" and l.get("url"):
+                search = _resolve(base_url, l.get("url"))
         parsed["next"] = nxt
+        parsed["search"] = search
         return parsed
     root = ET.fromstring(data)
     parsed = _parse_atom(root, base_url)
     parsed["next"] = ""
+    parsed["search"] = ""
     for l in root.findall(ATOM + "link"):
         if l.get("rel") == "next" and l.get("href"):
             parsed["next"] = _resolve(base_url, l.get("href"))
+        elif l.get("rel") == "search" and l.get("href"):
+            # a rel="search" link carries a {searchTerms} placeholder the UI
+            # fills in — this is what makes a real catalog search possible
+            parsed["search"] = _resolve(base_url, l.get("href"))
     return parsed
 
 

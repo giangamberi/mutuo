@@ -9,7 +9,26 @@ app as it stands today; earlier work is folded into it below.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-19
+
 ### Added
+- **OPDS catalog browsing** — add any OPDS feed (e.g. Standard Ebooks,
+  ManyBooks) as a catalog and browse its shelves and folders. `opds.py`
+  parses both Atom and OPDS 2.0 JSON feeds; books open in the in-site
+  readers (PDF, EPUB, text, HTML).
+- **Catalog search** — feeds that expose a `rel="search"` link get a real
+  search box (the `{searchTerms}` placeholder is filled in client-side);
+  results open in the in-site reader.
+- **Cross-provider search** — opening a book's detail page in a catalog
+  automatically searches your other providers for the same title; the
+  results render below the feed and open directly.
+- **Continue reading on launch** — the app reopens your last book at the
+  saved page (Settings → "Resume on launch", on by default).
+- **Global search** — the search box in the Library and Catalogs tabs
+  searches the whole library (torrents, direct PDFs, saved texts, EPUBs and
+  files) by name/title/author via `GET /api/search`, with an optional
+  full-text pass over saved text documents that returns a snippet.
+- **Clear all** button in the Recent tab (cached files are kept).
 - **Linux & macOS installers** — a GitHub Actions workflow
   (`.github/workflows/release.yml`) now builds all three platforms and
   attaches them to the release on a `v*` tag. `build_bundle.sh` packages the
@@ -20,6 +39,11 @@ app as it stands today; earlier work is folded into it below.
   API (entry points, result items, `CONFIG`, `covers()`, `resolve()`).
 
 ### Changed
+- **OPDS feed parsing hardened** — XHTML-wrapped titles, feed-typed
+  navigation links, and image-typed covers are now classified correctly;
+  covers come from `<opds:image>` or a thumbnail link.
+- **Catalog covers** — grid cards show covers, with a placeholder fallback
+  for 403/hanging cover URLs.
 - `desktop.py` is now cross-platform: the data dir is
   `~/Library/Application Support/Mutuo` on macOS and `~/.local/share/Mutuo`
   on Linux, and stale-port cleanup uses `lsof` on POSIX.

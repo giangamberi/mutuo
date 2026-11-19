@@ -700,7 +700,9 @@ def opds_browse(url: str) -> JSONResponse:
     except ValueError as exc:
         raise HTTPException(502, str(exc))
     return JSONResponse({"title": feed["title"], "url": url,
-                         "next": feed.get("next", ""), "entries": feed["entries"]})
+                         "next": feed.get("next", ""),
+                         "search": feed.get("search", ""),
+                         "entries": feed["entries"]})
 
 
 class OpdsSaveRequest(BaseModel):
@@ -1444,6 +1446,88 @@ def remove_recent(key: str) -> JSONResponse:
         raise HTTPException(404, "not in recent list")
     _save_recent(kept)
     return JSONResponse({"ok": True})
+
+
+@app.delete("/api/recent/all")
+def clear_recent() -> JSONResponse:
+    """Drop the whole recent list (cached files are kept)."""
+    _save_recent([])
+    return JSONResponse({"ok": True})
+
+
+# ---------- global search ----------
+# One box across every registry (torrents, direct PDFs, saved texts/EPUBs/
+# files). The fast path matches names/titles/authors in-memory; the optional
+# full-text pass scans the on-disk saved texts for a snippet. No database —
+# the registries are small JSON files, so a linear scan is plenty.
+
+def _text_snippet(path: Path, q: str, width: int = 120) -> str:
+    """A short excerpt around the first full-text match (for the search UI)."""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return ""
+    text = _utf8(raw).decode("utf-8", "replace")
+    i = text.lower().find(q)
+    if i < 0:
+        return ""
+    start = max(0, i - width // 2)
+    end = min(len(text), i + len(q) + width // 2)
+    snip = text[start:end].replace("\n", " ").strip()
+    return ("…" if start > 0 else "") + snip + ("…" if end < len(text) else "")
+
+
+@app.get("/api/search")
+def global_search(q: str = "", fulltext: bool = False) -> JSONResponse:
+    """Search every registry by name/title/author; optionally scan saved
+    texts for full-text matches (returns a snippet per hit)."""
+    q = q.strip().lower()
+    if not q:
+        return JSONResponse([])
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    def add(key: str, **kw) -> None:
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(kw)
+
+    for it in catalog.items():
+        if q in it.name.lower():
+            add("torrent:" + it.magnet, type="torrent", name=it.name,
+                ih=_ih_from_magnet(it.magnet) or "", magnet=it.magnet,
+                provider=it.provider, meta="torrent")
+    for pid, m in _load_pdfs().items():
+        hay = " ".join(str(m.get(k, "")) for k in ("name", "title", "author", "subject", "keywords")).lower()
+        if q in hay:
+            add("pdf:" + pid, type="pdf", name=m.get("title") or m.get("name") or pid,
+                id=pid, size=m.get("size", 0), pages=m.get("pages", 0),
+                provider=m.get("provider", "local"), meta="direct pdf")
+    for tid, m in _load_texts().items():
+        if q in m.get("name", "").lower():
+            add("text:" + tid, type="text", name=m.get("name") or tid,
+                id=tid, size=m.get("size", 0), provider=m.get("provider", "local"), meta="text")
+    for tid, m in _load_epubs().items():
+        if q in m.get("name", "").lower():
+            add("epub:" + tid, type="epub", name=m.get("name") or tid,
+                id=tid, size=m.get("size", 0), provider=m.get("provider", "local"), meta="epub")
+    for tid, m in _load_files().items():
+        if q in m.get("name", "").lower():
+            add("file:" + tid, type="file", name=m.get("name") or tid,
+                id=tid, size=m.get("size", 0), kind=m.get("kind", "file"),
+                provider=m.get("provider", "local"), meta=m.get("kind", "file"))
+    if fulltext:
+        for tid, m in _load_texts().items():
+            path = TEXT_DIR / f"{tid}.txt"
+            if not path.is_file() or path.stat().st_size > 5_000_000:
+                continue
+            snip = _text_snippet(path, q)
+            if snip:
+                add("text:" + tid, type="text", name=m.get("name") or tid,
+                    id=tid, size=m.get("size", 0), provider=m.get("provider", "local"),
+                    meta="text · " + snip)
+    return JSONResponse(out)
 
 
 @app.get("/api/favorites")

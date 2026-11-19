@@ -201,6 +201,8 @@
   #searchbar .count { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); white-space:nowrap; }
   #searchbar .pg { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); white-space:nowrap; }
   #searchbar .pg button { padding:4px 8px; font-size:calc(12px * var(--app-text-scale)); }
+  #searchbar label.chk { display:flex; align-items:center; gap:4px; font-size:calc(11px * var(--app-text-scale)); color:var(--dim); white-space:nowrap; cursor:pointer; }
+  #searchbar label.chk input { width:auto; flex:none; min-width:0; padding:0; }
   aside .titem { position:relative; border-bottom:1px solid var(--border-soft); }
   aside .titem button.open {
     display:block; width:100%; text-align:left; font:inherit; cursor:pointer;
@@ -524,6 +526,9 @@
   /* epub.js renders its own scrollable region; keep the book centred like the
      text reader and let its theme CSS do the rest */
   #epub-viewer .epub-view { height:100%; }
+  #catalog .recent-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 14px; border-bottom:1px solid var(--border-soft); color:var(--dim); font-size:calc(12px * var(--app-text-scale)); }
+  #catalog .recent-head button { background:var(--input-bg); border:1px solid var(--border); color:var(--dim); border-radius:6px; cursor:pointer; font-size:calc(12px * var(--app-text-scale)); padding:3px 10px; }
+  #catalog .recent-head button:hover { border-color:var(--danger-fg); color:var(--danger-hover-fg); }
   .empty { color:var(--dim); font-size:calc(13px * var(--app-text-scale)); margin-top:24px; padding:0 16px; }
   #loading { width:min(560px,92%); margin-top:36px; text-align:center; align-self:center; }
   #loading h2 { font-size:calc(15px * var(--app-text-scale)); margin:0 0 4px; word-break:break-all; }
@@ -606,6 +611,42 @@
   #catalog .opds-more { display:block; width:100%; margin:8px 14px; padding:7px; background:var(--input-bg); border:1px solid var(--border); color:var(--acc); border-radius:8px; cursor:pointer; font-size:calc(12px * var(--app-text-scale)); }
   #catalog .opds-more:hover { border-color:var(--acc); }
   #catalog .opds-status { color:var(--dim); font-size:calc(12px * var(--app-text-scale)); padding:14px; }
+  /* cross-provider search results for a selected catalog book */
+  #catalog .opds-cross-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px 4px; color:var(--acc); font-size:calc(12px * var(--app-text-scale)); font-weight:600; }
+  #catalog .opds-cross-close { background:none; border:1px solid var(--border); color:var(--dim); border-radius:6px; cursor:pointer; font-size:calc(12px * var(--app-text-scale)); padding:2px 8px; flex:0 0 auto; }
+  #catalog .opds-cross-close:hover { border-color:var(--acc); color:var(--text); }
+  #catalog .opds-cross-row { display:flex; gap:10px; padding:8px 14px; border-bottom:1px solid var(--border-faint); align-items:center; cursor:pointer; }
+  #catalog .opds-cross-row:hover { background:var(--hover); }
+  #catalog .opds-cross-row .cov { width:34px; height:48px; object-fit:cover; border-radius:3px; background:var(--input-bg); flex:0 0 auto; }
+  #catalog .opds-cross-row .body { flex:1; min-width:0; }
+  #catalog .opds-cross-row .t { font-size:calc(13px * var(--app-text-scale)); overflow-wrap:anywhere; }
+  #catalog .opds-cross-row .m { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  #catalog .opds-cross-row .prov { font-size:calc(10px * var(--app-text-scale)); color:var(--dim); border:1px solid var(--border); border-radius:8px; padding:1px 7px; margin-left:6px; vertical-align:1px; white-space:nowrap; }
+  /* filter / sort controls for a feed page */
+  #catalog .opds-controls { display:flex; gap:6px; align-items:center; padding:8px 14px; border-bottom:1px solid var(--border-strong); flex-wrap:wrap; }
+  #catalog .opds-controls input { flex:1 1 160px; min-width:120px; padding:5px 8px; font-size:calc(12px * var(--app-text-scale)); }
+  #catalog .opds-controls select { padding:5px 6px; font-size:calc(12px * var(--app-text-scale)); max-width:150px; }
+  #catalog .opds-controls button { padding:5px 10px; font-size:calc(12px * var(--app-text-scale)); }
+  /* in the catalogue grid, the non-card children span the full width so only
+     the .titem book cards flow in the grid */
+  #catalog.catalogue > .plugin-head,
+  #catalog.catalogue > .opds-crumb,
+  #catalog.catalogue > .opds-controls,
+  #catalog.catalogue > .opds-status,
+  #catalog.catalogue > .opds-more,
+  #catalog.catalogue > .opds-cross-head,
+  #catalog.catalogue > .opds-cross-row,
+  #catalog.catalogue > .recent-head { grid-column: 1 / -1; }
+  /* a placeholder cover (no image) sized like the grid cover */
+  #catalog.catalogue .titem .cover.ph {
+    width:150px; height:200px; margin:0 auto; border-radius:4px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:40px; background:var(--input-bg); color:var(--dim);
+  }
+  /* the catalog card's action buttons (🔎 / ⬇) sit in the grid bottom bar */
+  #catalog.catalogue .titem .acts { display:flex; gap:4px; }
+  #catalog.catalogue .titem .acts button { background:var(--input-bg); border:1px solid var(--border); color:var(--dim); border-radius:6px; cursor:pointer; font-size:calc(12px * var(--app-text-scale)); padding:3px 7px; }
+  #catalog.catalogue .titem .acts button:hover { border-color:var(--acc); color:var(--text); }
   #opds-add-modal { display:none; position:fixed; inset:0; z-index:100; background:var(--overlay); align-items:center; justify-content:center; }
   #opds-add-modal.open { display:flex; }
   #opds-add-modal .card { width:min(460px,92vw); background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; box-shadow:0 12px 40px var(--shadow-strong); }
@@ -917,6 +958,7 @@
     </div>
     <div id="searchbar">
       <input id="search" type="search" placeholder="Search documents…" autocomplete="off">
+      <label id="search-fulltext" class="chk" title="Also search inside saved text documents" style="display:none"><input type="checkbox" id="search-fulltext-cb"> full text</label>
       <button id="search-btn" type="button" title="Search" style="display:none">Search</button>
       <button id="filters-btn" type="button" title="Filter by metadata" style="display:none">Filters</button>
       <select id="sort" title="Sort order">
@@ -1004,7 +1046,7 @@ let providers = []; // [{id, name, feed, description, enabled}]
 let favorites = []; // [{key, name, type, ih, pdf, url, magnet, kind, provider}]
 let shelf = []; // personal shelf — a superset of favorites (favorites ⊆ shelf)
 // left rail: which top-level view the sidebar shows
-let view = 'shelf'; // 'shelf' | 'favorites' | 'reading' | 'plugins' | 'settings'
+let view = 'shelf'; // 'shelf' | 'favorites' | 'reading' | 'recent' | 'catalogs' | 'plugins' | 'settings'
 let readingSub = 'all'; // 'all' | 'toread' | 'reading' | 'complete' (My Shelf sub-tabs)
 let favSub = 'all'; // 'all' | 'toread' | 'reading' | 'complete' (Favorites sub-tabs)
 let tagFilter = null; // active custom-tag filter (My Shelf + Favorites views; null = all)
@@ -1034,6 +1076,8 @@ let savedEpubs = []; // [{id, name, size, url, provider}] — EPUBs saved locall
 let savedFiles = []; // [{id, name, size, url, provider, kind}] — html/mobi/file saved locally
 let opdsCatalogs = []; // [{id, name, url}] — saved OPDS catalogs
 let opdsBrowse = null; // {url, title, entries, next} — the feed page currently shown
+let opdsCross = null; // {book, query, results, loading, error} — provider matches for a selected catalog book
+let opdsFilter = { q: '', sort: 'title-asc', kind: 'all' }; // filter/sort for the current feed page
 // metadata filters for local (non-live) providers: PDF fields + torrent state/size
 let localFilters = { author:'', subject:'', keywords:'', minPages:'', maxPages:'', state:'', minSize:'', maxSize:'' };
 // Polling state: the 4s tick only re-fetches torrents that can still change.
@@ -1089,6 +1133,7 @@ function renderAll(torrents) {
   // ticks — sees an unchanged signature and leaves the previous view's HTML in
   // #catalog).
   if (view !== 'shelf') { lastListSig = null; lastLiveSig = null; }
+  document.getElementById('search-fulltext').style.display = 'none'; // Library/Catalogs show it when they run a global search
   syncTagPop(); // keep an open tag popover in sync with the re-rendered list
   pollPosition(); // persist the open book's reading position a few times a minute
   if (view === 'favorites') renderFavorites(torrents, directPdfs, byMagnet, provOf);
@@ -1122,6 +1167,7 @@ async function refresh() {
     recent = await j('/api/recent').then(r => r.json());
     dataLoaded = true;
     renderAll(torrents);
+    maybeResumeOnLaunch(); // once per page load: reopen the last book read
     fetchLocalCovers(); // fire-and-forget: covers appear a moment later
   } catch (e) { /* server still starting */ }
 }
@@ -1178,11 +1224,15 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
   document.getElementById('filters-btn').style.display = '';
   document.getElementById('searchbar').style.display = '';
   document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
-  document.getElementById('search').placeholder = 'Search documents…';
+  document.getElementById('search').placeholder = 'Search the whole library…';
+  document.getElementById('search-fulltext').style.display = '';
   const el = document.getElementById('catalog');
+    // a query runs the global search across every registry (torrents, PDFs,
+    // texts, EPUBs, files); an empty box shows the current provider's list
+    const q = (document.getElementById('search').value || '').trim().toLowerCase();
+    if (q) { el.classList.remove('catalogue'); el.innerHTML = ''; renderGlobalResults(el, q); return; }
     // search + sort: filter the current provider's items by name, then order
     // them by the chosen key (torrents first, then direct PDFs)
-    const q = (document.getElementById('search').value || '').trim().toLowerCase();
     const sort = document.getElementById('sort').value;
     const cmp = {
       'name-asc': (a, b) => a.name.localeCompare(b.name),
@@ -1319,9 +1369,18 @@ function updatePagination(pages) {
 // On a live tab, typing does nothing — the search only fires on the button
 // (or Enter), so a slow provider isn't hit on every keystroke.
 document.getElementById('search').addEventListener('input', () => {
+  const q = (document.getElementById('search').value || '').trim();
   const live = providers.find(p => p.id === activeProvider && p.live);
+  // Library & Catalogs: a query runs the global search across every registry
+  // (live provider tabs keep their own search — the button/Enter fires it)
+  if (!live && (view === 'shelf' || view === 'catalogs') && q) { runGlobalSearch(); return; }
   if (live) return;
   page = 1; refresh();
+});
+document.getElementById('search-fulltext-cb').addEventListener('change', () => {
+  const q = (document.getElementById('search').value || '').trim();
+  const live = providers.find(p => p.id === activeProvider && p.live);
+  if (q && !live && (view === 'shelf' || view === 'catalogs')) runGlobalSearch();
 });
 document.getElementById('search-btn').addEventListener('click', () => runLiveSearch());
 document.getElementById('search').addEventListener('keydown', (e) => {
@@ -2443,6 +2502,62 @@ function torrentCached(ih, f) {
     && p.cached_from.ih === ih && p.cached_from.f === f) || null;
 }
 
+// Continue reading on launch: after the first full refresh, reopen the most
+// recent book that has a saved position (preferring not-complete). Runs once
+// per page load; skipped when the setting is off or a book is already open.
+let resumeAttempted = false;
+function maybeResumeOnLaunch() {
+  if (resumeAttempted) return;
+  resumeAttempted = true;
+  if (localStorage.getItem('resume-on-launch') === '0') return;
+  if (openShelfKey) return; // a book is already open
+  const byKey = Object.fromEntries(shelf.map(s => [s.key, s]));
+  // recent entries opened from the Library carry no shelf_key — derive it
+  // (same key formats the shelf uses) so the saved position can be found
+  const keyOf = r => r.shelf_key
+    || (r.type === 'pdf' ? 'pdf:' + r.pdf
+      : r.type === 'torrent' ? 'torrent:' + r.ih
+      : 'live:' + (r.magnet || r.url || r.name));
+  const hasPos = s => s && ((s.page || 0) > 1 || (s.scroll || 0) > 0.005);
+  const pick = (allowComplete) => {
+    for (const r of recent) {
+      const s = byKey[keyOf(r)];
+      if (!s || !hasPos(s)) continue;
+      if (!allowComplete && s.status === 'complete') continue;
+      return r;
+    }
+    return null;
+  };
+  const r = pick(false) || pick(true);
+  if (!r) return;
+  const key = keyOf(r);
+  if (r.type === 'torrent') openTorrent(r.ih, r.name, key);
+  else if (r.type === 'pdf') openDirectPdfById(r.pdf, r.name, key);
+  else openRecentLive(r, key);
+  toast(`Resumed ${r.name || 'your last book'}`);
+}
+
+// open a recent "live" entry (text/html/epub/pdf link) — same dispatch as the
+// Recent row click, preferring a saved local copy when one exists
+function openRecentLive(r, key) {
+  const k = key || r.shelf_key || null;
+  const kind = r.kind || 'pdf';
+  if (r.magnet) { trackLiveMagnet(r.magnet, r.name); return; }
+  if (kind === 'text') {
+    const st = savedTexts.find(t => t.url === r.url);
+    if (st) openSavedText(st.id, r.name, k); else openTextResult(r.url, r.name, k);
+  } else if (kind === 'html') {
+    const sf = savedFiles.find(t => t.url === r.url);
+    if (sf) openHtmlResult(`/api/files/${sf.id}`, r.name, k); else openHtmlResult(r.url, r.name, k);
+  } else if (kind === 'epub') {
+    const se = savedEpubs.find(t => t.url === r.url);
+    if (se) openSavedEpub(se.id, r.name, k); else openEpubResult(r.url, r.name, k);
+  } else if (kind === 'pdf') {
+    const dl = directPdfs.find(p => p.url === r.url);
+    if (dl) openDirectPdfById(dl.id, r.name, k); else openLiveResult(r.url, r.name, k, r.provider);
+  } else if (r.url) window.open(r.url, '_blank', 'noopener');
+}
+
 function renderRecent(torrents, byMagnet) {
   const el = document.getElementById('catalog');
   document.getElementById('tabs').style.display = 'none';
@@ -2456,9 +2571,18 @@ function renderRecent(torrents, byMagnet) {
   document.getElementById('search').placeholder = 'Search recent…';
   const q = (document.getElementById('search').value || '').trim().toLowerCase();
   el.innerHTML = '';
+  if (recent.length) {
+    const head = document.createElement('div');
+    head.className = 'recent-head';
+    head.innerHTML = `<span>${recent.length} book${recent.length > 1 ? 's' : ''}</span><button type="button" id="recent-clear-all" title="Remove everything from the recent list">Clear all</button>`;
+    el.appendChild(head);
+  }
   const rows = recent.filter(r => !q || (r.name || '').toLowerCase().includes(q));
   if (!rows.length) {
-    el.innerHTML = `<div class="empty">${recent.length ? 'no matches' : 'nothing opened yet — books you open appear here'}</div>`;
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.textContent = recent.length ? 'no matches' : 'nothing opened yet — books you open appear here';
+    el.appendChild(e);
     return;
   }
   for (const r of rows) {
@@ -2494,6 +2618,66 @@ function renderRecent(torrents, byMagnet) {
     // ✕ remove this entry from the recent list (keeps any cached file)
     const rmBtn = `<button type="button" class="rmrecent" data-rmkey="${esc(r.key)}" title="Remove from recent">✕</button>`;
     item.innerHTML = openBtn + cachedMark + delCacheBtn + rmBtn;
+    el.appendChild(item);
+  }
+}
+
+// ---- global search: one box across every registry (torrents, direct PDFs,
+// saved texts/EPUBs/files). The fast path matches names/titles/authors;
+// the optional full-text pass scans saved texts for a snippet. Results reuse
+// the same open paths as the other views, so a hit opens exactly like the
+// book would from its home list.
+let searchResults = [];
+let searchQuery = ''; // the query that produced searchResults (stale-guard)
+let searchTimer = null;
+function runGlobalSearch() {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(doGlobalSearch, 250);
+}
+async function doGlobalSearch() {
+  const q = (document.getElementById('search').value || '').trim();
+  const ft = document.getElementById('search-fulltext-cb').checked;
+  if (!q) { searchResults = []; searchQuery = ''; refresh(); return; }
+  try {
+    searchResults = await j(`/api/search?q=${encodeURIComponent(q)}${ft ? '&fulltext=1' : ''}`).then(r => r.json());
+    searchQuery = q;
+  } catch { searchResults = []; searchQuery = q; }
+  refresh(); // re-render the current view (Library/Catalogs) with the fresh results
+}
+// Append global-search results to el. Called by the Library and Catalogs
+// views when their search box has a query. Reuses the same open paths as the
+// other views, so a hit opens exactly like the book would from its home list.
+function renderGlobalResults(el, q) {
+  if (q !== searchQuery) {
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.textContent = 'Searching…';
+    el.appendChild(e);
+    return;
+  }
+  if (!searchResults.length) {
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.textContent = `No matches for “${q}”.`;
+    el.appendChild(e);
+    return;
+  }
+  const head = document.createElement('div');
+  head.className = 'recent-head';
+  head.innerHTML = `<span>${searchResults.length} result${searchResults.length > 1 ? 's' : ''} for “${esc(q)}”</span>`;
+  el.appendChild(head);
+  const icon = { torrent: '📦', pdf: '📄', text: '📝', epub: '📚', file: '📎' };
+  for (const r of searchResults) {
+    const item = document.createElement('div');
+    item.className = 'titem';
+    const meta = [r.type, r.meta && r.meta !== r.type ? r.meta : null, r.size ? fmtSize(r.size) : null, r.pages ? r.pages + 'p' : null].filter(Boolean).join(' · ');
+    let btn;
+    if (r.type === 'torrent') btn = `<button type="button" class="open" data-ih="${esc(r.ih)}" data-name="${esc(r.name)}"><div class="name">${icon.torrent} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+    else if (r.type === 'pdf') btn = `<button type="button" class="open" data-pdf="${esc(r.id)}" data-name="${esc(r.name)}"><div class="name">${icon.pdf} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+    else if (r.type === 'text') btn = `<button type="button" class="open" data-savedtext="${esc(r.id)}" data-name="${esc(r.name)}"><div class="name">${icon.text} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+    else if (r.type === 'epub') btn = `<button type="button" class="open" data-savedepub="${esc(r.id)}" data-name="${esc(r.name)}"><div class="name">${icon.epub} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+    else btn = `<button type="button" class="open" data-savedfile="${esc(r.id)}" data-name="${esc(r.name)}" data-filekind="${esc(r.kind || 'file')}"><div class="name">${icon.file} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+    item.innerHTML = btn;
     el.appendChild(item);
   }
 }
@@ -2809,7 +2993,7 @@ function setNoBook(no) {
 // render their own layouts and must stay plain lists (the grid class would
 // squeeze their rows into 230px cards).
 function applyListView() {
-  const gridViews = ['shelf', 'favorites', 'reading', 'recent'];
+  const gridViews = ['shelf', 'favorites', 'reading', 'recent', 'catalogs'];
   const useGrid = gridViews.includes(view);
   const noBook = document.querySelector('main').classList.contains('no-book');
   const mode = noBook ? listViewNoBook : listViewBook;
@@ -3692,8 +3876,8 @@ async function downloadLivePdf(url, name) {
 
 // track a live plugin search result that is a torrent: add it to the catalog
 // (tagged with the plugin's provider) and to the session, like the magnet box
-async function trackLiveMagnet(magnet, name) {
-  const prov = providers.find(p => p.id === activeProvider && p.live);
+async function trackLiveMagnet(magnet, name, providerId) {
+  const prov = providers.find(p => p.id === (providerId || activeProvider) && p.live);
   if (!prov || !magnet) return;
   const status = document.getElementById('status');
   status.textContent = `adding ${name || 'torrent'}…`;
@@ -3985,6 +4169,16 @@ document.getElementById('catalog').addEventListener('click', async (e) => {
     removeBookFromShelf(rmGroupBtn);
     return;
   }
+  // 🧹 clear the whole recent list (keeps any cached files)
+  const clearAllBtn = e.target.closest('#recent-clear-all');
+  if (clearAllBtn) {
+    e.preventDefault();
+    if (!confirm('Clear the entire recent list? Cached files are kept.')) return;
+    try { await j('/api/recent/all', { method: 'DELETE' }); }
+    catch (err) { alert(err.message); return; }
+    refresh();
+    return;
+  }
   // ✕ remove an entry from the recent list (keeps any cached file)
   const rmRecentBtn = e.target.closest('button.rmrecent[data-rmkey]');
   if (rmRecentBtn) {
@@ -4055,7 +4249,14 @@ document.getElementById('catalog').addEventListener('click', async (e) => {
   const b = e.target.closest('button.open[data-ih]');
   if (b) { e.preventDefault(); openTorrent(b.dataset.ih, b.dataset.name || '', b.dataset.shelfkey || null); return; }
   const pb = e.target.closest('button.open[data-pdf]');
-  if (pb) { e.preventDefault(); openDirectPdfById(pb.dataset.pdf, pb.dataset.name || '', pb.dataset.shelfkey || null); }
+  if (pb) { e.preventDefault(); openDirectPdfById(pb.dataset.pdf, pb.dataset.name || '', pb.dataset.shelfkey || null); return; }
+  // global-search hits for saved texts / EPUBs / files (open from disk)
+  const stBtn = e.target.closest('button.open[data-savedtext]');
+  if (stBtn) { e.preventDefault(); openSavedText(stBtn.dataset.savedtext, stBtn.dataset.name || '', null); return; }
+  const seBtn = e.target.closest('button.open[data-savedepub]');
+  if (seBtn) { e.preventDefault(); openSavedEpub(seBtn.dataset.savedepub, seBtn.dataset.name || '', null); return; }
+  const sfBtn = e.target.closest('button.open[data-savedfile]');
+  if (sfBtn) { e.preventDefault(); openHtmlResult(`/api/files/${sfBtn.dataset.savedfile}`, sfBtn.dataset.name || '', null); return; }
 });
 
 // close the ⋯ menus on outside click / Escape
@@ -4241,10 +4442,32 @@ const OPDS_KIND_ICON = { epub: '📕', pdf: '📄', text: '📝', html: '🌐', 
 
 function renderCatalogsView() {
   document.getElementById('tabs').style.display = 'none';
-  document.getElementById('searchbar').style.display = 'none';
+  // global search box (sort/perpage/pagination don't apply to the catalog list)
+  document.getElementById('searchbar').style.display = '';
+  document.getElementById('sort').style.display = 'none';
+  document.getElementById('perpage').style.display = 'none';
+  document.querySelector('#searchbar .pg').style.display = 'none';
+  document.getElementById('search-btn').style.display = 'none';
+  document.getElementById('filters-btn').style.display = 'none';
+  document.getElementById('search-fulltext').style.display = '';
+  document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
+  document.getElementById('search').placeholder = 'Search the whole library…';
   document.getElementById('hdrstat').textContent = opdsCatalogs.length ? `${opdsCatalogs.length} catalog(s)` : 'no catalogs';
   const el = document.getElementById('catalog');
+  const q = (document.getElementById('search').value || '').trim();
+  if (q) { el.classList.remove('catalogue'); el.innerHTML = ''; renderGlobalResults(el, q); return; }
+  // remember filter-input focus so a re-render (the 4s poll or a filter
+  // keystroke) doesn't drop it mid-typing
+  const prevFocus = document.activeElement;
+  const wasFilterFocused = !!(prevFocus && prevFocus.id === 'opds-q');
+  const filterCursor = wasFilterFocused ? prevFocus.selectionStart : null;
   el.innerHTML = '';
+  // the catalogue grid applies only to a feed page / cross results, not the
+  // catalog list (a plain list of saved feeds)
+  const showingFeed = !!opdsBrowse || !!opdsCross;
+  const noBook = document.querySelector('main').classList.contains('no-book');
+  const mode = noBook ? listViewNoBook : listViewBook;
+  el.classList.toggle('catalogue', showingFeed && mode === 'catalogue');
   const head = document.createElement('div');
   head.className = 'plugin-head';
   head.innerHTML = `<h3>📡 Catalogs</h3><button type="button" id="opds-add-btn">+ catalog</button>`;
@@ -4269,10 +4492,43 @@ function renderCatalogsView() {
     item.onclick = () => browseOpds(c.url, c.name);
     el.appendChild(item);
   }
-  if (opdsBrowse) renderOpdsPage(el);
+  if (opdsBrowse) {
+    renderOpdsPage(el);
+    layoutCatalogueActions(); // grid: move the card's action buttons into the bottom bar
+    // restore filter-input focus (a keystroke or the 4s poll re-rendered us)
+    if (wasFilterFocused) {
+      const inp = el.querySelector('#opds-q');
+      if (inp) { inp.focus(); if (filterCursor != null) { try { inp.setSelectionRange(filterCursor, filterCursor); } catch (_) {} } }
+    }
+  }
+  // provider matches for the selected book render below the feed page
+  if (opdsCross && opdsBrowse) renderOpdsCross(el);
 }
 
-// show one fetched feed page: breadcrumb trail + entries + next-page button
+// watch a cover image: reveal it when it loads, and fall back to a
+// placeholder if it errors or hangs. Some feeds (ManyBooks' old-covers)
+// return 403s whose requests never settle, so a timeout is needed as well
+// as the error handler — otherwise the card shows an empty slot forever.
+function opdsCoverWatch(img, icon) {
+  const fail = () => {
+    if (!img.isConnected) return;
+    const ph = document.createElement('div');
+    ph.className = (img.className || 'cover').replace('loaded', '').trim() + ' ph';
+    ph.textContent = icon || '📖';
+    img.replaceWith(ph);
+  };
+  if (img.complete) {
+    if (img.naturalWidth) img.classList.add('loaded');
+    else fail();
+  } else {
+    img.addEventListener('load', () => img.classList.add('loaded'));
+    img.addEventListener('error', fail);
+    setTimeout(() => { if (!img.complete || !img.naturalWidth) fail(); }, 8000);
+  }
+}
+
+// show one fetched feed page: breadcrumb trail + filter/sort controls +
+// entries (grid cards in catalogue mode, compact rows in list mode) + next
 function renderOpdsPage(el) {
   const b = opdsBrowse;
   const crumb = document.createElement('div');
@@ -4295,35 +4551,133 @@ function renderOpdsPage(el) {
   crumb.appendChild(cur);
   el.appendChild(crumb);
 
-  if (!b.entries.length) {
+  // search / sort / filter controls. If the feed exposes an OPDS search
+  // endpoint (rel="search"), the text box is a real catalog search (🔍 / Enter
+  // navigates to the results feed); otherwise it falls back to filtering the
+  // current page. The kind options are derived from the page's own entries.
+  const kinds = [...new Set(b.entries.filter(e => !e.nav).map(e => e.kind))].sort();
+  const canSearch = !!b.searchUrl;
+  const controls = document.createElement('div');
+  controls.className = 'opds-controls';
+  controls.innerHTML = `
+    <input type="search" id="opds-q" placeholder="${canSearch ? 'Search catalog…' : 'Filter this page…'}" autocomplete="off">
+    ${canSearch ? '<button type="button" id="opds-search" title="Search the catalog">🔍</button>' : ''}
+    <select id="opds-sort" title="Sort">
+      <option value="title-asc">Title A–Z</option>
+      <option value="title-desc">Title Z–A</option>
+      <option value="author-asc">Author A–Z</option>
+      <option value="author-desc">Author Z–A</option>
+      <option value="kind">By kind</option>
+    </select>
+    <select id="opds-kind" title="Filter by kind">
+      <option value="all">All kinds</option>
+      ${kinds.map(k => `<option value="${esc(k)}">${esc(k)}</option>`).join('')}
+    </select>
+    <button type="button" id="opds-clear" title="Clear filter &amp; sort">✕</button>`;
+  controls.querySelector('#opds-q').value = opdsFilter.q;
+  controls.querySelector('#opds-sort').value = opdsFilter.sort;
+  controls.querySelector('#opds-kind').value = opdsFilter.kind;
+  // a filter/sort change only affects the in-memory feed page, so re-render
+  // the catalogs view directly (no full refresh / torrent re-fetch)
+  controls.querySelector('#opds-q').addEventListener('input', (e) => {
+    opdsFilter.q = e.target.value; // kept so a poll re-render restores the text
+    if (!canSearch) renderCatalogsView();
+  });
+  if (canSearch) {
+    // a real catalog search: Enter or 🔍 navigates to the feed's search endpoint
+    const doSearch = () => {
+      const q = opdsFilter.q.trim();
+      if (!q) return;
+      browseOpds(b.searchUrl.replace('{searchTerms}', encodeURIComponent(q)), `Search: ${q}`, opdsBrowse, true);
+    };
+    controls.querySelector('#opds-search').onclick = doSearch;
+    controls.querySelector('#opds-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+  }
+  controls.querySelector('#opds-sort').addEventListener('change', (e) => { opdsFilter.sort = e.target.value; renderCatalogsView(); });
+  controls.querySelector('#opds-kind').addEventListener('change', (e) => { opdsFilter.kind = e.target.value; renderCatalogsView(); });
+  controls.querySelector('#opds-clear').addEventListener('click', () => {
+    opdsFilter = { q: '', sort: 'title-asc', kind: 'all' };
+    renderCatalogsView();
+  });
+  el.appendChild(controls);
+
+  // apply the filter + sort to the page's entries. In search mode the text
+  // box is a catalog search (not a page filter), so the text filter is off.
+  const q = canSearch ? '' : opdsFilter.q.trim().toLowerCase();
+  let entries = b.entries.filter(it => {
+    if (opdsFilter.kind !== 'all' && !it.nav && it.kind !== opdsFilter.kind) return false;
+    if (!q) return true;
+    const hay = [it.title, it.author, it.summary].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+  const sorters = {
+    'title-asc': (a, c) => (a.title || '').localeCompare(c.title || ''),
+    'title-desc': (a, c) => (c.title || '').localeCompare(a.title || ''),
+    'author-asc': (a, c) => (a.author || '').localeCompare(c.author || ''),
+    'author-desc': (a, c) => (c.author || '').localeCompare(a.author || ''),
+    'kind': (a, c) => ((a.nav ? '0' : '1') + (a.kind || '')).localeCompare((c.nav ? '0' : '1') + (c.kind || '')),
+  };
+  entries = entries.slice().sort(sorters[opdsFilter.sort] || sorters['title-asc']);
+
+  if (!entries.length) {
     const e = document.createElement('div');
     e.className = 'opds-status';
-    e.textContent = 'This feed has no entries.';
+    e.textContent = (q || opdsFilter.kind !== 'all')
+      ? 'No entries match the filter.'
+      : 'This feed has no entries.';
     el.appendChild(e);
   }
-  for (const it of b.entries) {
-    const row = document.createElement('div');
-    row.className = 'opds-item' + (it.nav ? ' nav' : '');
+  const grid = el.classList.contains('catalogue');
+  for (const it of entries) {
+    // grid cards use the .cover class (large centred image); list rows use
+    // the small .cov thumbnail — the two are styled differently
+    const covClass = grid ? 'cover' : 'cov';
+    const phIcon = it.nav ? '📂' : (OPDS_KIND_ICON[it.kind] || '📖');
     const cover = it.cover
-      ? `<img class="cov" src="${esc(it.cover)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;cov ph&quot;>📖</div>'">`
-      : `<div class="cov ph">${it.nav ? '📂' : (OPDS_KIND_ICON[it.kind] || '📖')}</div>`;
-    const meta = it.nav ? 'section'
+      ? `<img class="${covClass}" src="${esc(it.cover)}" alt="">`
+      : `<div class="${covClass} ph">${phIcon}</div>`;
+    const meta = it.nav ? (it.author || 'section')
       : [it.author, it.summary].filter(Boolean).join(' — ').slice(0, 160);
-    row.innerHTML = `${cover}
-      <div class="body">
-        <div class="t">${esc(it.title)}${it.nav ? '' : `<span class="kind">${esc(it.kind)}</span>`}</div>
-        ${meta ? `<div class="m">${esc(meta)}</div>` : ''}
-      </div>
-      ${it.nav ? '' : `<div class="acts">
+    const gridMeta = it.nav ? (it.author || 'section')
+      : [it.kind, it.author, it.summary].filter(Boolean).join(' · ').slice(0, 160);
+    const acts = it.nav ? '' : `<div class="acts">
+        <button type="button" data-opdsxsearch="1" title="Search the providers for this book">🔎</button>
         <button type="button" data-opdssave="${esc(it.url)}" data-opdsname="${esc(it.title)}" data-opdskind="${esc(it.kind)}" title="Save for offline reading">⬇</button>
-      </div>`}`;
+      </div>`;
+    const row = document.createElement('div');
+    if (grid) {
+      // a book card (same structure as the shelf grid) so the catalogue
+      // layout + layoutCatalogueActions() bottom bar apply
+      row.className = 'titem';
+      row.innerHTML = `<button type="button" class="open${it.cover ? ' has-cover' : ''}">
+          ${cover}
+          <span class="covertxt">
+            <span class="name">${esc(it.title)}</span>
+            ${gridMeta ? `<span class="meta">${esc(gridMeta)}</span>` : ''}
+          </span>
+        </button>
+        ${acts}`;
+    } else {
+      row.className = 'opds-item' + (it.nav ? ' nav' : '');
+      row.innerHTML = `${cover}
+        <div class="body">
+          <div class="t">${esc(it.title)}${it.nav ? '' : `<span class="kind">${esc(it.kind)}</span>`}</div>
+          ${meta ? `<div class="m">${esc(meta)}</div>` : ''}
+        </div>
+        ${acts}`;
+    }
     if (it.nav) {
       row.onclick = () => browseOpds(it.url, it.title, b);
     } else {
       row.onclick = () => openOpdsEntry(it);
-      row.querySelector('[data-opdssave]').onclick = (e) => { e.stopPropagation(); saveOpdsEntry(it); };
+      const sv = row.querySelector('[data-opdssave]');
+      if (sv) sv.onclick = (e) => { e.stopPropagation(); saveOpdsEntry(it); };
+      const xs = row.querySelector('[data-opdsxsearch]');
+      if (xs) xs.onclick = (e) => { e.stopPropagation(); crossSearchBook(it); };
     }
     el.appendChild(row);
+    const covImg = row.querySelector('img.cover, img.cov');
+    if (covImg) opdsCoverWatch(covImg, phIcon);
   }
   if (b.next) {
     const more = document.createElement('button');
@@ -4336,23 +4690,145 @@ function renderOpdsPage(el) {
 }
 
 // fetch one feed page and show it. `trail` is the breadcrumb path so far.
-async function browseOpds(url, title, from) {
+// `isSearch` marks a catalog-search results page (never auto-cross-searched).
+async function browseOpds(url, title, from, isSearch) {
   const el = document.getElementById('catalog');
   const status = document.createElement('div');
   status.className = 'opds-status';
   status.textContent = `loading ${title || 'feed'}…`;
   el.appendChild(status);
+  opdsCross = null; // a new page starts without provider matches
+  opdsFilter = { q: '', sort: 'title-asc', kind: 'all' }; // and without a stale filter
   try {
     const d = await j(`/api/opds/browse?url=${encodeURIComponent(url)}`).then(r => r.json());
     const rootUrl = (from && from.rootUrl) || (opdsCatalogs.find(c => c.url === url) || {}).url || url;
-    const trail = (from ? from.trail : []) || [];
-    if (from && from.title) trail.push({ title: from.title, url: from.url });
+    // a search starts a fresh trail (root › Search: q); a normal page extends it
+    const trail = isSearch ? [] : ((from ? from.trail : []) || []);
+    if (from && from.title && !isSearch) trail.push({ title: from.title, url: from.url });
     opdsBrowse = { url, title: d.title || title, entries: d.entries, next: d.next,
-                   rootUrl, trail };
+                   searchUrl: d.search || '', rootUrl, trail, isSearch: !!isSearch };
+    // a page whose entries are all files (no sub-sections) is a book detail
+    // page — automatically search the providers for it (never on a search page)
+    const acq = d.entries.filter(e => !e.nav);
+    if (!isSearch && acq.length && acq.length === d.entries.length) {
+      crossSearchBook({ title: d.title || title, author: acq[0].author || '' });
+      return; // crossSearchBook re-renders via refresh()
+    }
     renderCatalogsView();
   } catch (e) {
     status.textContent = `error: ${e.message}`;
   }
+}
+
+// Selecting a catalog book: search every live provider plugin for matches
+// (title + author) and show the combined results. The book's own feed entry
+// stays reachable via the back button; opening a match reuses the live
+// provider's open/save machinery.
+async function crossSearchBook(it) {
+  const query = [it.title, it.author].filter(Boolean).join(' ');
+  opdsCross = { book: it, query, results: [], loading: true, error: null };
+  refresh();
+  const liveProvs = providers.filter(p => p.live);
+  if (!liveProvs.length) {
+    opdsCross.loading = false;
+    opdsCross.error = 'no searchable providers are available';
+    refresh();
+    return;
+  }
+  const per = liveProvs.map(prov => {
+    const pid = prov.id.slice(7);
+    const cfg = (prov.config && Object.keys(prov.config).length) ? prov.config : {};
+    const params = new URLSearchParams({ query, config: JSON.stringify(cfg) });
+    return j(`/api/plugins/${pid}/search?${params}`).then(r => r.json())
+      .then(data => (data.items || []).slice(0, 5).map(x => ({ ...x, provider: prov.name, _pid: pid })))
+      .catch(() => []);
+  });
+  try {
+    let all = (await Promise.all(per)).flat();
+    // two-stage providers (e.g. Internet Archive) return items without a URL
+    // yet — resolve them per provider so the matches are actually openable
+    const byPid = {};
+    for (const it of all) if (it.resolve_id && !it.url) (byPid[it._pid] = byPid[it._pid] || []).push(it);
+    await Promise.all(Object.entries(byPid).map(([pid, items]) =>
+      j(`/api/plugins/${pid}/resolve`, { method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: items.map(it => it.resolve_id) }) }).then(r => r.json())
+        .then(data => {
+          const resolved = data.resolved || {};
+          for (const it of items) {
+            const res = resolved[it.resolve_id];
+            if (res && res.url) { it.url = res.url; delete it.resolve_id; }
+          }
+        }).catch(() => {})
+    ));
+    all = all.filter(it => !it.resolve_id); // drop items that had no openable file
+    opdsCross.results = all; // keep _pid so openCrossResult routes to the right provider
+    opdsCross.loading = false;
+  } catch (e) {
+    opdsCross.error = e.message;
+    opdsCross.loading = false;
+  }
+  refresh();
+}
+
+// the cross-provider results panel (shown below the book's feed page)
+function renderOpdsCross(el) {
+  const c = opdsCross;
+  const head = document.createElement('div');
+  head.className = 'opds-cross-head';
+  head.innerHTML = `<span>🔎 “${esc(c.book.title)}” in providers</span>
+    <button type="button" class="opds-cross-close" title="Hide provider matches">✕</button>`;
+  head.querySelector('.opds-cross-close').onclick = () => { opdsCross = null; renderCatalogsView(); };
+  el.appendChild(head);
+  if (c.loading) {
+    const s = document.createElement('div');
+    s.className = 'opds-status';
+    s.textContent = `searching providers for “${c.query}”…`;
+    el.appendChild(s);
+    return;
+  }
+  if (c.error) {
+    const s = document.createElement('div');
+    s.className = 'opds-status';
+    s.textContent = `search failed: ${c.error}`;
+    el.appendChild(s);
+  }
+  if (!c.results.length) {
+    const s = document.createElement('div');
+    s.className = 'opds-status';
+    s.textContent = c.error ? '' : `no matches in the providers for “${c.query}”.`;
+    if (s.textContent) el.appendChild(s);
+    return;
+  }
+  for (const r of c.results) {
+    const row = document.createElement('div');
+    row.className = 'opds-cross-row';
+    const kind = r.magnet ? 'torrent' : (r.kind || 'pdf');
+    const icon = { pdf: '📄', text: '📝', html: '🌐', epub: '📕', torrent: '🧲', file: '📦' }[kind] || '📖';
+    const meta = [r.meta, r.provider].filter(Boolean).join(' · ');
+    row.innerHTML = `<div class="cov ph">${icon}</div>
+      <div class="body">
+        <div class="t">${esc(r.name)}<span class="prov">${esc(r.provider)}</span></div>
+        ${meta ? `<div class="m">${esc(meta)}</div>` : ''}
+      </div>`;
+    row.onclick = () => openCrossResult(r);
+    el.appendChild(row);
+  }
+}
+
+// open a cross-provider match with the live provider's per-kind flow. The
+// provider id (r._pid) is required: PDFs download through that provider's
+// /open endpoint and magnets are tagged with it, so a wrong/missing id would
+// silently no-op.
+function openCrossResult(r) {
+  const key = 'opdsx:' + (r.url || r.magnet || r.name);
+  const provId = r._pid ? 'plugin:' + r._pid : '';
+  if (r.magnet) trackLiveMagnet(r.magnet, r.name, provId);
+  else if (r.kind === 'text') openTextResult(r.url, r.name, key);
+  else if (r.kind === 'html') openHtmlResult(r.url, r.name, key);
+  else if (r.kind === 'epub') openEpubResult(r.url, r.name, key);
+  else if (r.kind === 'pdf') openLiveResult(r.url, r.name, key, provId);
+  else if (r.url) window.open(r.url, '_blank', 'noopener');
 }
 
 // open a feed entry in the matching reader (saved first, deduped by URL)
@@ -4615,6 +5091,7 @@ function renderSettingsView() {
       <option value="catalogue"${listViewBook === 'catalogue' ? ' selected' : ''}>Catalogue (cover grid)</option>
       <option value="list"${listViewBook === 'list' ? ' selected' : ''}>List (compact rows)</option>
     </select></div>
+    <div class="settings-row"><label>Resume on launch</label><label class="chk"><input type="checkbox" id="set-resume-launch"${localStorage.getItem('resume-on-launch') !== '0' ? ' checked' : ''}> Reopen the last book you were reading</label></div>
   `);
 
   // ---- Tab order (localStorage) ----
@@ -4741,6 +5218,7 @@ function renderSettingsView() {
     if (t.id === 'set-tabpos') { tabPosition = t.value; localStorage.setItem('tabPosition', tabPosition); applyTabPosition(); renderRail(); return; }
     if (t.id === 'set-listview-nobook') { listViewNoBook = t.value; localStorage.setItem('list-view-no-book', listViewNoBook); applyListView(); layoutCatalogueActions(); return; }
     if (t.id === 'set-listview-book') { listViewBook = t.value; localStorage.setItem('list-view-book', listViewBook); applyListView(); layoutCatalogueActions(); return; }
+    if (t.id === 'set-resume-launch') { localStorage.setItem('resume-on-launch', t.checked ? '1' : '0'); return; }
     const provEn = t.closest('input[data-prov-enabled]');
     if (provEn) { setProviderEnabled(provEn.dataset.provEnabled, provEn.checked); return; }
     const plugAct = t.closest('input[data-plug-active]');
