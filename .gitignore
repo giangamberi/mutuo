@@ -24,6 +24,9 @@ __pycache__/
 .torrents/
 .venv/
 .vscode/
+# local (personal) Qwen project context — not shared
+.qwen/*
+QWEN.md
 # build artifacts (PyInstaller + Inno Setup)
 build/
 dist/
