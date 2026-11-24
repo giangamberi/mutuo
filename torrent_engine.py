@@ -518,6 +518,21 @@ class TorrentEngine:
                     }
                 except Exception:
                     pass
+            # pieces that have since passed no longer need swarm focus.
+            # Without this, _pending_prio grows to the full piece set of
+            # everything ever opened and _apply_priorities re-sorts + re-
+            # asserts that whole list on every 250 ms tick.
+            pending = self._pending_prio.get(ih)
+            if pending and ts.fs is not None:
+                try:
+                    still = {p for p in pending if not handle.have_piece(p)}
+                except Exception:
+                    still = None
+                if still is not None:
+                    if still:
+                        self._pending_prio[ih] = still
+                    else:
+                        del self._pending_prio[ih]
         with self._cond:
             self._cond.notify_all()
 

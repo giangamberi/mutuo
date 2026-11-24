@@ -117,51 +117,160 @@ def _log_path() -> Path:
     return Path(tempfile.gettempdir()) / "pdf-reader-server.log"
 
 
-def _kill_port(port: int) -> None:
-    """Best-effort: kill whatever is listening on ``port`` (a stale server)."""
-    if os.name != "nt":
-        # lsof is the portable way to find a port's owner on POSIX; if it's
-        # missing we just skip (a stale server then fails to bind and the
-        # new one reports it).
-        try:
-            out = subprocess.check_output(
-                ["lsof", "-ti", f"tcp:{port}"], text=True, errors="ignore")
-        except (OSError, subprocess.CalledProcessError):
-            return
-        for pid in out.split():
-            if pid.isdigit() and int(pid) != os.getpid():
-                try:
-                    os.kill(int(pid), 15)
-                except OSError:
-                    pass
-        return
+_PID_FILE = Path(tempfile.gettempdir()) / "pdf-reader-server.pid"
+# cmdline fragments that identify one of OUR servers — used only as a fallback
+# attribution (e.g. for a stale server written by a version without the
+# pidfile). Kept specific on purpose: the port owner is only ever killed when
+# we can say it is ours; a generic marker like "python" or the workspace path
+# would let us kill unrelated processes (VS Code helpers carry the workspace
+# path in their cmdline too).
+_OURS_MARKERS = ("uvicorn app:app", "mutuo.exe", "desktop.py --server")
+
+
+def _write_pidfile(pid: int) -> None:
     try:
+        _PID_FILE.write_text(str(pid), encoding="ascii")
+    except OSError:
+        pass
+
+
+def _find_port_pid(port: int) -> int | None:
+    """The PID currently listening on ``port`` (None when the port is free)."""
+    try:
+        if os.name != "nt":
+            # lsof is the portable way to find a port's owner on POSIX
+            out = subprocess.check_output(
+                ["lsof", "-ti", f"tcp:{port}"], text=True, errors="ignore", timeout=5)
+            for tok in out.split():
+                if tok.isdigit() and int(tok) != os.getpid():
+                    return int(tok)
+            return None
         out = subprocess.check_output(
-            ["netstat", "-ano", "-p", "tcp"], text=True, errors="ignore"
-        )
+            ["netstat", "-ano", "-p", "tcp"], text=True, errors="ignore", timeout=5)
     except (OSError, subprocess.CalledProcessError):
-        return
-    pids = set()
+        return None
     for line in out.splitlines():
         parts = line.split()
         if len(parts) >= 5 and parts[1].endswith(f":{port}") and parts[3] == "LISTENING":
-            pids.add(parts[4])
-    for pid in pids:
-        if pid.isdigit() and int(pid) != os.getpid():
-            try:
-                subprocess.run(["taskkill", "/F", "/PID", pid],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except OSError:
-                pass
+            if parts[4].isdigit() and int(parts[4]) != os.getpid():
+                return int(parts[4])
+    return None
 
 
-def _wait_ready(port: int, timeout: float = READY_TIMEOUT) -> bool:
+def _alive(pid: int) -> bool:
+    try:
+        if os.name == "nt":
+            # os.kill(pid, 0) is not a safe existence check on Windows
+            out = subprocess.check_output(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                text=True, errors="ignore", timeout=5)
+            return str(pid) in out
+        os.kill(pid, 0)
+        return True
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+
+def _process_cmdline(pid: int) -> str:
+    try:
+        if os.name == "nt":
+            out = subprocess.check_output(
+                ["powershell", "-NoProfile", "-Command",
+                 f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"],
+                text=True, errors="ignore", timeout=5)
+        else:
+            out = subprocess.check_output(
+                ["ps", "-o", "command=", "-p", str(pid)],
+                text=True, errors="ignore", timeout=5)
+        return (out or "").strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
+def _is_ours(pid: int) -> bool:
+    low = _process_cmdline(pid).lower()
+    return bool(low) and any(m in low for m in _OURS_MARKERS)
+
+
+def _terminate(pid: int) -> None:
+    # /T kills the process *tree*: the python.exe we spawn on Windows is a
+    # launcher whose child is the real interpreter (the one that binds the
+    # port), and PyInstaller adds a bootloader layer too — killing just the
+    # top process orphans the server and it keeps holding the port.
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(pid), "/T"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        else:
+            os.kill(pid, 15)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _kill_pid(pid: int) -> None:
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/PID", str(pid), "/T"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        else:
+            os.kill(pid, 9)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _stop_stale_server() -> int | None:
+    """Stop a Mutuo server left on the port by a previous launch.
+
+    Only ever kills processes we can attribute to Mutuo: first via the
+    pidfile written at spawn, then via a clearly-ours cmdline (covers stale
+    servers from versions without the pidfile). A port owned by anything
+    else is left alone — the caller refuses to start instead of force-
+    killing a stranger's process.
+
+    Returns the PID still occupying the port (None when it's free)."""
+    # 1. our own previous server (pidfile)
+    try:
+        old = int(_PID_FILE.read_text().strip())
+    except (OSError, ValueError):
+        old = None
+    else:
+        _PID_FILE.unlink(missing_ok=True)
+        if _alive(old) and _is_ours(old):
+            _terminate(old)
+            for _ in range(20):  # ~5 s for a clean shutdown
+                if not _alive(old):
+                    break
+                time.sleep(0.25)
+            if _alive(old):
+                _kill_pid(old)
+    # 2. whatever still owns the port
+    pid = _find_port_pid(PORT)
+    if pid is not None and _is_ours(pid):
+        _terminate(pid)
+        for _ in range(20):
+            if not _alive(pid):
+                break
+            time.sleep(0.25)
+        if _alive(pid):
+            _kill_pid(pid)
+        for _ in range(20):  # wait for the socket to be released
+            if _find_port_pid(PORT) is None:
+                return None
+            time.sleep(0.25)
+    return _find_port_pid(PORT)
+
+
+def _wait_ready(port: int, profile: str, timeout: float = READY_TIMEOUT) -> bool:
+    """Wait until the server answers AND reports the profile we just started.
+    The name check matters: a 200 from a stale server (the kill missed, or
+    the port was foreign) would otherwise let the window navigate to the
+    wrong profile's data."""
     url = f"http://{HOST}:{port}/api/profile"
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=1) as r:
-                if r.status == 200:
+                if r.status == 200 and json.loads(r.read()).get("name") == profile:
                     return True
         except Exception:
             pass
@@ -169,17 +278,28 @@ def _wait_ready(port: int, timeout: float = READY_TIMEOUT) -> bool:
     return False
 
 
+_last_start_error = ""  # surfaced to the picker when start_server fails
+
+
 def start_server(profile_name: str) -> bool:
     """Spawn the uvicorn server for ``profile_name`` and wait until it's up.
 
     Frozen: re-spawn this same exe with ``--server <profile>`` (it runs the
     FastAPI app in-process). Dev: spawn ``python -m uvicorn app:app``.
+    Refuses to start (with a message) when the port is held by a process
+    that is not a Mutuo server.
     """
-    global _server_proc
+    global _server_proc, _last_start_error
     with _server_lock:
         _stop_locked()
-        _kill_port(PORT)
-        time.sleep(0.3)
+        _last_start_error = ""
+        foreign = _stop_stale_server()
+        if foreign:
+            _last_start_error = (
+                f"Port {PORT} is already in use by PID {foreign} (not a Mutuo "
+                f"server) — close that program and try again.")
+            print(f"server: {_last_start_error}")
+            return False
         env = dict(os.environ)
         env["PTR_PROFILE"] = profile_name
         env["PTR_DATA_DIR"] = str(DATA_DIR)
@@ -195,8 +315,11 @@ def start_server(profile_name: str) -> bool:
         _server_proc = subprocess.Popen(
             cmd, cwd=str(APP_DIR), env=env, stdout=log, stderr=subprocess.STDOUT, **kwargs,
         )
-        ok = _wait_ready(PORT)
+        _write_pidfile(_server_proc.pid)
+        ok = _wait_ready(PORT, profile_name)
         if not ok:
+            _last_start_error = ("server did not report readiness within "
+                                 f"{READY_TIMEOUT:.0f}s — see {_log_path()}")
             _stop_locked()
         return ok
 
@@ -210,14 +333,21 @@ def _stop_locked() -> None:
     global _server_proc
     proc, _server_proc = _server_proc, None
     if proc and proc.poll() is None:
+        # _terminate (taskkill /T), not proc.terminate(): the spawned
+        # python.exe is a launcher and the real server is its child — see
+        # _terminate for why only a tree kill actually stops it.
+        _terminate(proc.pid)
         try:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-        except OSError:
-            pass
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _kill_pid(proc.pid)
+    # clear the pidfile, but only if it points at the process we just stopped
+    # (a fresh start_server may have written a new one meanwhile)
+    try:
+        if proc is not None and int(_PID_FILE.read_text().strip()) == proc.pid:
+            _PID_FILE.unlink(missing_ok=True)
+    except (OSError, ValueError):
+        pass
 
 
 # ---- JS bridge (exposed to the picker + app as window.pywebview.api) -------
@@ -258,7 +388,8 @@ class ProfileAPI:
         if not profiles.profiles.verify(name, password or ""):
             return {"ok": False, "error": "Wrong password."}
         if not start_server(name):
-            return {"ok": False, "error": "Server failed to start — see the log."}
+            return {"ok": False, "error": _last_start_error
+                    or "Server failed to start — see the log."}
         _active_profile = name
         self._navigate_later(APP_URL)
         return {"ok": True}
@@ -286,7 +417,8 @@ class ProfileAPI:
         except ValueError as e:
             return {"ok": False, "error": str(e)}
         if not start_server(new_name):
-            return {"ok": False, "error": "Server failed to restart — see the log."}
+            return {"ok": False, "error": _last_start_error
+                    or "Server failed to restart — see the log."}
         _active_profile = new_name
         self._navigate_later(APP_URL)  # reload so the UI shows the new name
         return {"ok": True}

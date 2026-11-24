@@ -17,6 +17,7 @@ import re
 import time
 import urllib.request
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -44,15 +45,24 @@ class Catalog:
     def _load(self) -> None:
         try:
             with open(self._path, encoding="utf-8") as fh:
-                for entry in self._entries(json.load(fh)):
-                    self._items[self._magnet_key(entry["magnet"])] = CatalogItem(
-                        name=entry.get("name", ""),
-                        magnet=entry["magnet"],
-                        files=entry.get("files", []),
-                        provider=entry.get("provider", "local"),
-                    )
+                data = json.load(fh)
         except FileNotFoundError:
-            pass
+            return
+        except (json.JSONDecodeError, OSError):
+            # a crash mid-save can leave a truncated file — keep it (renamed)
+            # so nothing is lost, and start empty instead of failing to boot
+            try:
+                Path(self._path).rename(Path(self._path).with_name(Path(self._path).name + ".corrupt"))
+            except OSError:
+                pass
+            return
+        for entry in self._entries(data):
+            self._items[self._magnet_key(entry["magnet"])] = CatalogItem(
+                name=entry.get("name", ""),
+                magnet=entry["magnet"],
+                files=entry.get("files", []),
+                provider=entry.get("provider", "local"),
+            )
 
     def save(self) -> None:
         entries = [
@@ -60,8 +70,12 @@ class Catalog:
              "added_at": it.added_at, "provider": it.provider}
             for it in self._items.values()
         ]
-        with open(self._path, "w", encoding="utf-8") as fh:
-            json.dump(entries, fh, indent=2)
+        # atomic (tmp + rename) like the other registries: a crash mid-write
+        # must not leave a half-written file that _load then has to recover
+        p = Path(self._path)
+        tmp = p.with_name(p.name + ".tmp")
+        tmp.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+        tmp.replace(p)
 
     def items(self) -> list[CatalogItem]:
         return list(self._items.values())
@@ -171,18 +185,26 @@ class ProviderCatalog:
     def _load(self) -> None:
         try:
             with open(self._path, encoding="utf-8") as fh:
-                for entry in json.load(fh):
-                    p = Provider(
-                        id=entry["id"],
-                        name=entry.get("name", entry["id"]),
-                        feed=entry.get("feed", ""),
-                        description=entry.get("description", ""),
-                        enabled=entry.get("enabled", True),
-                        added_at=entry.get("added_at", time.time()),
-                    )
-                    self._providers[p.id] = p
+                data = json.load(fh)
         except FileNotFoundError:
-            pass
+            return
+        except (json.JSONDecodeError, OSError):
+            # see Catalog._load — recover, don't brick startup
+            try:
+                Path(self._path).rename(Path(self._path).with_name(Path(self._path).name + ".corrupt"))
+            except OSError:
+                pass
+            return
+        for entry in data:
+            p = Provider(
+                id=entry["id"],
+                name=entry.get("name", entry["id"]),
+                feed=entry.get("feed", ""),
+                description=entry.get("description", ""),
+                enabled=entry.get("enabled", True),
+                added_at=entry.get("added_at", time.time()),
+            )
+            self._providers[p.id] = p
 
     def save(self) -> None:
         entries = [
@@ -191,8 +213,10 @@ class ProviderCatalog:
              "added_at": p.added_at}
             for p in self._providers.values()
         ]
-        with open(self._path, "w", encoding="utf-8") as fh:
-            json.dump(entries, fh, indent=2)
+        p = Path(self._path)
+        tmp = p.with_name(p.name + ".tmp")
+        tmp.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+        tmp.replace(p)
 
     def items(self) -> list[Provider]:
         return list(self._providers.values())

@@ -11,7 +11,6 @@ Architecture notes
 from __future__ import annotations
 
 import base64
-import io
 import json
 import os
 import re
@@ -68,8 +67,16 @@ RECENT_INDEX = PROFILE_DIR / "recent.json"  # recently opened books (most recent
 async def _lifespan(app: FastAPI):
     # startup
     engine.start()
+    _migrate_pdf_covers()  # data-URI covers in pdfs.json -> files on disk
     feed = PROFILE_DIR / "feed.json"
-    catalog.sync(str(feed) if feed.exists() else None)
+    # a hand-edited or half-written feed.json must not keep the app from
+    # booting — provider feeds sync below (already guarded), and the user can
+    # re-sync later from the UI
+    if feed.exists():
+        try:
+            catalog.sync(str(feed))
+        except Exception as exc:
+            print(f"feed: sync failed ({exc})")
     # each enabled provider owns its own torrent list (a feed); merge them in
     for p in providers.items():
         if p.enabled and p.feed:
@@ -574,7 +581,18 @@ def delete_provider(pid: str) -> JSONResponse:
         raise HTTPException(404, "provider not found")
     providers.save()
     _drop_folder_pdfs(pid)  # its folder PDFs are no longer reachable
-    return JSONResponse({"ok": True})
+    # its torrents too — from the catalog (so a restart can't resurrect them)
+    # and from the live session (so they stop downloading now). Without this
+    # they run on invisibly: the UI lists per provider, and the provider's
+    # tab is gone, so nothing could pause or remove them.
+    orphans = [it for it in catalog.items() if it.provider == pid]
+    ihs = {_ih_from_magnet(it.magnet) for it in orphans}
+    ihs.discard(None)
+    known = {t["info_hash"] for t in engine.status(include_files=False)}
+    removed = catalog.remove_provider(pid)
+    for ih in ihs & known:
+        engine.remove_torrent(ih)  # files stay on disk; tracking stops
+    return JSONResponse({"ok": True, "torrents": removed})
 
 
 @app.post("/api/providers/{pid}/enabled")
@@ -720,10 +738,8 @@ def opds_save(req: OpdsSaveRequest) -> JSONResponse:
     provider = "opds"
     try:
         if req.kind == "pdf":
-            entry = _download_pdf(url, name, provider)
-            return JSONResponse({"ok": True, "kind": "pdf", "id":
-                                 next(k for k, m in _load_pdfs().items()
-                                      if m.get("url") == url)})
+            pid, _ = _download_pdf(url, name, provider)
+            return JSONResponse({"ok": True, "kind": "pdf", "id": pid})
         if req.kind == "epub":
             r = save_epub(SaveEpubRequest(url=url, name=name, provider=provider))
         elif req.kind == "text":
@@ -787,28 +803,47 @@ def _plugin_config_defaults(schema) -> dict:
     return out
 
 
-def _download_pdf(url: str, name: str, provider: str) -> dict:
+def _download_pdf(url: str, name: str, provider: str) -> tuple[str, dict]:
     """Fetch a remote PDF and register it as a direct PDF (source "plugin").
-    Returns the registry entry. Raises on a non-PDF or a fetch failure.
+    Returns (registry id, entry). Raises on a non-PDF or a fetch failure.
     Re-downloading the same URL is a no-op (returns the existing entry) so
-    re-running a plugin query doesn't pile up duplicates."""
+    re-running a plugin query doesn't pile up duplicates.
+
+    The body streams to a .part file in 1 MB chunks (a 500 MB scan would
+    otherwise sit in RAM for the whole download); the %PDF header is checked
+    on the first chunk so a non-PDF never registers, and a mid-download
+    failure leaves no partial file behind."""
     reg = _load_pdfs()
     for pid, m in reg.items():
         if m.get("url") == url:
-            return m
-    req = urllib.request.Request(url, headers={"User-Agent": "pdf-torrent-reader/1.0"})
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = resp.read()
-    if not data.startswith(b"%PDF-"):
-        raise ValueError("not a PDF (missing %PDF header)")
+            return pid, m
     PDF_DIR.mkdir(exist_ok=True)
-    pid = uuid.uuid4().hex
-    (PDF_DIR / f"{pid}.pdf").write_bytes(data)
-    reg[pid] = {"name": name, "size": len(data), "provider": provider,
-                "added_at": time.time(), "source": "plugin", "url": url,
-                **_pdf_meta(str(PDF_DIR / f"{pid}.pdf"))}
-    _save_pdfs(reg)
-    return reg[pid]
+    tmp = PDF_DIR / f".dl-{uuid.uuid4().hex}.part"
+    req = urllib.request.Request(url, headers={"User-Agent": "pdf-torrent-reader/1.0"})
+    size = 0
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as out:
+            first = resp.read(65536)
+            if not first.startswith(b"%PDF-"):
+                raise ValueError("not a PDF (missing %PDF header)")
+            out.write(first)
+            size = len(first)
+            while True:
+                chunk = resp.read(1 << 20)
+                if not chunk:
+                    break
+                out.write(chunk)
+                size += len(chunk)
+        pid = uuid.uuid4().hex
+        final = PDF_DIR / f"{pid}.pdf"
+        tmp.replace(final)
+        reg[pid] = {"name": name, "size": size, "provider": provider,
+                    "added_at": time.time(), "source": "plugin", "url": url,
+                    **_pdf_meta(str(final))}
+        _save_pdfs(reg)
+        return pid, reg[pid]
+    finally:
+        tmp.unlink(missing_ok=True)  # no .part left on success or failure
 
 
 @app.get("/api/plugins")
@@ -898,13 +933,9 @@ def open_plugin_pdf(pid: str, req: PluginOpenRequest) -> JSONResponse:
     no-op (deduped by URL)."""
     provider = f"plugin:{pid}"
     try:
-        _download_pdf(req.url, req.name, provider)
+        pdf_id, _ = _download_pdf(req.url, req.name, provider)
     except Exception as exc:
         raise HTTPException(502, f"could not open PDF: {exc}")
-    reg = _load_pdfs()
-    pdf_id = next((k for k, m in reg.items() if m.get("url") == req.url), None)
-    if pdf_id is None:
-        raise HTTPException(502, "could not open PDF")
     return JSONResponse({"ok": True, "id": pdf_id})
 
 
@@ -1008,13 +1039,27 @@ def remove_plugin(pid: str) -> JSONResponse:
 def clear_plugin_items(pid: str) -> JSONResponse:
     """Drop everything a plugin loaded (its catalog torrents + direct PDFs)."""
     provider = f"plugin:{pid}"
+    # stop the session from tracking those torrents now, not just at the
+    # next restart (the catalog is the rebuild source, so dropping the
+    # entries alone would still leave them downloading)
+    orphans = [it for it in catalog.items() if it.provider == provider]
+    ihs = {_ih_from_magnet(it.magnet) for it in orphans}
+    ihs.discard(None)
+    known = {t["info_hash"] for t in engine.status(include_files=False)}
     removed_torrents = catalog.remove_provider(provider)
+    for ih in ihs & known:
+        engine.remove_torrent(ih)
     reg = _load_pdfs()
+    # downloaded PDFs (source "plugin") AND local PDFs registered in place
+    # (source "folder", "pluginfile:" ids) — both carry the provider tag;
+    # the unlink is a no-op for local-path PDFs (their file lives elsewhere
+    # and must not be touched)
     removed_pdfs = [k for k, m in reg.items()
-                    if m.get("provider") == provider and m.get("source") == "plugin"]
+                    if m.get("provider") == provider and m.get("source") in ("plugin", "folder")]
     for k in removed_pdfs:
         del reg[k]
         (PDF_DIR / f"{k}.pdf").unlink(missing_ok=True)
+        _cover_path(k).unlink(missing_ok=True)
     if removed_pdfs:
         _save_pdfs(reg)
     return JSONResponse({"ok": True, "torrents": removed_torrents, "pdfs": len(removed_pdfs)})
@@ -1161,10 +1206,10 @@ def _pdf_meta(path: str) -> dict:
     return out
 
 
-# ---------- local PDF covers (first page rendered to a data URI) ----------
-# A book's cover is its first page, rendered server-side to a small JPEG and
-# stored as a base64 data URI in the pdfs.json registry entry (one render per
-# PDF — re-requests are served from the registry). pypdfium2 is a
+# ---------- local PDF covers (first page rendered to a JPEG file) ----------
+# A book's cover is its first page, rendered server-side to a small JPEG file
+# under .pdfs/covers/ (one render per PDF — the registry keeps only a bool
+# flag, and the file is served by /api/pdfs/{pid}/cover). pypdfium2 is a
 # self-contained PDFium build, so no system poppler is needed. Rendering is
 # best-effort: a scanned, encrypted, or otherwise odd PDF simply has no cover
 # (the row shows nothing) and never breaks the list.
@@ -1173,28 +1218,62 @@ def _pdf_meta(path: str) -> dict:
 _cover_lock = threading.Lock()
 
 
-def _render_pdf_cover_data(path: str) -> str | None:
-    """Render a PDF's first page to a ~200px-wide JPEG data URI.
-    Returns None when the PDF has no renderable first page."""
+def _cover_path(pid: str) -> Path:
+    """The rendered cover JPEG for a registry id. Pids may contain colons or
+    (plugin-provided) path-ish text, so the filename is percent-quoted —
+    uuid pids pass through unchanged, so existing covers keep their names."""
+    return PDF_DIR / "covers" / f"{quote(pid, safe='')}.jpg"
+
+
+def _render_pdf_cover_file(path: str, dest: Path) -> bool:
+    """Render a PDF's first page to a ~200px-wide JPEG file.
+    Returns False when the PDF has no renderable first page."""
     try:
         import pypdfium2 as pdfium
         pdf = pdfium.PdfDocument(str(path))
         try:
             if len(pdf) == 0:
-                return None
+                return False
             page = pdf[0]
             width = page.get_width() or 612.0
             scale = 200.0 / width  # fixed thumbnail width, any page size
             img = page.render(scale=scale).to_pil()
             if img.mode != "RGB":
                 img = img.convert("RGB")
-            buf = io.BytesIO()
-            img.save(buf, "JPEG", quality=72)
-            return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            img.save(str(dest), "JPEG", quality=72)
+            return True
         finally:
             pdf.close()
     except Exception:
-        return None
+        dest.unlink(missing_ok=True)  # no partial JPEG left behind
+        return False
+
+
+def _migrate_pdf_covers() -> None:
+    """One-time: covers used to be stored as base64 data URIs inside
+    pdfs.json (so every /api/pdfs response carried them all). They now live
+    on disk (.pdfs/covers/<pid>.jpg) and the registry keeps only a flag.
+    Runs at startup and is a no-op once every entry is migrated."""
+    reg = _load_pdfs()
+    changed = False
+    for pid, m in reg.items():
+        cov = m.get("cover")
+        if not isinstance(cov, str):
+            continue
+        try:
+            head, b64 = cov.split(",", 1)
+            if not head.startswith("data:image/"):
+                raise ValueError("not a data URI")
+            _cover_path(pid).parent.mkdir(parents=True, exist_ok=True)
+            _cover_path(pid).write_bytes(base64.b64decode(b64))
+            m["cover"] = True
+            changed = True
+        except Exception:
+            m.pop("cover", None)  # unparseable — drop; the render path retries
+            changed = True
+    if changed:
+        _save_pdfs(reg)
 
 
 class PdfCoversRequest(BaseModel):
@@ -1203,29 +1282,42 @@ class PdfCoversRequest(BaseModel):
 
 @app.post("/api/pdfs/covers")
 def pdf_covers(req: PdfCoversRequest) -> JSONResponse:
-    """Render first-page covers for local PDFs that don't have one yet and
-    store them in the registry. Already-covered ids are skipped, so this is
-    cheap to call repeatedly (the front end fires it after every list load).
-    Renders run sequentially: PDFium is not thread-safe, so concurrent renders
-    can crash the process — the list still loads first and covers appear a
-    moment later because this endpoint runs off the main flow."""
+    """Render first-page covers for local PDFs that don't have one yet, as
+    JPEG files (served by GET /api/pdfs/{pid}/cover). The registry keeps only
+    a flag, so /api/pdfs stays small however large the library grows.
+    Renders are serialized (PDFium is not thread-safe) and capped at 25 per
+    request — the front end re-fires on every refresh, so a big library
+    fills in over a few polls instead of holding one request for minutes."""
     reg = _load_pdfs()
     missing = [pid for pid in req.ids
                if pid in reg and not reg[pid].get("cover")]
-    if missing:
-        for pid in missing:
-            meta = reg[pid]
-            path = Path(meta["path"]) if meta.get("source") == "folder" else PDF_DIR / f"{pid}.pdf"
-            if not path.exists():
-                continue
-            with _cover_lock:
-                data = _render_pdf_cover_data(str(path))
-            if data:
-                reg[pid]["cover"] = data
+    changed = False
+    for pid in missing[:25]:
+        meta = reg[pid]
+        path = Path(meta["path"]) if meta.get("source") == "folder" else PDF_DIR / f"{pid}.pdf"
+        if not path.exists():
+            continue
+        with _cover_lock:
+            ok = _render_pdf_cover_file(str(path), _cover_path(pid))
+        if ok:
+            reg[pid]["cover"] = True
+            changed = True
+    if changed:
         _save_pdfs(reg)
     return JSONResponse({"ok": True,
-                         "covers": {pid: reg[pid]["cover"] for pid in req.ids
-                                    if pid in reg and reg[pid].get("cover")}})
+                         "covers": {pid: f"/api/pdfs/{pid}/cover" for pid in req.ids
+                                    if reg.get(pid, {}).get("cover")}})
+
+
+@app.get("/api/pdfs/{pid}/cover")
+def pdf_cover(pid: str) -> Response:
+    """A direct PDF's first-page cover (rendered once, then immutable for the
+    life of the registry entry — cached hard in the browser)."""
+    path = _cover_path(pid)
+    if not path.is_file():
+        raise HTTPException(404, "no cover")
+    return Response(path.read_bytes(), media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.post("/api/pdf/upload")
@@ -1256,7 +1348,6 @@ async def upload_pdf(files: List[UploadFile] = File(...),
                     **await anyio.to_thread.run_sync(_pdf_meta, str(dest))}
         added.append({"id": pid, "name": fname, "size": len(data)})
     if errors and not added:
-        _save_pdfs(reg)
         raise HTTPException(400, "; ".join(f"{e['file']}: {e['error']}" for e in errors))
     _save_pdfs(reg)
     return JSONResponse({"ok": True, "added": added, "errors": errors})
@@ -1278,12 +1369,11 @@ def add_pdf_url(req: AddPdfUrlRequest) -> JSONResponse:
     name = req.name.strip() or url.rsplit("/", 1)[-1].split("?")[0] or "document.pdf"
     # provider "local" so it lists under the Local provider, like uploads
     try:
-        entry = _download_pdf(url, name, "local")
+        pid, entry = _download_pdf(url, name, "local")
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:
         raise HTTPException(502, f"could not download PDF: {exc}")
-    pid = next(k for k, m in _load_pdfs().items() if m.get("url") == url)
     return JSONResponse({"ok": True, "id": pid, "name": entry["name"], "size": entry["size"]})
 
 
@@ -1366,6 +1456,7 @@ def delete_pdf(pid: str) -> JSONResponse:
     # must not be deleted from the user's folder
     if not is_folder:
         (PDF_DIR / f"{pid}.pdf").unlink(missing_ok=True)
+    _cover_path(pid).unlink(missing_ok=True)  # its rendered cover (if any)
     return JSONResponse({"ok": True})
 
 

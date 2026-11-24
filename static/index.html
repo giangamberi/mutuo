@@ -606,6 +606,46 @@
   #catalog .plugin-item .cogwrap .menu { top:calc(100% + 4px); left:0; right:auto; }
   #catalog .plugin-empty { color:var(--dim); font-size:calc(13px * var(--app-text-scale)); padding:16px 14px; }
   #catalog .plugin-subhead { padding:10px 14px 4px; font-size:calc(10px * var(--app-text-scale)); color:var(--dim); text-transform:uppercase; letter-spacing:.5px; opacity:.8; }
+  /* Discover results: one expandable box per source (the local library plus
+     each active live plugin). The boxes are plain children of #catalog, not
+     .titem cards, so the grid's card CSS and layoutCatalogueActions ignore
+     them; in grid mode they span the full row instead of taking one cell. */
+  #catalog .dsrbox { margin:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--panel); }
+  /* in grid mode the grid's own gap + padding space the rows; the margin
+     would double that up */
+  #catalog.catalogue .dsrbox { grid-column:1 / -1; margin:0; }
+  #catalog .dsrhead { padding:4px 6px; background:var(--input-bg); border-radius:8px 8px 0 0; border-bottom:1px solid var(--border-soft); }
+  #catalog .dsrtoggle {
+    display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+    font:inherit; cursor:pointer; background:transparent; color:var(--text);
+    border:0; border-radius:6px; padding:6px 8px; font-size:calc(13px * var(--app-text-scale));
+  }
+  #catalog .dsrtoggle:hover { background:var(--hover); }
+  #catalog .dsrtoggle .chev { color:var(--dim); font-size:calc(11px * var(--app-text-scale)); width:12px; flex:none; }
+  #catalog .dsrtoggle .name { font-weight:600; min-width:0; overflow-wrap:anywhere; }
+  #catalog .dsrtoggle .count { margin-left:auto; color:var(--dim); font-size:calc(12px * var(--app-text-scale)); white-space:nowrap; }
+  #catalog .dsrbody { display:none; padding:4px 10px 8px; }
+  #catalog .dsrbody.open { display:block; }
+  /* rows inside a group: the compact list-row look (a .dsritem, not a .titem,
+     so the card CSS never touches them); same open paths, same click handler */
+  #catalog .dsritem { border-bottom:1px solid var(--border-soft); }
+  #catalog .dsritem:last-child { border-bottom:none; }
+  #catalog .dsritem button.open {
+    display:block; width:100%; text-align:left; font:inherit; cursor:pointer;
+    background:transparent; color:var(--text); border:0; border-radius:0; padding:8px 6px;
+  }
+  #catalog .dsritem:hover button.open { background:var(--hover); }
+  #catalog .dsritem .name { overflow-wrap:anywhere; }
+  #catalog .dsritem button.open.has-cover { display:flex; align-items:flex-start; gap:10px; }
+  #catalog .dsritem .cover {
+    flex:0 0 auto; width:44px; height:60px; object-fit:cover; border-radius:3px;
+    border:1px solid var(--border); background:var(--input-bg);
+    display:none; /* hidden until the image actually loads — no empty slot */
+  }
+  #catalog .dsritem .cover.loaded { display:block; }
+  #catalog .dsritem .cover.noimg { display:none; }
+  #catalog .dsritem .covertxt { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+  #catalog .dsritem .covertxt .name, #catalog .dsritem .covertxt .meta { display:block; }
   /* Catalogs (OPDS) view */
   #catalog .opds-crumb { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 14px; border-bottom:1px solid var(--border-strong); font-size:calc(12px * var(--app-text-scale)); }
   #catalog .opds-crumb button { background:none; border:none; color:var(--acc); cursor:pointer; font-size:inherit; padding:2px 4px; border-radius:4px; }
@@ -1112,6 +1152,16 @@ let polling = false; // guard against overlapping ticks
 let dataLoaded = false; // true once the first full refresh succeeds
 let lastListSig = null; // signature of the last rendered Shelf list (skip rebuild if unchanged)
 let lastLiveSig = null; // signature of the last rendered live-provider list (skip rebuild if unchanged)
+// One sig per UI region the 4s tick re-renders: when the signature is
+// unchanged the DOM is left alone (no wipe → no flicker, hover/menus kept).
+let lastRailSig = null;        // left rail
+let lastTabsSig = null;        // provider tab bar (#tabs, Shelf view)
+let lastStatusSig = null;      // To Read / Reading / Complete sub-tab row (#tabs)
+let lastCollectionSig = null;  // My Shelf / Favorites list (#catalog)
+let lastRecentSig = null;      // Recent list (#catalog)
+let lastCatalogsSig = null;    // OPDS catalogs view (#catalog)
+let lastPluginsSig = null;     // Plugins view (#catalog)
+let lastSettingsSig = null;    // Settings view (#catalog)
 
 async function j(url, opts) {
   const r = await fetch(url, opts);
@@ -1147,11 +1197,15 @@ function renderAll(torrents) {
   const provOf = t => (byMagnet[magnetKey(t.magnet)] || {}).provider || 'local';
   renderRail();
   applyListView(); // keep the catalogue/list class in sync with the setting
-  // leaving the shelf list for another view: clear the sig so returning to the
-  // shelf forces a rebuild (otherwise renderShelf's sig-skip — meant for idle
-  // ticks — sees an unchanged signature and leaves the previous view's HTML in
-  // #catalog).
-  if (view !== 'shelf') { lastListSig = null; lastLiveSig = null; }
+  // leaving a view for another: clear its sig(s) so returning forces a rebuild
+  // (otherwise the sig-skip — meant for idle ticks — sees an unchanged signature
+  // and leaves the previous view's HTML in #catalog / #tabs).
+  if (view !== 'shelf') { lastListSig = null; lastLiveSig = null; lastTabsSig = null; }
+  if (view !== 'reading' && view !== 'favorites') { lastCollectionSig = null; lastStatusSig = null; }
+  if (view !== 'recent') lastRecentSig = null;
+  if (view !== 'catalogs') lastCatalogsSig = null;
+  if (view !== 'plugins') lastPluginsSig = null;
+  if (view !== 'settings') lastSettingsSig = null;
   document.getElementById('search-fulltext').style.display = 'none'; // the Discover tab shows it
   syncTagPop(); // keep an open tag popover in sync with the re-rendered list
   pollPosition(); // persist the open book's reading position a few times a minute
@@ -1191,10 +1245,18 @@ async function refresh() {
   } catch (e) { /* server still starting */ }
 }
 
-// Local PDFs render their first-page cover server-side (in parallel) and store
-// it in the registry. The list is already on screen by the time this fires, so
-// covers appear a moment later without blocking the results. Already-covered
-// ids are skipped server-side, so this is cheap to call on every refresh.
+// A direct PDF's first-page cover: a JPEG rendered once on the server
+// (registry keeps only a flag), so the /api/pdfs payload stays small no
+// matter how large the library gets. '' when it hasn't been rendered yet.
+function directCoverUrl(p) {
+  return (p && p.cover) ? `/api/pdfs/${encodeURIComponent(p.id)}/cover` : '';
+}
+
+// Ask the server to render covers for the PDFs that don't have one yet.
+// The list is already on screen by the time this fires, so covers appear a
+// moment later without blocking the results. Already-covered ids are skipped
+// server-side (and at most 25 render per call), so this is cheap to fire on
+// every refresh and a big library fills in over a few polls.
 function fetchLocalCovers() {
   const missing = directPdfs.filter(p => !p.cover).map(p => p.id);
   if (!missing.length) return;
@@ -1244,22 +1306,36 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
   document.getElementById('searchbar').style.display = '';
   document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
   const el = document.getElementById('catalog');
-  // Discover tab: the global search across every registry (torrents, PDFs,
-  // texts, EPUBs, files). No sort/pagination — it's a search, not a list.
+  // Discover tab: the global search fanned out to every source — the local
+  // registries plus every active live plugin — rendered as one expandable
+  // row per source. The page control paginates the library row.
   if (activeProvider === 'discover') {
     document.getElementById('sort').style.display = 'none';
-    document.getElementById('perpage').style.display = 'none';
-    document.querySelector('#searchbar .pg').style.display = 'none';
+    document.getElementById('perpage').style.display = '';
+    document.querySelector('#searchbar .pg').style.display = '';
     document.getElementById('filters-btn').style.display = 'none';
-    document.getElementById('search').placeholder = 'Search the whole library…';
+    document.getElementById('search').placeholder = 'Search the library and every active plugin…';
     document.getElementById('search-fulltext').style.display = '';
-    el.innerHTML = '';
     const dq = (document.getElementById('search').value || '').trim();
+    // skip the rebuild when the query, page, and every source row are
+    // unchanged; pdf covers are compared by presence (a cover arriving later
+    // re-renders once), a resolving plugin item flips resolve_id → url
+    const dsig = 'discover:' + JSON.stringify([dq, page, perPage, searchQuery,
+      searchGroups.map(g => [g.key, g.name, g.loading, g.error || '',
+        g.items.map(it => [it.type || '', it.ih || it.id || it.url || it.magnet || '',
+          it.name || '', it.meta || '', it.size || 0, it.pages || 0, it.kind || '',
+          it.resolve_id || '',
+          g.key === 'library' && it.type === 'pdf' ? ((directPdfs.find(x => x.id === it.id) || {}).cover ? 1 : 0) : ''])]),
+      [...searchGroupCollapsed].sort()]);
+    if (dsig === lastListSig) return;
+    lastListSig = dsig;
+    el.innerHTML = '';
     if (dq) { renderGlobalResults(el, dq); return; }
     const e = document.createElement('div');
     e.className = 'empty';
-    e.textContent = 'Search every book in the library — torrents, PDFs, texts, EPUBs and saved files.';
+    e.textContent = 'Search the library (torrents, PDFs, texts, EPUBs, files) and every active plugin at once — results land in one row per source.';
     el.appendChild(e);
+    updatePagination(1);
     return;
   }
   document.getElementById('search').placeholder = 'Search documents…';
@@ -1358,10 +1434,12 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
       const pdfFavKey = 'pdf:' + p.id;
       const pdfIsFav = favorites.some(f => f.key === pdfFavKey);
       const pdfShelved = shelf.some(s => s.key === pdfFavKey);
-      // first-page cover thumbnail (rendered server-side, stored in the
-      // registry); shown only once it's been fetched — no empty slot before
-      const coverHtml = p.cover
-        ? `<img class="cover" src="${esc(p.cover)}" alt="" onload="this.classList.add('loaded')" onerror="this.classList.add('noimg')">`
+      // first-page cover thumbnail (rendered server-side, served from
+      // /api/pdfs/<id>/cover); shown only once it's been fetched — no
+      // empty slot before
+      const coverUrl = directCoverUrl(p);
+      const coverHtml = coverUrl
+        ? `<img class="cover" src="${esc(coverUrl)}" alt="" onload="this.classList.add('loaded')" onerror="this.classList.add('noimg')">`
         : '';
       item.innerHTML = `<button type="button" class="open${p.cover ? ' has-cover' : ''}" data-pdf="${p.id}" data-name="${esc(displayName)}" data-source="${fromFolder ? 'folder' : 'upload'}">
           ${coverHtml}
@@ -1394,6 +1472,9 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
 }
 
 function updatePagination(pages) {
+  // keep the bar's per-page select in sync (Settings can change perPage out
+  // from under it without touching this control)
+  document.getElementById('perpage').value = perPage === 0 ? 'all' : String(perPage);
   document.getElementById('pg-info').textContent = pages > 1 ? `${page}/${pages}` : '';
   document.getElementById('pg-prev').disabled = page <= 1;
   document.getElementById('pg-next').disabled = page >= pages;
@@ -1412,7 +1493,14 @@ document.getElementById('search').addEventListener('input', () => {
 });
 document.getElementById('search-fulltext-cb').addEventListener('change', () => {
   const q = (document.getElementById('search').value || '').trim();
-  if (q && activeProvider === 'discover') runGlobalSearch();
+  if (!q || activeProvider !== 'discover') return;
+  const lib = searchGroups.find(g => g.key === 'library');
+  if (lib && searchQuery === q) {
+    // the full-text toggle only changes the local pass — re-fetch the library
+    // row alone instead of re-fanning-out every plugin for the same query
+    lib.loading = true;
+    fetchLocalSearchGroup(lib, q, searchSeq);
+  } else runGlobalSearch();
 });
 document.getElementById('search-btn').addEventListener('click', () => runLiveSearch());
 document.getElementById('search').addEventListener('keydown', (e) => {
@@ -1519,6 +1607,7 @@ function renderLiveProvider(prov, directPdfs) {
   // list blank.
   const liveSig = JSON.stringify({
     prov: prov.id, loading: liveLoading, error: st.error, expanded: [...liveExpanded],
+    page, perPage,
     favs: favorites.map(f => f.key), shelf: shelf.map(s => s.key),
     savedT: savedTexts.map(t => t.url), savedE: savedEpubs.map(t => t.url), savedF: savedFiles.map(t => t.url),
     dl: directPdfs.filter(p => p.url).map(p => p.url),
@@ -1531,10 +1620,11 @@ function renderLiveProvider(prov, directPdfs) {
   sb.style.display = '';
   document.getElementById('search-btn').style.display = '';
   document.getElementById('filters-btn').style.display = 'none';
-  // hide the torrent-only controls; a live provider lists search results
+  // hide the torrent-only sort control; a live provider lists search results,
+  // paginated like the other lists (per-page select + page controls stay)
   document.getElementById('sort').style.display = 'none';
-  document.getElementById('perpage').style.display = 'none';
-  document.querySelector('#searchbar .pg').style.display = 'none';
+  document.getElementById('perpage').style.display = '';
+  document.querySelector('#searchbar .pg').style.display = '';
   document.getElementById('search').placeholder = `Search ${esc(prov.name)}…`;
   // inject the plugin's config controls (sort, language, …) into the search bar
   sb.querySelectorAll('.live-cfg').forEach(n => n.remove());
@@ -1576,6 +1666,7 @@ function renderLiveProvider(prov, directPdfs) {
     d.innerHTML = '<div class="spin"></div> searching…';
     el.appendChild(d);
     document.getElementById('hdrstat').textContent = 'searching…';
+    updatePagination(1);
     return;
   }
   if (!liveResults.length) {
@@ -1586,6 +1677,7 @@ function renderLiveProvider(prov, directPdfs) {
       : 'Type a search term above to list results. Use the sort / language / topic controls to narrow it down.';
     el.appendChild(d);
     document.getElementById('hdrstat').textContent = st.error ? 'search error' : `search ${esc(prov.name)}`;
+    updatePagination(1);
     return;
   }
   // a failed search keeps the previous results on screen (a flaky provider
@@ -1602,7 +1694,15 @@ function renderLiveProvider(prov, directPdfs) {
   const savedFileByUrl = Object.fromEntries(savedFiles.map(t => [t.url, t]));
   // PDFs already downloaded to disk (for later reading) — matched by URL
   const downloadedByUrl = Object.fromEntries(directPdfs.filter(p => p.url).map(p => [p.url, p]));
-  for (const [idx, it] of liveResults.entries()) {
+  // paginate like the other lists; idx stays the GLOBAL item index so edition
+  // expansion (liveExpanded) and edtoggle targets survive page changes
+  const total = liveResults.length;
+  const pp = perPage === 0 ? total : perPage;
+  const pages = Math.max(1, Math.ceil(total / pp));
+  if (page > pages) page = pages;
+  const start = (page - 1) * pp;
+  for (const [i, it] of liveResults.slice(start, start + pp).entries()) {
+    const idx = start + i;
     const item = document.createElement('div');
     item.className = 'titem has-shelf';
     const kind = it.magnet ? 'torrent' : (it.kind || 'pdf');
@@ -1684,6 +1784,7 @@ function renderLiveProvider(prov, directPdfs) {
     el.appendChild(item);
   }
   document.getElementById('hdrstat').textContent = `${liveResults.length} result(s) in ${esc(prov.name)}`;
+  updatePagination(pages);
 }
 
 function runLiveSearch() {
@@ -1708,6 +1809,7 @@ function runLiveSearch() {
   entry.error = null;
   liveCache[provId] = entry;
   liveExpanded.clear(); // a new result set — old expansion indices are stale
+  page = 1; // a new result set starts on page one
   refresh();
   const params = new URLSearchParams({ query: q, config: JSON.stringify(cfg) });
   j(`/api/plugins/${pid}/search?${params}`)
@@ -1914,6 +2016,10 @@ function railOrder() {
 }
 function renderRail() {
   const el = document.getElementById('rail');
+  // the rail only changes with the active tab, its position, or the saved order
+  const rsig = JSON.stringify([view, tabPosition, railOrder().join(',')]);
+  if (rsig === lastRailSig) return;
+  lastRailSig = rsig;
   el.innerHTML = '';
   const showText = tabPosition === 'top'; // in the header, show icon + name
   const mk = (icon, name, label, key) => {
@@ -1937,6 +2043,11 @@ function renderRail() {
 // each group separated by a divider, the plugin group labelled.
 function renderShelfTabs() {
   const el = document.getElementById('tabs');
+  // the tab bar only changes when the provider set or the active tab changes
+  const tsig = JSON.stringify([activeProvider,
+    providers.map(p => [p.id, p.name, !!p.plugin, !!p.enabled, p.description || p.feed || p.name])]);
+  if (tsig === lastTabsSig) return;
+  lastTabsSig = tsig;
   el.style.display = '';
   el.innerHTML = '';
   const mkTab = (p) => {
@@ -2021,8 +2132,10 @@ function renderShelfTabs() {
 // favorite entry. Empty when the book has no cover.
 function resolveCover(d) {
   if (d.favtype === 'pdf' && d.favpdf) {
-    const p = directPdfs.find(x => x.id === d.favpdf);
-    if (p && p.cover) return p.cover;
+    // the registry flag only — the image itself is served per entry, so the
+    // saved cover stays a small URL, not a multi-KB data URI
+    const u = directCoverUrl(directPdfs.find(x => x.id === d.favpdf));
+    if (u) return u;
   }
   if (d.favtype === 'live' && d.favprovider) {
     const st = liveCache[d.favprovider];
@@ -2276,15 +2389,6 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
   const showRemove = !!opts.showRemove;
   const tagFilter = opts.tagFilter || null;
   const el = document.getElementById('catalog');
-  el.innerHTML = '';
-  document.getElementById('sort').style.display = '';
-  document.getElementById('perpage').style.display = 'none';
-  document.querySelector('#searchbar .pg').style.display = 'none';
-  document.getElementById('search-btn').style.display = 'none';
-  document.getElementById('filters-btn').style.display = 'none';
-  document.getElementById('searchbar').style.display = '';
-  document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
-  document.getElementById('search').placeholder = opts.placeholder || 'Search…';
   const q = (document.getElementById('search').value || '').trim().toLowerCase();
   // status + tags are managed on the shelf (favorites ⊆ shelf), so resolve
   // them from the shelf entry when one exists — keeps the Favorites view in
@@ -2312,7 +2416,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       if (!p) continue; // PDF removed
       rows.push({ kind: 'pdf', name: p.title || p.name,
         meta: [p.source === 'folder' ? 'from folder' : 'direct file', fmtSize(p.size), p.pages ? p.pages + 'p' : null, p.author || null].filter(Boolean).join(' · '),
-        pdf: p.id, source: p.source, url: p.url || '', cover: p.cover || '', fav: f, eff });
+        pdf: p.id, source: p.source, url: p.url || '', cover: directCoverUrl(p), fav: f, eff });
     } else { // live result (Gutenberg text/html/epub/pdf, or a torrent magnet)
       const saved = (f.kind === 'text' && f.url) ? savedByUrl[f.url] : null;
       const savedEpub = (f.kind === 'epub' && f.url) ? savedEpubByUrl[f.url] : null;
@@ -2336,6 +2440,36 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       } else flat.push(r);
     }
   } else flat.push(...rows);
+  // skip the DOM rebuild when nothing that affects the rendered rows changed —
+  // the 4s tick would otherwise tear down and re-inflate the whole grid (cover
+  // images re-decode and the view flickers) on every poll. Covers are compared
+  // by presence only: the base64 data never changes once stored.
+  const csig = JSON.stringify({
+    view, sub: opts.statusFilter, q, statusFilter, tagFilter, group: !!opts.group,
+    favs: favorites.map(f => f.key),
+    shelf: shelf.map(s => s.key),
+    expanded: [...shelfGroupExpanded].sort(),
+    rows: rows.map(r => [r.kind, r.fav.key, r.name, r.meta, r.bar,
+      r.pdf || '', r.source || '', r.url || '', !!r.cover,
+      r.saved || '', r.savedepub || '', r.savedfile || '',
+      r.fav.name, r.fav.provider || '', r.fav.magnet || '', r.fav.kind || '',
+      (r.kind === 'pdf' && r.url) ? (directPdfs.some(p => p.url === r.url) ? 1 : 0) : '',
+      r.eff.status || '', (r.eff.tags || []).length, r.eff.page || 0, r.eff.scroll || 0,
+      r.group || '']),
+    groups: [...groups.entries()].map(([k, g]) => [k, g.rows.length]),
+    flat: flat.length
+  });
+  if (csig === lastCollectionSig) return;
+  lastCollectionSig = csig;
+  el.innerHTML = '';
+  document.getElementById('sort').style.display = '';
+  document.getElementById('perpage').style.display = 'none';
+  document.querySelector('#searchbar .pg').style.display = 'none';
+  document.getElementById('search-btn').style.display = 'none';
+  document.getElementById('filters-btn').style.display = 'none';
+  document.getElementById('searchbar').style.display = '';
+  document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
+  document.getElementById('search').placeholder = opts.placeholder || 'Search…';
   const renderRow = (r) => {
     const item = document.createElement('div');
     item.dataset.shelfkey = r.fav.key;
@@ -2514,6 +2648,10 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
 // used by both the My Shelf and Favorites views so they offer the same filters
 function buildStatusTabs(activeSub, setActive) {
   const el = document.getElementById('tabs');
+  // same #tabs container as the provider tab bar; `view` keeps the two apart
+  const ssig = JSON.stringify([view, activeSub, tagFilter, allTags]);
+  if (ssig === lastStatusSig) return;
+  lastStatusSig = ssig;
   el.style.display = '';
   el.innerHTML = '';
   const sub = document.createElement('div');
@@ -2644,6 +2782,29 @@ function renderRecent(torrents, byMagnet) {
   document.getElementById('searchbar').querySelectorAll('.live-cfg').forEach(n => n.remove());
   document.getElementById('search').placeholder = 'Search recent…';
   const q = (document.getElementById('search').value || '').trim().toLowerCase();
+  const rows = recent.filter(r => !q || (r.name || '').toLowerCase().includes(q));
+  // skip the DOM rebuild when nothing the rows show changed — the 4s tick
+  // would otherwise tear down and re-inflate the list on every poll
+  const rsig = JSON.stringify({
+    view, q,
+    rows: rows.map(r => {
+      if (r.type === 'torrent') {
+        const t = torrents.find(x => x.info_hash === r.ih);
+        const c = byMagnet[magnetKey(r.magnet)] || {};
+        return [r.key, r.name, r.size || 0, r.shelf_key || '', c.name || '',
+          t ? t.state : '', t ? Math.round(t.progress * 100) : '',
+          torrentCached(r.ih, r.f) ? 1 : 0];
+      }
+      if (r.type === 'pdf') {
+        const p = directPdfs.find(x => x.id === r.pdf);
+        return [r.key, r.name, r.shelf_key || '', r.size || 0,
+          p ? (p.title || p.name) : '', p ? p.pages : '', p ? p.size : ''];
+      }
+      return [r.key, r.name, r.shelf_key || '', r.kind || '', r.url || '', r.magnet || ''];
+    })
+  });
+  if (rsig === lastRecentSig) return;
+  lastRecentSig = rsig;
   el.innerHTML = '';
   if (recent.length) {
     const head = document.createElement('div');
@@ -2651,7 +2812,6 @@ function renderRecent(torrents, byMagnet) {
     head.innerHTML = `<span>${recent.length} book${recent.length > 1 ? 's' : ''}</span><button type="button" id="recent-clear-all" title="Remove everything from the recent list">Clear all</button>`;
     el.appendChild(head);
   }
-  const rows = recent.filter(r => !q || (r.name || '').toLowerCase().includes(q));
   if (!rows.length) {
     const e = document.createElement('div');
     e.className = 'empty';
@@ -2696,72 +2856,218 @@ function renderRecent(torrents, byMagnet) {
   }
 }
 
-// ---- global search: one box across every registry (torrents, direct PDFs,
-// saved texts/EPUBs/files). The fast path matches names/titles/authors;
-// the optional full-text pass scans saved texts for a snippet. Results reuse
-// the same open paths as the other views, so a hit opens exactly like the
-// book would from its home list.
-let searchResults = [];
-let searchQuery = ''; // the query that produced searchResults (stale-guard)
+// ---- global search (Discover): one box that fans out to every source at
+// once — the local library (torrents, direct PDFs, saved texts/EPUBs/files)
+// plus the live search of EVERY active plugin. Each source gets its own
+// expandable result row with independent loading/error state, so one slow
+// provider never holds up the others. Hits reuse the same open paths as the
+// other views, so a hit opens exactly like the book would from its home list.
+let searchGroups = []; // [{key, icon, name, config?, items, loading, error}]
+let searchQuery = ''; // the query the groups are for (stale-guard)
+let searchSeq = 0; // a new query supersedes in-flight group fetches
 let searchTimer = null;
+let searchGroupCollapsed = new Set(); // group keys currently collapsed
 function runGlobalSearch() {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(doGlobalSearch, 250);
 }
-async function doGlobalSearch() {
+function doGlobalSearch() {
   const q = (document.getElementById('search').value || '').trim();
-  const ft = document.getElementById('search-fulltext-cb').checked;
-  if (!q) { searchResults = []; searchQuery = ''; refresh(); return; }
-  try {
-    searchResults = await j(`/api/search?q=${encodeURIComponent(q)}${ft ? '&fulltext=1' : ''}`).then(r => r.json());
-    searchQuery = q;
-  } catch { searchResults = []; searchQuery = q; }
-  refresh(); // re-render the current view (Library/Catalogs) with the fresh results
+  if (!q) {
+    searchQuery = '';
+    searchGroups = [];
+    refresh();
+    return;
+  }
+  const seq = ++searchSeq;
+  searchQuery = q;
+  page = 1; // a new search starts on page one
+  searchGroupCollapsed.clear(); // fresh results start expanded
+  searchGroups = [
+    { key: 'library', icon: '📚', name: 'This library', items: [], loading: true, error: null },
+    ...providers.filter(p => p.live).map(p => ({
+      key: p.id, icon: '🔌', name: p.name, config: p.config || {},
+      items: [], loading: true, error: null,
+    })),
+  ];
+  refresh();
+  fetchLocalSearchGroup(searchGroups[0], q, seq);
+  for (const g of searchGroups.slice(1)) fetchPluginSearchGroup(g, q, seq);
 }
-// Append global-search results to el. Called by the Library and Catalogs
-// views when their search box has a query. Reuses the same open paths as the
-// other views, so a hit opens exactly like the book would from its home list.
+
+// the library row: /api/search (fast name/title/author match, plus the
+// optional full-text pass over saved texts)
+function fetchLocalSearchGroup(g, q, seq) {
+  const ft = document.getElementById('search-fulltext-cb').checked;
+  // per-group token: the full-text checkbox can re-trigger this fetch while
+  // an older one is still in flight; only the newest one may land
+  const tok = (g.libTok || 0) + 1;
+  g.libTok = tok;
+  j(`/api/search?q=${encodeURIComponent(q)}${ft ? '&fulltext=1' : ''}`)
+    .then(r => r.json())
+    .then(items => {
+      if (seq !== searchSeq || g.libTok !== tok) return; // superseded
+      g.items = items;
+      g.loading = false;
+      refresh();
+    })
+    .catch(e => {
+      if (seq !== searchSeq || g.libTok !== tok) return;
+      g.error = e.message;
+      g.loading = false;
+      refresh();
+    });
+}
+
+// a plugin row: the same two-stage flow the provider tabs use —
+// search(query, config), then resolve() for two-stage providers
+function fetchPluginSearchGroup(g, q, seq) {
+  const pid = g.key.slice(7); // 'plugin:<id>' -> '<id>'
+  const params = new URLSearchParams({ query: q, config: JSON.stringify(g.config || {}) });
+  j(`/api/plugins/${pid}/search?${params}`)
+    .then(r => r.json())
+    .then(data => {
+      if (seq !== searchSeq) return;
+      g.items = data.items || [];
+      g.loading = false;
+      refresh();
+      resolveSearchGroup(g, seq);
+    })
+    .catch(e => {
+      if (seq !== searchSeq) return;
+      g.error = e.message;
+      g.loading = false;
+      refresh();
+    });
+}
+
+// stage 2 for a plugin row: resolve the pending items (resolve_id, no url
+// yet) to their openable URLs, merge them back in, drop the ones with no PDF
+function resolveSearchGroup(g, seq) {
+  const pending = g.items.filter(it => it.resolve_id && !it.url);
+  if (!pending.length) return;
+  if (g.resolving) return; // a resolve for this search is already in flight
+  g.resolving = true;
+  const pid = g.key.slice(7);
+  j(`/api/plugins/${pid}/resolve`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: pending.map(it => it.resolve_id) }) })
+    .then(r => r.json())
+    .then(data => {
+      if (seq !== searchSeq) return;
+      const resolved = data.resolved || {};
+      const next = [];
+      for (const it of g.items) {
+        if (it.resolve_id && !it.url) {
+          const res = resolved[it.resolve_id];
+          if (res && res.url) {
+            it.url = res.url;
+            if (res.size) {
+              const mb = Math.round(res.size / (1024 * 1024));
+              it.meta = it.meta ? `${it.meta} · ${mb} MB` : `${mb} MB`;
+            }
+            delete it.resolve_id;
+            next.push(it);
+          }
+          // no openable PDF for this item — drop it from the row
+        } else {
+          next.push(it);
+        }
+      }
+      g.items = next;
+      g.resolving = false;
+      refresh();
+    })
+    .catch(() => {
+      if (seq !== searchSeq) return;
+      g.resolving = false; // keep the pending items; a re-search will retry
+      refresh();
+    });
+}
+// Append Discover results to el: one expandable row per source (the local
+// library + every active live plugin). The rows are independent — each keeps
+// its own loading/error state, so a slow provider never blanks the rest.
+// Hits reuse the same open paths as the other views, so a hit opens exactly
+// like the book would from its home list.
 function renderGlobalResults(el, q) {
-  if (q !== searchQuery) {
-    const e = document.createElement('div');
-    e.className = 'empty';
-    e.textContent = 'Searching…';
-    el.appendChild(e);
-    return;
-  }
-  if (!searchResults.length) {
-    const e = document.createElement('div');
-    e.className = 'empty';
-    e.textContent = `No matches for “${q}”.`;
-    el.appendChild(e);
-    return;
-  }
+  const settled = searchGroups.filter(g => !g.loading && !g.error);
+  const total = settled.reduce((n, g) => n + g.items.length, 0);
+  const anyLoading = searchGroups.some(g => g.loading);
+  const stale = q !== searchQuery; // typed, but the debounced search hasn't fired yet
   const head = document.createElement('div');
   head.className = 'recent-head';
-  head.innerHTML = `<span>${searchResults.length} result${searchResults.length > 1 ? 's' : ''} for “${esc(q)}”</span>`;
+  head.innerHTML = `<span>${stale
+    ? 'Searching…'
+    : `${total} result${total > 1 ? 's' : ''} for “${esc(q)}”${anyLoading ? ' · searching…' : ''}`}</span>`;
   el.appendChild(head);
-  const icon = { torrent: '📦', pdf: '📄', text: '📝', epub: '📚', file: '📎' };
-  for (const r of searchResults) {
-    const item = document.createElement('div');
-    item.className = 'titem';
-    const meta = [r.type, r.meta && r.meta !== r.type ? r.meta : null, r.size ? fmtSize(r.size) : null, r.pages ? r.pages + 'p' : null].filter(Boolean).join(' · ');
-    let btn;
-    if (r.type === 'torrent') btn = `<button type="button" class="open" data-ih="${esc(r.ih)}" data-name="${esc(r.name)}"><div class="name">${icon.torrent} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
-    else if (r.type === 'pdf') {
-      // first-page cover from the direct-PDF registry (same markup as the
-      // shelf, so the grid/list cover CSS + fetchLocalCovers apply)
-      const p = directPdfs.find(x => x.id === r.id);
-      const coverHtml = p && p.cover
-        ? `<img class="cover" src="${esc(p.cover)}" alt="" onload="this.classList.add('loaded')" onerror="this.classList.add('noimg')">`
-        : '';
-      btn = `<button type="button" class="open${coverHtml ? ' has-cover' : ''}" data-pdf="${esc(r.id)}" data-name="${esc(r.name)}">${coverHtml}<span class="covertxt"><span class="name">${icon.pdf} ${esc(r.name)}</span><span class="meta">${esc(meta)}</span></span></button>`;
-    }
-    else if (r.type === 'text') btn = `<button type="button" class="open" data-savedtext="${esc(r.id)}" data-name="${esc(r.name)}"><div class="name">${icon.text} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
-    else if (r.type === 'epub') btn = `<button type="button" class="open" data-savedepub="${esc(r.id)}" data-name="${esc(r.name)}"><div class="name">${icon.epub} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
-    else btn = `<button type="button" class="open" data-savedfile="${esc(r.id)}" data-name="${esc(r.name)}" data-filekind="${esc(r.kind || 'file')}"><div class="name">${icon.file} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
-    item.innerHTML = btn;
-    el.appendChild(item);
+  // the shared page control paginates the library row; the plugin rows show
+  // all of their rows (each is bounded by the plugin's own result limit)
+  const lib = searchGroups.find(g => g.key === 'library');
+  let libPages = 1;
+  if (lib && !lib.loading && !lib.error && lib.items.length) {
+    const pp = perPage === 0 ? lib.items.length : perPage;
+    libPages = Math.max(1, Math.ceil(lib.items.length / pp));
+    if (page > libPages) page = libPages;
   }
+  for (const g of searchGroups) {
+    const collapsed = searchGroupCollapsed.has(g.key);
+    const state = g.loading ? 'searching…' : g.error ? 'search failed' : String(g.items.length);
+    const box = document.createElement('div');
+    box.className = 'dsrbox';
+    let body;
+    if (g.loading) body = `<div class="plugin-empty">Searching ${esc(g.name)}…</div>`;
+    else if (g.error) body = `<div class="plugin-empty">Search failed: ${esc(g.error)}</div>`;
+    else if (!g.items.length) body = `<div class="plugin-empty">no matches</div>`;
+    else if (g.key === 'library') body = `<div class="dsrlist">${libItemsPage(lib)}</div>`;
+    else body = `<div class="dsrlist">${g.items.map(it => renderSearchPluginItem(it)).join('')}</div>`;
+    box.innerHTML =
+      `<div class="dsrhead"><button type="button" class="dsrtoggle" data-dsrkey="${esc(g.key)}">` +
+      `<span class="chev">${collapsed ? '▸' : '▾'}</span><span>${g.icon}</span>` +
+      `<span class="name">${esc(g.name)}</span><span class="count">${esc(state)}</span></button></div>` +
+      `<div class="dsrbody${collapsed ? '' : ' open'}">${body}</div>`;
+    el.appendChild(box);
+  }
+  updatePagination(libPages);
+}
+
+// the library row's items on the current page (shared page/perPage controls)
+function libItemsPage(g) {
+  const total = g.items.length;
+  const pp = perPage === 0 ? total : perPage;
+  const start = (page - 1) * pp;
+  return g.items.slice(start, start + pp).map(renderSearchItem).join('');
+}
+
+// one local-library hit — the pre-group markup, so a hit opens exactly like
+// it used to (torrent / PDF / text / EPUB / file)
+function renderSearchItem(r) {
+  const icon = { torrent: '📦', pdf: '📄', text: '📝', epub: '📚', file: '📎' }[r.type] || '📎';
+  const meta = [r.type, r.meta && r.meta !== r.type ? r.meta : null, r.size ? fmtSize(r.size) : null, r.pages ? r.pages + 'p' : null].filter(Boolean).join(' · ');
+  let btn;
+  if (r.type === 'torrent') btn = `<button type="button" class="open" data-ih="${esc(r.ih)}" data-name="${esc(r.name)}"><div class="name">${icon} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+  else if (r.type === 'pdf') {
+    // first-page cover from the direct-PDF registry (same markup as the
+    // shelf, so the cover CSS + fetchLocalCovers apply)
+    const coverUrl = directCoverUrl(directPdfs.find(x => x.id === r.id));
+    const coverHtml = coverUrl
+      ? `<img class="cover" src="${esc(coverUrl)}" alt="" onload="this.classList.add('loaded')" onerror="this.classList.add('noimg')">`
+      : '';
+    btn = `<button type="button" class="open${coverHtml ? ' has-cover' : ''}" data-pdf="${esc(r.id)}" data-name="${esc(r.name)}">${coverHtml}<span class="covertxt"><span class="name">${icon} ${esc(r.name)}</span><span class="meta">${esc(meta)}</span></span></button>`;
+  }
+  else if (r.type === 'text') btn = `<button type="button" class="open" data-savedtext="${esc(r.id)}" data-name="${esc(r.name)}"><div class="name">${icon} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+  else if (r.type === 'epub') btn = `<button type="button" class="open" data-savedepub="${esc(r.id)}" data-name="${esc(r.name)}"><div class="name">${icon} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+  else btn = `<button type="button" class="open" data-savedfile="${esc(r.id)}" data-name="${esc(r.name)}" data-filekind="${esc(r.kind || 'file')}"><div class="name">${icon} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
+  return `<div class="dsritem">${btn}</div>`;
+}
+
+// one live-plugin hit — the delegated click handler opens it from the four
+// data-live* attrs alone (same as the provider tabs); a not-yet-resolved
+// item has no url/magnet, so clicking it is a no-op
+function renderSearchPluginItem(it) {
+  const kind = it.kind || 'pdf';
+  const icon = { pdf: '📄', text: '📝', html: '🌐', epub: '📚', torrent: '📦', file: '📎' }[kind] || '📄';
+  const meta = [it.meta, it.resolve_id && !it.url ? 'resolving…' : null].filter(Boolean).join(' · ');
+  return `<div class="dsritem"><button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}"><div class="name">${icon} ${esc(it.name)}</div><div class="meta">${esc(meta)}</div></button></div>`;
 }
 
 // move a shelf book between the reading states (To Read / Reading / Complete).
@@ -4143,6 +4449,15 @@ document.getElementById('catalog').addEventListener('click', async (e) => {
     refresh();
     return;
   }
+  // expand/collapse a Discover source row (the library + each live plugin)
+  const dsrToggle = e.target.closest('button.dsr-toggle[data-dsrkey]');
+  if (dsrToggle) {
+    e.preventDefault();
+    const k = dsrToggle.dataset.dsrkey;
+    if (searchGroupCollapsed.has(k)) searchGroupCollapsed.delete(k); else searchGroupCollapsed.add(k);
+    refresh();
+    return;
+  }
   // expand/collapse a book's editions list (multi-edition results, e.g. Gutenberg)
   const edToggle = e.target.closest('button.edtoggle[data-edtoggle]');
   if (edToggle) {
@@ -4634,6 +4949,28 @@ let runPluginId = null;
 const OPDS_KIND_ICON = { epub: '📕', pdf: '📄', text: '📝', html: '🌐', file: '📦' };
 
 function renderCatalogsView() {
+  // skip the DOM rebuild when nothing the view shows changed — the 4s tick
+  // would otherwise tear down and re-inflate the (often image-heavy) feed
+  // page on every poll
+  const csig = JSON.stringify({
+    view,
+    noBook: document.querySelector('main').classList.contains('no-book'),
+    catalogs: opdsCatalogs.map(c => [c.id, c.name, c.url]),
+    browse: opdsBrowse ? [opdsBrowse.url, opdsBrowse.title, opdsBrowse.rootUrl || '',
+      opdsBrowse.searchUrl || '', opdsBrowse.next || '',
+      (opdsBrowse.trail || []).map(s => [s.title, s.url]),
+      opdsBrowse.entries.map(e => [e.url || e.title, e.title, e.author || '', e.kind || '',
+        e.nav ? 1 : 0, e.cover || '', e.summary || ''])] : null,
+    cross: opdsCross ? [opdsCross.query, opdsCross.loading, opdsCross.error || '',
+      opdsCross.book ? [opdsCross.book.title, opdsCross.book.author || ''] : '',
+      (opdsCross.results || []).map(r => [r.provider || '', r.name || '',
+        r.url || r.magnet || '', r.kind || '', r.meta || ''])] : null,
+    filter: opdsFilter,
+    shelf: shelf.map(s => s.key),
+    favs: favorites.map(f => f.key)
+  });
+  if (csig === lastCatalogsSig) return;
+  lastCatalogsSig = csig;
   document.getElementById('tabs').style.display = 'none';
   document.getElementById('searchbar').style.display = 'none';
   document.getElementById('hdrstat').textContent = opdsCatalogs.length ? `${opdsCatalogs.length} catalog(s)` : 'no catalogs';
@@ -5125,6 +5462,24 @@ async function submitOpdsAdd() {
 })();
 
 function renderPluginView(directPdfs, catalog) {
+  // how many items each plugin has loaded (catalog torrents + direct PDFs)
+  const loadedCount = {};
+  for (const c of catalog) if (c.provider && c.provider.startsWith('plugin:')) {
+    const k = c.provider.slice(7); loadedCount[k] = (loadedCount[k] || 0) + 1;
+  }
+  for (const p of directPdfs) if ((p.provider || '').startsWith('plugin:')) {
+    const k = p.provider.slice(7); loadedCount[k] = (loadedCount[k] || 0) + 1;
+  }
+  // skip the DOM rebuild when nothing the view shows changed
+  const psig = JSON.stringify({
+    view,
+    plugins: plugins.map(p => [p.id, p.name, !!p.builtin, !!p.active, !!p.has_fetch,
+      (p.config_schema || []).length, p.description || '']),
+    loaded: Object.keys(loadedCount).sort().map(k => [k, loadedCount[k]]),
+    cats: opdsCatalogs.map(c => [c.id, c.name, c.url])
+  });
+  if (psig === lastPluginsSig) return;
+  lastPluginsSig = psig;
   document.getElementById('tabs').style.display = 'none';
   document.getElementById('searchbar').style.display = 'none';
   document.getElementById('hdrstat').textContent = plugins.length ? `${plugins.length} plugin(s)` : 'no plugins';
@@ -5141,14 +5496,6 @@ function renderPluginView(directPdfs, catalog) {
     e.textContent = 'No plugins yet. Add one to load books or PDFs from a source (e.g. Project Gutenberg).';
     el.appendChild(e);
     return;
-  }
-  // how many items each plugin has loaded (catalog torrents + direct PDFs)
-  const loadedCount = {};
-  for (const c of catalog) if (c.provider && c.provider.startsWith('plugin:')) {
-    const k = c.provider.slice(7); loadedCount[k] = (loadedCount[k] || 0) + 1;
-  }
-  for (const p of directPdfs) if ((p.provider || '').startsWith('plugin:')) {
-    const k = p.provider.slice(7); loadedCount[k] = (loadedCount[k] || 0) + 1;
   }
   // same compact look as the Settings → Plugins list: name + active switch on
   // one line, description below, action buttons in a row
@@ -5229,6 +5576,19 @@ function renderPluginView(directPdfs, catalog) {
 // immediately (no Save button) and the view re-renders on the 4s poll like
 // the other views, so a re-render just rebuilds at the current state.
 function renderSettingsView() {
+  // skip the DOM rebuild (and the /api/profile fetch inside) when nothing
+  // the view shows changed
+  const setsig = JSON.stringify({
+    view,
+    cfg: [textFontSize, textFontFamily, textTheme, textSpacing, textWidth, textAlign,
+      appTheme, Math.round(appTextScale * 100), Math.round(appIconScale * 100),
+      perPage, tabPosition, listViewNoBook, listViewBook,
+      localStorage.getItem('resume-on-launch'), railOrder().join(',')],
+    provs: providers.map(p => [p.id, p.name, !!p.plugin, !!p.enabled, p.feed || '', p.description || '']),
+    plugs: plugins.map(p => [p.id, p.name, !!p.active, (p.config_schema || []).length, p.description || ''])
+  });
+  if (setsig === lastSettingsSig) return;
+  lastSettingsSig = setsig;
   document.getElementById('tabs').style.display = 'none';
   document.getElementById('searchbar').style.display = 'none';
   document.getElementById('count').textContent = '';

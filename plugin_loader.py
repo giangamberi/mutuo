@@ -64,12 +64,26 @@ def _module_name(path: Path) -> str:
     return f"ptr_plugin_{_slug(path.stem)}"
 
 
+# cached per (path, mtime): re-executing a plugin's top-level code on every
+# search call adds up, and a plugin's own module state (e.g. a shared opener)
+# now survives across calls. An edited file re-executes on the next load.
+_module_cache: dict[str, tuple[float | None, object]] = {}
+
+
 def _load_module(path: Path):
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = None
+    hit = _module_cache.get(str(path))
+    if hit is not None and hit[0] == mtime:
+        return hit[1]
     spec = importlib.util.spec_from_file_location(_module_name(path), str(path))
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load plugin module from {path}")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    _module_cache[str(path)] = (mtime, mod)
     return mod
 
 
@@ -169,13 +183,19 @@ def _tracked_plugin_files() -> set[str]:
     global _tracked_cache
     if _tracked_cache is not None:
         return _tracked_cache
+    if not (PLUGIN_DIR.parent / ".git").exists():
+        # not a git checkout (a frozen bundle, or a non-git install): nothing
+        # is tracked, and spawning git on every call would only fail
+        _tracked_cache = set()
+        return _tracked_cache
     try:
         out = subprocess.run(["git", "ls-files", "plugins/"],
                              cwd=str(PLUGIN_DIR.parent), capture_output=True,
                              text=True, timeout=5)
         _tracked_cache = {line.split("/", 1)[-1] for line in out.stdout.splitlines() if line.strip()}
     except Exception:
-        return set()  # don't cache a failure — retry on the next call
+        _tracked_cache = set()  # cache the failure too — list_plugins runs on
+        return _tracked_cache   # every refresh; retrying a spawn per call is wasteful
     return _tracked_cache
 
 
