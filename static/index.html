@@ -44,20 +44,45 @@
   header { display:flex; gap:8px; align-items:center; padding:8px 14px; background:var(--panel); border-bottom:1px solid var(--border-strong); }
   header h1 { font-size:calc(15px * var(--app-text-scale)); margin:0 14px 0 0; font-weight:600; }
   header .grow { flex:1; }
+  /* the global input min-width (280px) would push the header off the window
+     at the 760px minimum — let the link field shrink to fill what's left */
+  header #magnet { flex:1 1 260px; min-width:140px; }
   button, input, select { background:var(--input-bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:calc(13px * var(--app-text-scale)); }
   button { cursor:pointer; }
   input { min-width:280px; }
+  /* keyboard focus gets a consistent accent ring everywhere (the UA default
+     outline is a different colour and most rows don't have one at all);
+     typing fields additionally highlight their border on mouse focus */
+  button:focus-visible, input:focus-visible, select:focus-visible,
+  textarea:focus-visible, [tabindex]:focus-visible {
+    outline:2px solid var(--acc); outline-offset:1px;
+  }
+  input:focus, select:focus, textarea:focus { border-color:var(--acc); }
+  /* action buttons disable while their request is in flight (see the busy
+     guard) — visible press feedback and a double-click safeguard */
+  button:disabled { opacity:.45; cursor:default; }
+  /* shown while polls keep failing (the server died mid-session) — the lists
+     freeze on their last state, so the user needs to know why */
+  #server-banner { display:none; padding:4px 14px; background:var(--danger-bg); color:var(--danger-fg);
+    font-size:calc(12px * var(--app-text-scale)); text-align:center; }
+  #server-banner.show { display:block; }
+  /* themed scrollbars (WebView2 is Chromium) — the OS default is a grey
+     thumb that clashes with the dark panels */
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:6px; border:2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background:var(--dim); }
   main { flex:1; display:flex; min-height:0; }
   aside { width:320px; min-width:200px; background:var(--panel); border-right:1px solid var(--border-strong); display:flex; flex-direction:column; position:relative; }
   #resizer { position:absolute; top:0; right:-5px; width:10px; height:100%; cursor:col-resize; z-index:20; touch-action:none; }
   #resizer::after { content:''; position:absolute; top:0; right:4px; width:2px; height:100%; background:transparent; }
   #resizer:hover::after, #resizer.dragging::after { background:var(--acc); }
-  /* No book open: the list takes the whole screen and the viewer shrinks to a
-     narrow strip showing the empty placeholder (the resizer is meaningless
-     while the list is full-width, so it's hidden). */
+  /* No book open: the list takes the whole screen — the viewer is hidden
+     entirely (a 220px strip of placeholder text just cost layout space),
+     and the "how it works" hint lives in the empty list state instead. */
   main.no-book aside { flex:1 1 0; width:auto; min-width:0; }
   main.no-book #resizer { display:none; }
-  main.no-book #viewer { flex:0 0 220px; width:220px; min-width:220px; }
+  main.no-book #viewer { display:none; }
   /* no book open: the list is the whole screen, so the sidebar is always
      expanded — the hide button isn't even offered (the JS force-restores a
      minimized sidebar in this state) */
@@ -474,7 +499,9 @@
   .t .name { font-size:calc(13px * var(--app-text-scale)); font-weight:600; }
   .t .meta { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:3px; }
   .bar { height:4px; background:var(--input-bg); border-radius:2px; margin-top:6px; overflow:hidden; }
-  .bar > div { height:100%; background:var(--acc); }
+  /* the list only re-renders on the 4 s poll, so without a transition the
+     bar teleports between values — animating the width smooths it over */
+  .bar > div { height:100%; background:var(--acc); transition:width .8s ease; }
   .files { font-size:calc(12px * var(--app-text-scale)); margin-top:6px; }
   .files .no-pdf { color:var(--dim); font-style:italic; padding:2px 0; }
   .files button.file-btn {
@@ -555,7 +582,10 @@
     text-align:left; font-size:calc(12px * var(--app-text-scale)); margin-top:14px;
   }
   #loading .stats b, #book-loading .stats b { color:var(--dim); font-weight:500; margin-right:6px; }
-  #loading .spin, #book-loading .spin {
+  /* base spinner (the book-loading pages and the live-provider "searching…"
+     state all reuse it — it must not be scoped to #loading or it renders
+     as an invisible 0×0 div elsewhere) */
+  .spin {
     width:18px; height:18px; margin:0 auto 10px; border-radius:50%;
     border:2px solid var(--border); border-top-color:var(--acc); animation:spin .9s linear infinite;
   }
@@ -610,7 +640,9 @@
      each active live plugin). The boxes are plain children of #catalog, not
      .titem cards, so the grid's card CSS and layoutCatalogueActions ignore
      them; in grid mode they span the full row instead of taking one cell. */
-  #catalog .dsrbox { margin:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--panel); }
+  /* overflow:hidden trims the header's square bottom corners when a row is
+     collapsed (the header is then the box's bottom edge) */
+  #catalog .dsrbox { margin:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--panel); overflow:hidden; }
   /* in grid mode the grid's own gap + padding space the rows; the margin
      would double that up */
   #catalog.catalogue .dsrbox { grid-column:1 / -1; margin:0; }
@@ -646,6 +678,33 @@
   #catalog .dsritem .cover.noimg { display:none; }
   #catalog .dsritem .covertxt { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
   #catalog .dsritem .covertxt .name, #catalog .dsritem .covertxt .meta { display:block; }
+  /* per-row actions (📖/★, plus ⬇/💾 save for URL results) — the same
+     buttons and delegated handlers as the list rows, clustered top-right
+     (the rows are short, so there's no bottom slot); the row text keeps
+     right padding so it never slips under the cluster */
+  #catalog .dsritem { position:relative; }
+  #catalog .dsritem .fav, #catalog .dsritem .shelfbtn, #catalog .dsritem .savetext,
+  #catalog .dsritem .saveepub, #catalog .dsritem .savefile, #catalog .dsritem .savepdf {
+    position:absolute; top:6px; line-height:1; padding:3px 6px;
+    font-size:calc(12px * var(--app-text-scale));
+    background:var(--input-bg); color:var(--dim); border:1px solid var(--border); border-radius:6px; cursor:pointer;
+  }
+  #catalog .dsritem .fav { right:8px; }
+  #catalog .dsritem .shelfbtn { right:34px; }
+  #catalog .dsritem .savetext, #catalog .dsritem .saveepub,
+  #catalog .dsritem .savefile, #catalog .dsritem .savepdf { right:60px; }
+  #catalog .dsritem .fav:hover, #catalog .dsritem .shelfbtn:hover, #catalog .dsritem .savetext:hover,
+  #catalog .dsritem .saveepub:hover, #catalog .dsritem .savefile:hover, #catalog .dsritem .savepdf:hover {
+    background:var(--hover); border-color:var(--acc); color:var(--text);
+  }
+  #catalog .dsritem .fav.on { color:var(--fav); border-color:var(--fav-border); }
+  #catalog .dsritem .shelfbtn.on { color:#fff; background:var(--acc); border-color:var(--acc); }
+  #catalog .dsritem .savetext.on, #catalog .dsritem .saveepub.on,
+  #catalog .dsritem .savefile.on, #catalog .dsritem .savepdf.on { color:var(--acc); border-color:var(--acc-border); }
+  #catalog .dsritem.has-acts button.open { padding-right:64px; }
+  #catalog .dsritem.has-save button.open { padding-right:90px; }
+  /* keyboard list navigation: the row the cursor is on (↑/↓/Home/End, Enter opens) */
+  #catalog .kb-cursor { outline:2px solid var(--acc); outline-offset:-2px; }
   /* Catalogs (OPDS) view */
   #catalog .opds-crumb { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 14px; border-bottom:1px solid var(--border-strong); font-size:calc(12px * var(--app-text-scale)); }
   #catalog .opds-crumb button { background:none; border:none; color:var(--acc); cursor:pointer; font-size:inherit; padding:2px 4px; border-radius:4px; }
@@ -694,7 +753,11 @@
   #catalog.catalogue > .opds-nav,
   #catalog.catalogue > .opds-cross-head,
   #catalog.catalogue > .opds-cross-row,
-  #catalog.catalogue > .recent-head { grid-column: 1 / -1; }
+  /* empty-state and spinner notices are plain divs too — without this they
+     land in a single 230px grid cell and the text squints at the edge */
+  #catalog.catalogue > .recent-head,
+  #catalog.catalogue > .empty,
+  #catalog.catalogue > .plugin-empty { grid-column: 1 / -1; }
   /* a placeholder cover (no image) sized like the grid cover */
   #catalog.catalogue .titem .cover.ph {
     width:150px; height:200px; margin:0 auto; border-radius:4px;
@@ -759,12 +822,13 @@
   #profile-modal .hint { font-size:calc(11px * var(--app-text-scale)); color:var(--dim); margin-top:10px; line-height:1.5; }
   #profile-modal .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
   #profile-modal .err { color:var(--danger-fg); font-size:calc(12px * var(--app-text-scale)); margin-top:10px; min-height:1em; }
-  /* small green success toast (bottom-centre, fades out) */
-  #success-toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:1000;
+  /* bottom-centre toast: confirmations (green) and errors (red), fades out */
+  #notify { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:1000;
     background:#17351f; color:#8fe6ae; border:1px solid #2e6b45; padding:8px 16px; border-radius:8px;
     font-size:calc(13px * var(--app-text-scale)); box-shadow:0 6px 20px var(--shadow-strong);
-    opacity:0; pointer-events:none; transition:opacity .25s; }
-  #success-toast.show { opacity:1; }
+    opacity:0; pointer-events:none; transition:opacity .25s; max-width:80vw; overflow-wrap:anywhere; }
+  #notify.show { opacity:1; }
+  #notify.err { background:#3a1f24; color:#ff9d9d; border-color:#6b2e35; }
   /* settings view (⚙ in the left rail) */
   #catalog .settings-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border-strong); }
   #catalog .settings-head h3 { margin:0; font-size:calc(13px * var(--app-text-scale)); }
@@ -958,7 +1022,7 @@
     </div>
   </div>
 </div>
-<div id="success-toast"></div>
+<div id="notify"></div>
 <div id="filters-modal">
   <div class="card">
     <h2>Filters</h2>
@@ -1006,6 +1070,7 @@
   <span id="hdrstat" style="font-size:calc(12px * var(--app-text-scale));color:var(--dim)"></span>
   <button id="switch-profile-btn" type="button" title="Switch profile" style="display:none">Switch profile</button>
 </header>
+<div id="server-banner">Server unreachable — retrying…</div>
 <main>
   <aside>
     <div id="sidebar-row">
@@ -1219,30 +1284,55 @@ function renderAll(torrents) {
   layoutCatalogueActions(); // move row controls into the bottom bar in grid mode
 }
 
+// consecutive failed refresh/poll count — after two the server is presumed
+// dead and the banner goes up; any success clears it
+let serverFails = 0;
+function serverBanner() {
+  document.getElementById('server-banner').classList.toggle('show', serverFails >= 2);
+}
+
 // Full refresh: fetch every torrent fresh (rebuilding the settled cache) plus
 // the other lists. Called on user actions and at startup.
 async function refresh() {
   try {
-    const torrents = await j('/api/torrents?files=0').then(r => r.json());
+    // All 13 registries are independent — fetch them concurrently. Sequential
+    // awaits made every button press pay 13 server round-trips back to back.
+    const [torrents, catalog, provs, pdfs, plug, favs, shel, tags,
+           texts, epubs, files, cats, rec] = await Promise.all([
+      j('/api/torrents?files=0').then(r => r.json()),
+      j('/api/catalog').then(r => r.json()),
+      j('/api/providers').then(r => r.json()),
+      j('/api/pdfs').then(r => r.json()),
+      j('/api/plugins').then(r => r.json()),
+      j('/api/favorites').then(r => r.json()),
+      j('/api/shelf').then(r => r.json()),
+      j('/api/shelf/tags').then(r => r.json()),
+      j('/api/texts').then(r => r.json()),
+      j('/api/epubs').then(r => r.json()),
+      j('/api/files').then(r => r.json()),
+      j('/api/opds/catalogs').then(r => r.json()),
+      j('/api/recent').then(r => r.json()),
+    ]);
     rebuildSettled(torrents);
-    catalogData = await j('/api/catalog').then(r => r.json());
-    providers = await j('/api/providers').then(r => r.json());
-    directPdfs = await j('/api/pdfs').then(r => r.json());
+    catalogData = catalog;
+    providers = provs;
+    directPdfs = pdfs;
     window.__pdfs = directPdfs; // kept for the metadata edit modal
-    plugins = await j('/api/plugins').then(r => r.json());
-    favorites = await j('/api/favorites').then(r => r.json());
-    shelf = await j('/api/shelf').then(r => r.json());
-    allTags = await j('/api/shelf/tags').then(r => r.json());
-    savedTexts = await j('/api/texts').then(r => r.json());
-    savedEpubs = await j('/api/epubs').then(r => r.json());
-    savedFiles = await j('/api/files').then(r => r.json());
-    opdsCatalogs = await j('/api/opds/catalogs').then(r => r.json());
-    recent = await j('/api/recent').then(r => r.json());
+    plugins = plug;
+    favorites = favs;
+    shelf = shel;
+    allTags = tags;
+    savedTexts = texts;
+    savedEpubs = epubs;
+    savedFiles = files;
+    opdsCatalogs = cats;
+    recent = rec;
     dataLoaded = true;
+    serverFails = 0; serverBanner();
     renderAll(torrents);
     maybeResumeOnLaunch(); // once per page load: reopen the last book read
     fetchLocalCovers(); // fire-and-forget: covers appear a moment later
-  } catch (e) { /* server still starting */ }
+  } catch (e) { serverFails++; serverBanner(); /* server still starting */ }
 }
 
 // A direct PDF's first-page cover: a JPEG rendered once on the server
@@ -1271,23 +1361,27 @@ function fetchLocalCovers() {
     .catch(() => { /* covers are best-effort; the list stays as-is */ });
 }
 
-// The 4s tick: re-fetch only the torrents that can still change (settled ones
+// The tick: re-fetch only the torrents that can still change (settled ones
 // are skipped via the `skip` param) and merge them with the cached settled
 // entries. The other lists only change on user actions, so they're not
 // re-fetched here — a finished download is never re-polled.
+// Cadence adapts: 1 s while any torrent can still move, 4 s once settled.
+let pollDelay = 4000;
 async function pollTick() {
   if (polling) return;
-  if (!dataLoaded) { refresh(); return; } // server still starting — full refresh
   polling = true;
   try {
+    if (!dataLoaded) { await refresh(); return; } // server still starting — full refresh
     const skip = [...settledTorrents.keys()].join(',');
     const fresh = await j(`/api/torrents?files=0${skip ? `&skip=${encodeURIComponent(skip)}` : ''}`).then(r => r.json());
     // a torrent that was still downloading may have finished — cache it now
     for (const t of fresh) if (isSettled(t)) settledTorrents.set(t.info_hash, t);
     const torrents = [...fresh, ...settledTorrents.values()];
+    pollDelay = fresh.length ? 1000 : 4000;
+    serverFails = 0; serverBanner();
     renderAll(torrents);
-  } catch (e) { /* server hiccup — keep last state */ }
-  finally { polling = false; }
+  } catch (e) { serverFails++; serverBanner(); /* server hiccup — keep last state */ }
+  finally { polling = false; setTimeout(pollTick, pollDelay); }
 }
 
 // Shelf view: the Providers / Plugins sub-explorers. The Providers sub-view
@@ -1321,6 +1415,11 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
     // unchanged; pdf covers are compared by presence (a cover arriving later
     // re-renders once), a resolving plugin item flips resolve_id → url
     const dsig = 'discover:' + JSON.stringify([dq, page, perPage, searchQuery,
+      // the row actions' state (📖/★/💾) must be in the sig or a toggle
+      // wouldn't re-render the row on the next tick
+      favorites.map(f => f.key), shelf.map(s => s.key),
+      savedTexts.map(t => t.url), savedEpubs.map(t => t.url), savedFiles.map(t => t.url),
+      directPdfs.filter(p => p.url).map(p => p.url),
       searchGroups.map(g => [g.key, g.name, g.loading, g.error || '',
         g.items.map(it => [it.type || '', it.ih || it.id || it.url || it.magnet || '',
           it.name || '', it.meta || '', it.size || 0, it.pages || 0, it.kind || '',
@@ -1391,7 +1490,7 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
       const pct = Math.round(t.progress * 100);
       const item = document.createElement('div');
       item.dataset.ih = t.info_hash;
-      const meta = `${esc(t.state)} · ${pct}% · ${t.num_seeds || 0}⇩${t.num_peers}peers` +
+      const meta = `${esc(t.state)} · ${pct}% · ${t.num_seeds || 0} seeds · ${t.num_peers || 0} peers` +
         (t.is_paused ? ' · ⏸' : '');
       const favKey = 'torrent:' + t.info_hash;
       const isFav = favorites.some(f => f.key === favKey);
@@ -1464,9 +1563,20 @@ function renderShelf(torrents, directPdfs, catalog, byMagnet, provOf) {
     }
     const shown = tItems.length + pItems.length;
     const provName = activeProvider === 'local' ? 'Local' : (providers.find(p => p.id === activeProvider) || {}).name || activeProvider;
+    // an empty list used to be a blank grid (the "how it works" hint lived in
+    // the viewer strip, which is hidden with no book open) — put it in the
+    // list itself. A search with no hits just says so in the header.
+    if (!shown && !q) {
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = activeProvider === 'local'
+        ? 'Nothing here yet — drop a .torrent or .pdf file anywhere in the window, or paste a link in the top field. Nothing downloads until you open a file — that’s how you choose what to fetch.'
+        : `No items in ${provName} yet — sync its feed from the ⋯ menu on the tab.`;
+      el.appendChild(e);
+    }
     document.getElementById('hdrstat').textContent =
-      shown ? `${shown} item(s) in ${esc(provName)}`
-            : 'nothing here — drop a .torrent or .pdf, or sync the provider feed';
+      shown ? `${shown} item(s) in ${provName}`
+            : (q ? 'no matches' : 'nothing here — drop a .torrent or .pdf, or sync the provider feed');
     document.getElementById('count').textContent = q ? `${shown} match` : '';
     updatePagination(pages);
 }
@@ -1676,7 +1786,7 @@ function renderLiveProvider(prov, directPdfs) {
       ? `Search failed: ${st.error}`
       : 'Type a search term above to list results. Use the sort / language / topic controls to narrow it down.';
     el.appendChild(d);
-    document.getElementById('hdrstat').textContent = st.error ? 'search error' : `search ${esc(prov.name)}`;
+    document.getElementById('hdrstat').textContent = st.error ? 'search error' : `search ${prov.name}`;
     updatePagination(1);
     return;
   }
@@ -1783,7 +1893,7 @@ function renderLiveProvider(prov, directPdfs) {
       <button type="button" class="fav${liveIsFav ? ' on' : ''}" data-favkey="${esc(liveFavKey)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url || '')}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(prov.id)}" title="${liveIsFav ? 'Remove from favorites' : 'Add to favorites'}">${liveIsFav ? '★' : '☆'}</button>`;
     el.appendChild(item);
   }
-  document.getElementById('hdrstat').textContent = `${liveResults.length} result(s) in ${esc(prov.name)}`;
+  document.getElementById('hdrstat').textContent = `${liveResults.length} result(s) in ${prov.name}`;
   updatePagination(pages);
 }
 
@@ -2150,6 +2260,8 @@ function resolveCover(d) {
 // toggle a document's favorite state (star). The payload is built from the
 // button's data-* attrs so it works for torrents, direct PDFs, and live results.
 async function toggleFavorite(btn) {
+  if (btn.dataset.busy) return; // request in flight — ignore repeat clicks
+  btn.dataset.busy = '1'; btn.disabled = true;
   const d = btn.dataset;
   const on = btn.classList.contains('on');
   const payload = { key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
@@ -2160,12 +2272,15 @@ async function toggleFavorite(btn) {
     if (on) await j('/api/favorites?key=' + encodeURIComponent(d.favkey), { method: 'DELETE' });
     else await j('/api/favorites', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
+  finally { btn.disabled = false; delete btn.dataset.busy; } // no-op if re-rendered
 }
 
 // toggle a document's shelf state (📖). Same payload shape as favorites; the
 // shelf is a superset of favorites, so favoriting a book also shelves it.
 async function toggleShelf(btn) {
+  if (btn.dataset.busy) return; // request in flight — ignore repeat clicks
+  btn.dataset.busy = '1'; btn.disabled = true;
   const d = btn.dataset;
   const on = btn.classList.contains('on');
   const payload = { key: d.favkey, name: d.favname || '', type: d.favtype || 'live',
@@ -2176,7 +2291,8 @@ async function toggleShelf(btn) {
     if (on) await j('/api/shelf?key=' + encodeURIComponent(d.favkey), { method: 'DELETE' });
     else await j('/api/shelf', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
+  finally { btn.disabled = false; delete btn.dataset.busy; } // no-op if re-rendered
 }
 
 // remove a book from the personal shelf (🗑 on My Shelf rows). Unlike
@@ -2184,6 +2300,8 @@ async function toggleShelf(btn) {
 // 💾 save a live text result to disk so it can be read offline (no re-fetch,
 // no CORS). Re-saving the same URL is a no-op on the server.
 async function saveText(btn) {
+  if (btn.dataset.busy) return; // request in flight — ignore repeat clicks
+  btn.dataset.busy = '1'; btn.disabled = true;
   try {
     await j('/api/text/save', { method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ url: btn.dataset.saveurl, name: btn.dataset.savename || '', provider: btn.dataset.saveprovider || 'local' }) });
@@ -2197,14 +2315,15 @@ async function saveText(btn) {
           group: d.favgroup || '', cover: resolveCover(d) }) });
     }
     refresh();
-  } catch (e) { alert('could not save: ' + e.message); }
+  } catch (e) { notify('could not save: ' + e.message, 'err'); }
+  finally { btn.disabled = false; delete btn.dataset.busy; } // no-op if re-rendered
 }
 
 // 📁 open the folder a local (folder) paper lives in, in the OS file manager
 async function openPdfFolder(btn) {
   try {
     await j(`/api/pdfs/${btn.dataset.pdf}/open-folder`, { method: 'POST' });
-  } catch (e) { alert('could not open folder: ' + e.message); }
+  } catch (e) { notify('could not open folder: ' + e.message, 'err'); }
 }
 
 // remove a locally-saved text (with a confirm, since it deletes the file)
@@ -2214,7 +2333,7 @@ async function removeSavedText(btn) {
   try {
     await j(`/api/texts/${btn.dataset.savedid}`, { method: 'DELETE' });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 // open a locally-saved text in the in-site reader (served from disk, so it
@@ -2255,6 +2374,8 @@ async function openSavedText(id, name, key) {
 // ⬇/💾 save an EPUB locally for offline reading (mirrors saveText). Re-saving
 // the same URL is a no-op on the server; the button flips to 💾 once saved.
 async function saveEpub(btn) {
+  if (btn.dataset.busy) return; // request in flight — ignore repeat clicks
+  btn.dataset.busy = '1'; btn.disabled = true;
   try {
     await j('/api/epub/save', { method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ url: btn.dataset.saveurl, name: btn.dataset.savename || '', provider: btn.dataset.saveprovider || 'local' }) });
@@ -2268,7 +2389,8 @@ async function saveEpub(btn) {
           group: d.favgroup || '', cover: resolveCover(d) }) });
     }
     refresh();
-  } catch (e) { alert('could not save: ' + e.message); }
+  } catch (e) { notify('could not save: ' + e.message, 'err'); }
+  finally { btn.disabled = false; delete btn.dataset.busy; } // no-op if re-rendered
 }
 
 // remove a locally-saved EPUB (with a confirm, since it deletes the file)
@@ -2278,12 +2400,14 @@ async function removeSavedEpub(btn) {
   try {
     await j(`/api/epubs/${btn.dataset.savedid}`, { method: 'DELETE' });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 // ⬇/💾 save an html/mobi/file result locally for offline reading (mirrors
 // saveEpub). The kind is carried so the server stores + serves the right type.
 async function saveFile(btn) {
+  if (btn.dataset.busy) return; // request in flight — ignore repeat clicks
+  btn.dataset.busy = '1'; btn.disabled = true;
   try {
     await j('/api/file/save', { method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ url: btn.dataset.saveurl, name: btn.dataset.savename || '', provider: btn.dataset.saveprovider || 'local', kind: btn.dataset.savekind || 'file' }) });
@@ -2297,7 +2421,8 @@ async function saveFile(btn) {
           group: d.favgroup || '', cover: resolveCover(d) }) });
     }
     refresh();
-  } catch (e) { alert('could not save: ' + e.message); }
+  } catch (e) { notify('could not save: ' + e.message, 'err'); }
+  finally { btn.disabled = false; delete btn.dataset.busy; } // no-op if re-rendered
 }
 
 // remove a locally-saved html/mobi/file (with a confirm, since it deletes it)
@@ -2307,7 +2432,7 @@ async function removeSavedFile(btn) {
   try {
     await j(`/api/files/${btn.dataset.savedid}`, { method: 'DELETE' });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 // open a locally-saved EPUB in the in-site reader (served from disk, so it
@@ -2359,7 +2484,7 @@ async function removeFromShelf(btn) {
   try {
     await j('/api/shelf?key=' + encodeURIComponent(key), { method: 'DELETE' });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 // 🗑 on a My Shelf group header — removes the whole book (every edition of it)
@@ -2371,7 +2496,7 @@ async function removeBookFromShelf(btn) {
   try {
     for (const k of keys) await j('/api/shelf?key=' + encodeURIComponent(k), { method: 'DELETE' });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 // Renders a collection of saved documents (the ★ Favorites list or the � My
@@ -2409,7 +2534,7 @@ function renderCollection(torrents, directPdfs, byMagnet, provOf, opts) {
       const c = byMagnet[magnetKey(t.magnet)] || {};
       const pct = Math.round(t.progress * 100);
       rows.push({ kind: 'torrent', name: c.name || t.name || t.info_hash,
-        meta: `${esc(t.state)} · ${pct}% · ${t.num_seeds || 0}⇩${t.num_peers}peers` + (t.is_paused ? ' · ⏸' : ''),
+        meta: `${esc(t.state)} · ${pct}% · ${t.num_seeds || 0} seeds · ${t.num_peers || 0} peers` + (t.is_paused ? ' · ⏸' : ''),
         bar: pct, ih: t.info_hash, fav: f, eff });
     } else if (f.type === 'pdf') {
       const p = directPdfs.find(x => x.id === f.pdf);
@@ -3019,15 +3144,44 @@ function renderGlobalResults(el, q) {
     else if (g.error) body = `<div class="plugin-empty">Search failed: ${esc(g.error)}</div>`;
     else if (!g.items.length) body = `<div class="plugin-empty">no matches</div>`;
     else if (g.key === 'library') body = `<div class="dsrlist">${libItemsPage(lib)}</div>`;
-    else body = `<div class="dsrlist">${g.items.map(it => renderSearchPluginItem(it)).join('')}</div>`;
+    else body = `<div class="dsrlist">${g.items.map(it => renderSearchPluginItem(it, g.key)).join('')}</div>`;
     box.innerHTML =
-      `<div class="dsrhead"><button type="button" class="dsrtoggle" data-dsrkey="${esc(g.key)}">` +
-      `<span class="chev">${collapsed ? '▸' : '▾'}</span><span>${g.icon}</span>` +
+      `<div class="dsrhead"><button type="button" class="dsrtoggle" data-dsrkey="${esc(g.key)}" title="${g.key === 'library' ? 'Open the Local tab' : 'Open the ' + esc(g.name) + ' tab'}">` +
+      `<span class="chev" title="Collapse / expand">${collapsed ? '▸' : '▾'}</span><span>${g.icon}</span>` +
       `<span class="name">${esc(g.name)}</span><span class="count">${esc(state)}</span></button></div>` +
       `<div class="dsrbody${collapsed ? '' : ' open'}">${body}</div>`;
     el.appendChild(box);
   }
   updatePagination(libPages);
+}
+
+// A Discover source row's header is a portal to that source's own tab:
+// switch to it carrying the Discover query, and show the results the row
+// already fetched (same search + resolve the tab would run) instead of
+// refetching. The library row opens the Local tab, whose list the query
+// filters like any other search.
+function openDiscoverSource(key) {
+  const q = (document.getElementById('search').value || '').trim();
+  // same reset the tab click does — the previous tab's filters don't carry
+  // over (each live tab's own search history is handled below)
+  localFilters = { author:'', subject:'', keywords:'', minPages:'', maxPages:'', state:'', minSize:'', maxSize:'' };
+  page = 1;
+  activeProvider = key;
+  document.getElementById('search').value = q;
+  if (key !== 'library') {
+    liveExpanded.clear(); // a fresh view of this provider's results
+    const g = searchGroups.find(x => x.key === key);
+    // reuse the row's results only when they're for THIS query and settled;
+    // otherwise let the tab run its own search (loading rows, a stale query,
+    // or a failed fetch would otherwise strand the tab on stale/empty state)
+    if (g && !g.loading && !g.error && searchQuery === q) {
+      liveCache[key] = { query: q, items: g.items, error: null, loading: false };
+    }
+  }
+  refresh();
+  // no reusable results, or a cache from a different query — run the tab's
+  // own search for the query that's in the box
+  if (key !== 'library' && (!liveCache[key] || liveCache[key].loading || liveCache[key].query !== q)) runLiveSearch();
 }
 
 // the library row's items on the current page (shared page/perPage controls)
@@ -3038,11 +3192,36 @@ function libItemsPage(g) {
   return g.items.slice(start, start + pp).map(renderSearchItem).join('');
 }
 
+// the 📖/★ pair shared by list rows and Discover rows — the delegated
+// #catalog handlers build their payload from the data-* attrs, so identical
+// markup works anywhere inside #catalog
+function favShelfBtns(key, d) {
+  const isFav = favorites.some(f => f.key === key);
+  const isShelved = shelf.some(s => s.key === key);
+  const attrs = `data-favkey="${esc(key)}" data-favtype="${esc(d.favtype)}" data-favname="${esc(d.favname)}"` +
+    (d.favih ? ` data-favih="${esc(d.favih)}"` : '') +
+    (d.favpdf ? ` data-favpdf="${esc(d.favpdf)}"` : '') +
+    (d.favurl ? ` data-favurl="${esc(d.favurl)}"` : '') +
+    (d.favmagnet ? ` data-favmagnet="${esc(d.favmagnet)}"` : '') +
+    ` data-favkind="${esc(d.favkind || '')}" data-favprovider="${esc(d.favprovider || 'local')}"`;
+  return `<button type="button" class="shelfbtn${isShelved ? ' on' : ''}" ${attrs} title="${isShelved ? 'Remove from shelf' : 'Add to shelf'}">📖</button>` +
+    `<button type="button" class="fav${isFav ? ' on' : ''}" ${attrs} title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">${isFav ? '★' : '☆'}</button>`;
+}
+
 // one local-library hit — the pre-group markup, so a hit opens exactly like
 // it used to (torrent / PDF / text / EPUB / file)
 function renderSearchItem(r) {
   const icon = { torrent: '📦', pdf: '📄', text: '📝', epub: '📚', file: '📎' }[r.type] || '📎';
   const meta = [r.type, r.meta && r.meta !== r.type ? r.meta : null, r.size ? fmtSize(r.size) : null, r.pages ? r.pages + 'p' : null].filter(Boolean).join(' · ');
+  // row actions: torrent hits key by info-hash, PDF hits by registry id
+  // (text/epub/file hits are already-saved local documents — they're managed
+  // from My Shelf / Recent, so they get no star of their own here)
+  let acts = '';
+  if (r.type === 'torrent' && r.ih) {
+    acts = favShelfBtns('torrent:' + r.ih, { favtype: 'torrent', favname: r.name, favih: r.ih, favprovider: r.provider || 'local' });
+  } else if (r.type === 'pdf') {
+    acts = favShelfBtns('pdf:' + r.id, { favtype: 'pdf', favname: r.name, favpdf: r.id, favprovider: r.provider || 'local' });
+  }
   let btn;
   if (r.type === 'torrent') btn = `<button type="button" class="open" data-ih="${esc(r.ih)}" data-name="${esc(r.name)}"><div class="name">${icon} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
   else if (r.type === 'pdf') {
@@ -3057,17 +3236,33 @@ function renderSearchItem(r) {
   else if (r.type === 'text') btn = `<button type="button" class="open" data-savedtext="${esc(r.id)}" data-name="${esc(r.name)}"><div class="name">${icon} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
   else if (r.type === 'epub') btn = `<button type="button" class="open" data-savedepub="${esc(r.id)}" data-name="${esc(r.name)}"><div class="name">${icon} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
   else btn = `<button type="button" class="open" data-savedfile="${esc(r.id)}" data-name="${esc(r.name)}" data-filekind="${esc(r.kind || 'file')}"><div class="name">${icon} ${esc(r.name)}</div><div class="meta">${esc(meta)}</div></button>`;
-  return `<div class="dsritem">${btn}</div>`;
+  return `<div class="dsritem${acts ? ' has-acts' : ''}">${btn}${acts}</div>`;
 }
 
 // one live-plugin hit — the delegated click handler opens it from the four
 // data-live* attrs alone (same as the provider tabs); a not-yet-resolved
 // item has no url/magnet, so clicking it is a no-op
-function renderSearchPluginItem(it) {
+function renderSearchPluginItem(it, provId) {
   const kind = it.kind || 'pdf';
   const icon = { pdf: '📄', text: '📝', html: '🌐', epub: '📚', torrent: '📦', file: '📎' }[kind] || '📄';
   const meta = [it.meta, it.resolve_id && !it.url ? 'resolving…' : null].filter(Boolean).join(' · ');
-  return `<div class="dsritem"><button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}"><div class="name">${icon} ${esc(it.name)}</div><div class="meta">${esc(meta)}</div></button></div>`;
+  // same row actions the provider tab's rows carry: 📖/★ keyed 'live:<id>',
+  // plus a ⬇ save for URL results (state tracked against the local registries)
+  const key = 'live:' + (it.magnet || it.url || it.name);
+  const acts = favShelfBtns(key, { favtype: 'live', favname: it.name, favurl: it.url || '', favmagnet: it.magnet || '', favkind: kind, favprovider: provId });
+  let saveBtn = '';
+  if (it.url && (kind === 'text' || kind === 'epub' || ['html', 'mobi', 'file'].includes(kind))) {
+    const reg = kind === 'text' ? savedTexts : kind === 'epub' ? savedEpubs : savedFiles;
+    const s = reg.find(t => t.url === it.url);
+    const cls = kind === 'text' ? 'savetext' : kind === 'epub' ? 'saveepub' : 'savefile';
+    saveBtn = `<button type="button" class="${cls}${s ? ' on' : ''}" data-saveurl="${esc(it.url)}" data-savename="${esc(it.name)}" data-saveprovider="${esc(provId)}" data-savedid="${s ? esc(s.id) : ''}" data-favkey="${esc(key)}" data-favtype="live" data-favname="${esc(it.name)}" data-favurl="${esc(it.url)}" data-favmagnet="${esc(it.magnet || '')}" data-favkind="${esc(kind)}" data-favprovider="${esc(provId)}" title="${s ? 'Saved locally — click to remove' : 'Save locally for offline reading'}">${s ? '💾' : '⬇'}</button>`;
+  } else if (it.url && kind === 'pdf') {
+    const dl = directPdfs.find(p => p.url === it.url);
+    saveBtn = `<button type="button" class="savepdf${dl ? ' on' : ''}" data-pdfurl="${esc(it.url)}" data-pdfname="${esc(it.name)}" data-pdfid="${dl ? esc(dl.id) : ''}" title="${dl ? 'Downloaded — click to open' : 'Download for later reading'}">${dl ? '💾' : '⬇'}</button>`;
+  }
+  return `<div class="dsritem has-acts${saveBtn ? ' has-save' : ''}">` +
+    `<button type="button" class="open" data-liveurl="${esc(it.url || '')}" data-livemagnet="${esc(it.magnet || '')}" data-livekind="${esc(kind)}" data-livename="${esc(it.name)}"><div class="name">${icon} ${esc(it.name)}</div><div class="meta">${esc(meta)}</div></button>` +
+    saveBtn + acts + '</div>';
 }
 
 // move a shelf book between the reading states (To Read / Reading / Complete).
@@ -3079,7 +3274,7 @@ window.setStatus = async function (sel) {
   try {
     await j('/api/shelf/status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key, status }) });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 };
 
 // ---- custom tags: a popover per row to toggle/create tags, plus a filter row ----
@@ -3215,7 +3410,7 @@ async function saveTags(key, tags) {
     const row = document.querySelector(`#catalog .titem .tagbtn[data-favkey="${CSS.escape(key)}"]`);
     if (row) row.textContent = tags.length ? '🏷 ' + tags.length : '🏷';
     rebuildTagFilterRow();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 function toggleProviderMenu(cog, p) {
@@ -3247,7 +3442,7 @@ async function setProviderEnabled(pid, enabled) {
   try {
     await j(`/api/providers/${pid}/enabled?enabled=${enabled}`, { method: 'POST' });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 async function syncProvider(pid) {
@@ -3255,7 +3450,7 @@ async function syncProvider(pid) {
     const r = await j(`/api/providers/${pid}/sync`, { method: 'POST' }).then(r => r.json());
     toast(`synced ${pid}: +${r.added} new torrent(s)`);
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 async function removeProvider(p) {
@@ -3266,7 +3461,7 @@ async function removeProvider(p) {
     delete liveCache[p.id];
     if (activeProvider === p.id) activeProvider = 'local';
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 // promise-based confirm (the integrated browser blocks window.confirm)
@@ -3316,7 +3511,7 @@ document.getElementById('prov-browse').onclick = async () => {
   try {
     const r = await j('/api/providers/browse', { method: 'POST' }).then(r => r.json());
     if (r.path) feed.value = r.path;
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
   btn.disabled = false; btn.textContent = 'Browse…';
 };
 document.getElementById('prov-name').addEventListener('keydown', (e) => {
@@ -3327,10 +3522,10 @@ async function addProvider(name, feed, description) {
   try {
     const r = await j('/api/providers', { method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ name, feed, description }) }).then(r => r.json());
-    if (r.sync_error) alert(`Provider added, but feed sync failed: ${r.sync_error}`);
+    if (r.sync_error) notify(`Provider added, but feed sync failed: ${r.sync_error}`, 'err');
     activeProvider = r.id;
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 function magnetKey(m) { for (const p of m.split('&')) if (p.startsWith('xt=')) return p.slice(3); return m; }
@@ -3366,10 +3561,9 @@ async function openTorrent(ih, name, key) {
 }
 
 // Whether a book is open in the viewer. When none is, the list expands to the
-// full screen (main.no-book) and the viewer shrinks to a narrow strip. Driven
-// by the empty placeholder: showEmpty() sets it true, every open*() sets it
-// false. Toggling the class is idempotent, so it's safe to call from all of
-// them.
+// full screen and the viewer is hidden (main.no-book). Driven by the empty
+// placeholder: showEmpty() sets it true, every open*() sets it false. Toggling
+// the class is idempotent, so it's safe to call from all of them.
 function setNoBook(no) {
   document.querySelector('main').classList.toggle('no-book', !!no);
 }
@@ -3598,13 +3792,13 @@ window.addMagnet = async function () {
   // a PDF link (http/https) downloads the PDF and opens it; anything else
   // must be a magnet: URI
   if (/^https?:\/\//i.test(value)) { addPdfUrl(value); return; }
-  if (!value.startsWith('magnet:')) { alert('paste a magnet: URI or an http(s) PDF link'); return; }
+  if (!value.startsWith('magnet:')) { notify('paste a magnet: URI or an http(s) PDF link', 'err'); return; }
   try {
     await j('/api/catalog', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({name: value.slice(10, 60), magnet: value, provider: activeProvider})});
     document.getElementById('magnet').value = '';
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 };
 
 // download a remote PDF (e.g. an arXiv link) into the direct-PDF store and
@@ -3651,7 +3845,7 @@ window.addEventListener('drop', (e) => {
   const allFiles = e.dataTransfer.files ? [...e.dataTransfer.files] : [];
   const torrents = allFiles.filter(f => /\.torrent$/i.test(f.name));
   const pdfs = allFiles.filter(f => /\.pdf$/i.test(f.name));
-  if (!torrents.length && !pdfs.length) { alert('Drop one or more .torrent or .pdf files'); return; }
+  if (!torrents.length && !pdfs.length) { notify('Drop one or more .torrent or .pdf files', 'err'); return; }
   if (torrents.length) dropTorrentFiles(torrents);
   if (pdfs.length) dropPdfFiles(pdfs);
 });
@@ -4411,7 +4605,7 @@ async function savePdfMeta() {
     await j(`/api/pdfs/${id}/meta`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
     document.getElementById('pdf-meta-modal').classList.remove('open');
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 (function () {
@@ -4433,7 +4627,7 @@ async function doPdfAction(id, act, source) {
     try {
       await j(`/api/pdfs/${id}`, { method: 'DELETE' });
       if (selected === 'pdf:' + id) { selected = null; showEmpty('PDF removed.'); }
-    } catch (e) { alert(e.message); }
+    } catch (e) { notify(e.message, 'err'); }
   }
   refresh();
 }
@@ -4449,13 +4643,19 @@ document.getElementById('catalog').addEventListener('click', async (e) => {
     refresh();
     return;
   }
-  // expand/collapse a Discover source row (the library + each live plugin)
-  const dsrToggle = e.target.closest('button.dsr-toggle[data-dsrkey]');
+  // Discover source row (the library + each live plugin): the chevron
+  // collapses/expands the row; clicking anywhere else on the header opens
+  // that source's own tab with the current search results
+  const dsrToggle = e.target.closest('button.dsrtoggle[data-dsrkey]');
   if (dsrToggle) {
     e.preventDefault();
     const k = dsrToggle.dataset.dsrkey;
-    if (searchGroupCollapsed.has(k)) searchGroupCollapsed.delete(k); else searchGroupCollapsed.add(k);
-    refresh();
+    if (e.target.closest('.chev')) {
+      if (searchGroupCollapsed.has(k)) searchGroupCollapsed.delete(k); else searchGroupCollapsed.add(k);
+      refresh();
+      return;
+    }
+    openDiscoverSource(k);
     return;
   }
   // expand/collapse a book's editions list (multi-edition results, e.g. Gutenberg)
@@ -4683,7 +4883,7 @@ document.getElementById('catalog').addEventListener('click', async (e) => {
     e.preventDefault();
     if (!confirm('Clear the entire recent list? Cached files are kept.')) return;
     try { await j('/api/recent/all', { method: 'DELETE' }); }
-    catch (err) { alert(err.message); return; }
+    catch (err) { notify(err.message, 'err'); return; }
     refresh();
     return;
   }
@@ -4692,7 +4892,7 @@ document.getElementById('catalog').addEventListener('click', async (e) => {
   if (rmRecentBtn) {
     e.preventDefault();
     try { await j(`/api/recent?key=${encodeURIComponent(rmRecentBtn.dataset.rmkey)}`, { method: 'DELETE' }); }
-    catch (err) { alert(err.message); return; }
+    catch (err) { notify(err.message, 'err'); return; }
     refresh();
     return;
   }
@@ -4702,7 +4902,7 @@ document.getElementById('catalog').addEventListener('click', async (e) => {
     e.preventDefault();
     if (!confirm('Delete the cached copy of this PDF? The torrent itself is not affected.')) return;
     try { await j(`/api/pdfs/${delCacheBtn.dataset.pdf}`, { method: 'DELETE' }); }
-    catch (err) { alert(err.message); return; }
+    catch (err) { notify(err.message, 'err'); return; }
     refresh();
     return;
   }
@@ -4780,6 +4980,52 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape')
     document.querySelectorAll('#catalog .menu.open, #tabs .menu.open').forEach(m => m.classList.remove('open'));
 });
+
+// ---- keyboard list navigation ----
+// With nothing focused, ↑/↓/Home/End move a cursor through the visible rows
+// and Enter opens the one it's on (delegated to the row's own open button, so
+// every open path — torrent / PDF / live result / saved doc — works as-is).
+// Skipped while typing in a field, with a modal open, or with a book open
+// (the arrow keys belong to the reader then). Re-renders drop the cursor
+// class, so the index is re-clamped against the current rows on every press.
+let kbIndex = -1;
+function kbClearCursor() {
+  const el = document.querySelector('#catalog .kb-cursor');
+  if (el) el.classList.remove('kb-cursor');
+}
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  const tag = (t && t.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+  if (document.querySelector('[id$="-modal"].open, #confirm-modal.open')) return;
+  if (document.getElementById('status').style.display !== 'none') return; // a book is open
+  // visible rows only — rows inside a collapsed Discover group are
+  // display:none and offsetParent reports null
+  const rows = Array.from(document.querySelectorAll('#catalog .titem, #catalog .dsritem'))
+    .filter(r => r.offsetParent !== null);
+  if (e.key === 'Enter') {
+    if (kbIndex >= 0 && rows[kbIndex] && tag !== 'button') {
+      const b = rows[kbIndex].querySelector('button.open');
+      if (b) { e.preventDefault(); b.click(); }
+    }
+    return;
+  }
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+  if (!rows.length) return;
+  e.preventDefault();
+  // a focused button would otherwise keep stealing Enter — the cursor row is
+  // the single source of truth once the arrows are in use
+  if (tag === 'button' || tag === 'a') t.blur();
+  if (kbIndex >= rows.length) kbIndex = rows.length - 1;
+  if (e.key === 'ArrowDown') kbIndex = Math.min(rows.length - 1, kbIndex + 1);
+  else if (e.key === 'ArrowUp') kbIndex = Math.max(0, kbIndex - 1);
+  else if (e.key === 'Home') kbIndex = 0;
+  else kbIndex = rows.length - 1;
+  kbClearCursor();
+  const row = rows[kbIndex];
+  row.classList.add('kb-cursor');
+  row.scrollIntoView({ block: 'nearest' });
+});
 // save the reading position when the tab is closed / navigated away
 window.addEventListener('pagehide', flushPosition);
 window.addEventListener('beforeunload', flushPosition);
@@ -4803,7 +5049,7 @@ async function doTorrentAction(ih, act) {
     } else {
       await j(`/api/torrent/${ih}/${act}`, { method: 'POST' });
     }
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
   refresh();
 }
 
@@ -4814,20 +5060,22 @@ function toast(msg) {
   setTimeout(() => { if (el.textContent === msg) el.textContent = old; }, 2000);
 }
 
-// small green confirmation toast (bottom-centre), e.g. after saving a profile
-let successToastTimer = null;
-function successToast(msg) {
-  const el = document.getElementById('success-toast');
+// bottom-centre toast: kind 'ok' (default, green) or 'err' (red, lingers a
+// bit longer so the message can actually be read)
+let notifyTimer = null;
+function notify(msg, kind) {
+  const el = document.getElementById('notify');
   if (!el) return;
   el.textContent = msg;
+  el.classList.toggle('err', kind === 'err');
   el.classList.add('show');
-  if (successToastTimer) clearTimeout(successToastTimer);
-  successToastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  if (notifyTimer) clearTimeout(notifyTimer);
+  notifyTimer = setTimeout(() => el.classList.remove('show'), kind === 'err' ? 4500 : 2500);
 }
 // a profile rename reloads the page (server restart) — show the toast here
 if (sessionStorage.getItem('profileSaved')) {
   sessionStorage.removeItem('profileSaved');
-  successToast('Profile saved');
+  notify('Profile saved');
 }
 
 // "Retry now" on the loading page
@@ -4869,7 +5117,7 @@ async function deleteFileFromDisk(b) {
     b.remove(); // drop the row; it's gone
     const list = b.parentElement;
     if (list && !list.querySelector('button.file-btn')) list.innerHTML = '<div class="no-pdf">(no files left)</div>';
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 // show every file in the torrent with an include/exclude toggle
@@ -4877,8 +5125,8 @@ async function openFileManager(ih) {
   hideLoading();
   let entry;
   try { entry = await j(`/api/torrent?ih=${ih}`).then(r => r.json()); }
-  catch (e) { alert(e.message); return; }
-  if (!entry.files || !entry.files.length) { alert('No file list yet — metadata not available.'); return; }
+  catch (e) { notify(e.message, 'err'); return; }
+  if (!entry.files || !entry.files.length) { notify('No file list yet — metadata not available.', 'err'); return; }
   const pages = document.getElementById('pages');
   const empty = document.getElementById('empty');
   empty.style.display = 'none';
@@ -4933,7 +5181,7 @@ async function toggleExcluded(b) {
   } catch (e) {
     b.classList.remove('excluded');
     excl.textContent = '⬇ include';
-    alert(e.message);
+    notify(e.message, 'err');
   }
 }
 
@@ -5425,7 +5673,7 @@ async function removeOpdsCatalog(cid) {
     await j(`/api/opds/catalogs/${cid}`, { method: 'DELETE' });
     if (opdsBrowse && opdsBrowse.rootUrl === (opdsCatalogs.find(c => c.id === cid) || {}).url) opdsBrowse = null;
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 function openOpdsAddModal() {
@@ -5833,7 +6081,7 @@ function renderSettingsView() {
       const pid = plugAct.dataset.plugActive;
       j(`/api/plugins/${pid}/active`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ active: plugAct.checked }) })
         .then(r => r.json()).then(() => refresh())
-        .catch(err => { alert(err.message); refresh(); });
+        .catch(err => { notify(err.message, 'err'); refresh(); });
       return;
     }
   });
@@ -5921,7 +6169,7 @@ document.getElementById('profile-modal-save').onclick = async () => {
     const r = await api.set_profile_password(current, next);
     if (!r.ok) { err.textContent = r.error; return; }
     closeProfileModal();
-    successToast('Profile saved');
+    notify('Profile saved');
     refresh(); // update the 🔒 indicator in the Profile section
   } finally {
     saveBtn.disabled = false;
@@ -5937,7 +6185,7 @@ async function doPluginAction(pid, act) {
   if (act === 'clear') {
     const ok = await askConfirm('Clear all items this plugin loaded? (torrents are removed from the session, downloaded PDFs are deleted)');
     if (!ok) return;
-    try { await j(`/api/plugins/${pid}/items`, { method: 'DELETE' }); } catch (e) { alert(e.message); }
+    try { await j(`/api/plugins/${pid}/items`, { method: 'DELETE' }); } catch (e) { notify(e.message, 'err'); }
     refresh();
     return;
   }
@@ -5948,7 +6196,7 @@ async function doPluginAction(pid, act) {
       await j(`/api/plugins/${pid}`, { method: 'DELETE' });
       delete liveCache['plugin:' + pid];
       if (activeProvider === 'plugin:' + pid) activeProvider = 'local';
-    } catch (e) { alert(e.message); }
+    } catch (e) { notify(e.message, 'err'); }
     refresh();
   }
 }
@@ -5968,7 +6216,7 @@ document.getElementById('catalog').addEventListener('change', (e) => {
     headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ active }) })
     .then(r => r.json())
     .then(() => refresh())
-    .catch(err => { alert(err.message); refresh(); });
+    .catch(err => { notify(err.message, 'err'); refresh(); });
 });
 
 function openConfigModal(pid) {
@@ -6027,7 +6275,7 @@ document.getElementById('plugin-config-save').onclick = async () => {
     await j(`/api/plugins/${pid}/config`, { method: 'POST',
       headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ config: cfg }) });
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 };
 
 function openRunPluginModal(pid) {
@@ -6123,7 +6371,7 @@ async function openEditPluginModal(pid) {
     document.getElementById('plugin-add-code').value = d.code || '';
     document.getElementById('plugin-add-needsquery').checked = !!d.needs_query;
     document.getElementById('plugin-add-modal').classList.add('open');
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 }
 
 document.getElementById('plugin-add-load').onclick = async () => {
@@ -6137,7 +6385,7 @@ document.getElementById('plugin-add-load').onclick = async () => {
     document.getElementById('plugin-add-code').value = d.code || '';
     document.getElementById('plugin-add-needsquery').checked = !!d.needs_query;
     toast('plugin loaded — review & Add');
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 };
 
 document.getElementById('plugin-add-cancel').onclick = () =>
@@ -6163,7 +6411,7 @@ document.getElementById('plugin-add-ok').onclick = async () => {
     }
     editingPluginId = null;
     refresh();
-  } catch (e) { alert(e.message); }
+  } catch (e) { notify(e.message, 'err'); }
 };
 
 // "Switch profile" is only meaningful inside the desktop shell (pywebview
@@ -6188,7 +6436,7 @@ document.getElementById('plugin-add-ok').onclick = async () => {
 })();
 
 refresh();
-setInterval(pollTick, 4000);
+setTimeout(pollTick, 4000); // self-reschedules with an adaptive delay
 </script>
 </body>
 </html>
