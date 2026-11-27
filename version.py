@@ -7,4 +7,4 @@ Read by:
 Bump this when cutting a release, then rebuild the installer.
 """
 
-__version__ = "0.7.1"
+__version__ = "0.7.2"

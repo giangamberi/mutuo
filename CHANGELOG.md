@@ -9,6 +9,63 @@ app as it stands today; earlier work is folded into it below.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-27
+
+### Added
+- **Discover tab** — one search box fans out to the local library and
+  every active provider in parallel; results render as per-source
+  expandable rows. Clicking a source header opens that provider's own
+  tab carrying the query and its results (cached, no re-fetch when the
+  results already match the query).
+- **Row actions in Discover** — every result row gets the same
+  favorite (★) / shelf (📖) / save (⬇) buttons as provider rows.
+- **Keyboard navigation** — ↑/↓/Home/End move a highlighted row,
+  Enter opens it; active whenever no field is focused, no modal is open
+  and no book is open.
+- **Non-blocking toasts** — the 41 error `alert()` dialogs are replaced
+  by bottom-right toasts (red and longer-lived for errors); the profile
+  save toast uses the same component.
+- **"Server unreachable" banner** — a strip under the header after two
+  consecutive failed polls; clears as soon as the server answers.
+- **Onboarding empty state** — with no book open the list takes the
+  full width (no more empty viewer strip), and an empty list shows the
+  hint: drop a .torrent or .pdf, or paste a link — nothing downloads
+  until you open a file.
+- **Book loading overlay** — opening a book shows a loading overlay
+  with live swarm stats; opening another book stops the previous one
+  (it stays in recents).
+
+### Changed
+- **Faster interaction** — `refresh()` now fetches all 13 registries in
+  parallel instead of 13 sequential round-trips; the poll cadence is
+  adaptive (1 s while any torrent can still move, 4 s when settled).
+- Row action buttons dim while their request is in flight and ignore
+  repeat clicks.
+- Torrent rows show `state · progress · seeds · peers · ⏸` instead of
+  a truncated status string.
+- **Safe server lifecycle (Windows)** — the desktop shell kills the
+  server process tree (`taskkill /T`; the spawned `python.exe` is a
+  launcher whose child owns the port), attributes the port by pidfile
+  + cmdline so a foreign port owner is never killed (startup refuses
+  instead), and verifies the profile name in the readiness check.
+- PDF covers are rendered to cached files instead of data URIs in
+  `pdfs.json` (one-time startup migration, 25-per-request cap, hard
+  browser cache).
+- Switching provider tabs resets the search/filter text while each
+  provider's own search history is kept.
+- Keyboard focus rings on all interactive elements; styled scrollbars.
+
+### Fixed
+- Discover's collapse toggle did nothing (selector mismatch after the
+  grouped-Discover rewrite).
+- HTML-escaped provider names rendered literally (`&amp;`) in the
+  header status in three places.
+- Corrupt `catalog.json` / `providers.json` now recover instead of
+  failing startup; all JSON registries save atomically.
+- Full-file RAM buffering removed from streamed PDF downloads.
+- Pending file-include state cleaned up on torrent removal; orphaned
+  torrents removed on provider delete / plugin clear.
+
 ## [0.7.1] - 2026-11-19
 
 ### Added
